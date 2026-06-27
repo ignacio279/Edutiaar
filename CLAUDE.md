@@ -15,7 +15,7 @@ El núcleo: cada alumno tiene un **programa** por materia → SOL lo divide en *
 
 ## Stack
 
-- **Frontend:** HTML/CSS/JS ya existente (estático), deployado en **Vercel**, bajo `edutia.ar`.
+- **Frontend:** **Next.js** (App Router, TypeScript, React) en `web/`, deployado en **Vercel**, bajo `edutia.ar`. (Migrado desde el front estático original; ver `docs/NEXT_MIGRATION.md`.)
 - **Backend / base / auth:** **Supabase** (Postgres + Auth + Edge Functions). Plan Free para desarrollo; Pro ($25/mes) en producción.
 - **IA (SOL):** **API de Claude** (Anthropic), llamada desde una **Edge Function de Supabase**.
 
@@ -56,7 +56,7 @@ Ver detalle en `docs/ARCHITECTURE.md`.
 - Antes de cambios grandes (estructura de tablas, dependencias nuevas, decisiones de arquitectura), **proponer y confirmar** en vez de avanzar de una.
 - Mantener este `CLAUDE.md` y los docs actualizados cuando algo cambie.
 - **Tests por feature (obligatorio).** Cada cosa nueva que agregamos lleva sus tests, y se corren antes de commitear. No commitear con tests en rojo.
-  - Lógica pura del front (arte SVG, helpers) → **tests unitarios** en `tests/unit` (`npm test`; Node nativo `node --test`, sin dependencias). Para que sea testeable, la lógica pura va en módulos sin DOM (ej. `frontend/app/art.js`), no inline en `app.js`.
+  - Lógica pura del front (arte SVG, helpers) → **tests unitarios** en `tests/unit` (`npm test`; Node nativo `node --test`, sin dependencias). Para que sea testeable, la lógica pura va en módulos sin DOM (ej. `web/lib/art.ts`), no inline en los componentes.
   - DB / RLS / RPCs / Edge Functions / seguridad → **tests de integración** en `tests/integration` (`npm run test:db`; necesitan envs `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`). Deben ser idempotentes: crear y borrar sus propios datos efímeros, sin tocar la data semilla.
 
 ## Convenciones

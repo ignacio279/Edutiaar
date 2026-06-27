@@ -19,5 +19,5 @@ dist/
 # Artefactos de test de browser (Playwright MCP)
 .playwright-mcp/
 
-# Front: config local con claves (anon es pública pero no la versionamos)
-frontend/config.js
+# Next (web/) — env local con claves; anon es pública pero no la versionamos
+web/.env*.local
