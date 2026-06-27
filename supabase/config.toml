@@ -1,0 +1,9 @@
+project_id = "yqzlekflztbuyuzwmnip"
+
+# Las funciones del login del alumno se llaman sin sesión (el chico aún no está
+# logueado); la auth la hacen ellas (secreto de aula + PIN + lockout).
+[functions.aula-students]
+verify_jwt = false
+
+[functions.alumno-login]
+verify_jwt = false
