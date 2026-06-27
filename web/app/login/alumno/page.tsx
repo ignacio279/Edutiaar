@@ -68,7 +68,7 @@ export default function LoginAlumno() {
         access_token: data.session.access_token,
         refresh_token: data.session.refresh_token,
       });
-      router.push('/alumno');
+      router.push('/alumno/mapa');
       router.refresh();
       return;
     }

@@ -51,12 +51,18 @@ Edge Functions `alumno-login` + `aula-students`, `supabase.auth` (docente).
 - **Fase 1 — Entrada + auth.** Rutas `/`, `/setup`, `/login/alumno`, `/login/docente`.
   Reusa Edge Functions. Sesión vía `@supabase/ssr`.
   *Demo:* entrás como alumno (avatar+PIN) y docente (email+pass).
-- **Fase 2 — Homes.** `/alumno`, `/docente`. Middleware redirige si no hay sesión.
-  *Demo:* navegás post-login a cada home.
-- **Fase 3 — Mapa + Practicar (shell).** `/alumno/mapa`, `/alumno/practicar`.
-  *Demo:* paridad total con el HTML actual.
-- **Fase 4 — Cleanup + deploy.** Borrar `frontend/`. Vercel: Root Directory →
-  carpeta Next, fuera build-command hack y `config.js`. Deploy verde.
+- **Fase 2 — Homes + mapa/practicar.** ✅ HECHO. `/docente` (panel real con lista
+  de alumnos), `/alumno` → `/alumno/mapa` (el alumno no tiene home separado: en el
+  front viejo `scHomeAlumno` es código muerto, loadMeAndRoute rutea alumno → mapa),
+  `/alumno/practicar`, header compartido (Mi mapa / Practicar / Salir), protección
+  de rutas en `proxy.ts`. Absorbió lo que era Fase 3 porque el alumno aterriza
+  directo en el mapa.
+  *Demo verificada (Playwright):* login alumno (Benja, PIN 3333) → mapa con nodos por
+  estado; toggle Practicar con saludo de SOL; panel docente lista 5 alumnos; rutas
+  protegidas redirigen si no hay sesión.
+- **Fase 3 — Cleanup + deploy.** Borrar `frontend/`. Vercel: Root Directory →
+  carpeta Next (`web`), fuera build-command hack y `config.js`. Setear
+  `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY` en Vercel. Deploy verde.
 
 → Después, SOL se construye ya en Next (fuera de este plan).
 

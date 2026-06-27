@@ -29,7 +29,18 @@ export async function proxy(request: NextRequest) {
   );
 
   // IMPORTANTE: no metas lógica entre createServerClient y getUser().
-  await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // Protección de rutas: /alumno/* y /docente exigen sesión.
+  const path = request.nextUrl.pathname;
+  const needsAuth = path.startsWith('/alumno') || path.startsWith('/docente');
+  if (needsAuth && !user) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/';
+    return NextResponse.redirect(url);
+  }
 
   return response;
 }
