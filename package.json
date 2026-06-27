@@ -1,0 +1,10 @@
+{
+  "name": "edutia",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/unit/*.test.mjs",
+    "test:db": "node --test tests/integration/*.test.mjs",
+    "test:all": "node --test tests/unit/*.test.mjs tests/integration/*.test.mjs"
+  }
+}
