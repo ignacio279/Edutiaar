@@ -16,5 +16,8 @@ dist/
 .DS_Store
 *.log
 
+# Artefactos de test de browser (Playwright MCP)
+.playwright-mcp/
+
 # Front: config local con claves (anon es pública pero no la versionamos)
 frontend/config.js

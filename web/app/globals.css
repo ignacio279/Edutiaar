@@ -1,49 +1,113 @@
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-html {
-  height: 100%;
-}
-
-html,
-body {
-  max-width: 100vw;
-  overflow-x: hidden;
-}
-
-body {
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
+/* EDUTIA — estilos base + animaciones (portado de frontend/app/index.html).
+   Fuentes cargadas con next/font en layout.tsx → variables --font-*. */
 
 * {
   box-sizing: border-box;
-  padding: 0;
+}
+html,
+body {
   margin: 0;
+  padding: 0;
+}
+body {
+  background: #fbf4e6;
+  font-family: var(--font-nunito), 'Nunito', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  color: #3a332a;
+}
+button {
+  font-family: inherit;
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
+@keyframes edFade {
+  from {
+    transform: translateY(12px);
   }
+  to {
+    transform: none;
+  }
+}
+@keyframes edBob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-7px);
+  }
+}
+@keyframes edShake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-7px);
+  }
+  60% {
+    transform: translateX(7px);
+  }
+  80% {
+    transform: translateX(-4px);
+  }
+}
+
+/* teclado numérico */
+.ed-key {
+  transition: transform 0.1s ease, background 0.12s ease;
+}
+.ed-key:hover {
+  background: #fbefd9;
+}
+.ed-key:active {
+  transform: scale(0.94);
+}
+.ed-signout {
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.ed-signout:hover {
+  border-color: #f4a93b;
+}
+/* roles (inicio) */
+.ed-role {
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.ed-role:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 16px 30px rgba(120, 90, 40, 0.2);
+}
+.ed-role--alumno:hover {
+  border-color: #f4a93b;
+}
+.ed-role--sena:hover {
+  border-color: #6fb7d4;
+}
+.ed-student {
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.ed-student:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 16px 28px rgba(120, 90, 40, 0.18);
+  border-color: #f4a93b;
+}
+.ed-primary {
+  transition: filter 0.15s ease;
+}
+.ed-primary:hover {
+  filter: brightness(1.04);
+}
+.ed-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  background: #3a332a;
+  color: #fffcf5;
+  padding: 12px 20px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 15px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.2);
+  z-index: 30;
+  animation: edFade 0.25s ease;
 }
