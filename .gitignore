@@ -1,0 +1,20 @@
+# Secrets — NUNCA commitear
+.env
+.env.*
+!.env.example
+
+# Supabase local
+.supabase/
+supabase/.temp/
+
+# Dependencias / build
+node_modules/
+dist/
+.vercel/
+
+# OS / editor
+.DS_Store
+*.log
+
+# Front: config local con claves (anon es pública pero no la versionamos)
+frontend/config.js

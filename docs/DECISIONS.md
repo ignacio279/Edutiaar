@@ -32,6 +32,15 @@
 **Decisión:** Vercel (preferencia del equipo). El backend vive en Supabase igual, así que la elección del host del front no afecta la arquitectura de datos.
 **Consecuencias:** deploy automático desde GitHub; ninguna dependencia fuerte con el host.
 
+## ADR-007 — Login del alumno endurecido (aula + Edge Function + creds opacas)
+**Contexto:** el login por avatar + PIN de 4 dígitos con `signInWithPassword` directo y email adivinable (`mateo@edutia.local`) es fuerza-bruteable (10.000 combinaciones contra una cuenta conocida). Datos de menores → hace falta defensa en capas.
+**Decisión:** el login del alumno pasa por una **Edge Function** (`alumno-login`), nunca `signInWithPassword` directo. Capas:
+1. **Secreto de aula** (lo configura la seño 1 vez en el device) → sin él ni se listan los avatares (`aula-students`).
+2. **PIN por chico** (4 dígitos) con **bloqueo tras 5 intentos** (15 min), enforced en un RPC `SECURITY DEFINER`.
+3. **Credenciales opacas**: email aleatorio + password Auth random guardado server-only en `alumno_cred`; el browser nunca las ve.
+Tablas server-only (`aula_secreto`, `alumno_cred`, `intento_login`) con RLS y **sin policies** + RPCs con `EXECUTE` revocado a `anon`/`authenticated` (solo `service_role`). La docente sigue con email+contraseña directo.
+**Consecuencias:** fuerza bruta inviable (gateada por secreto de aula + lockout); no se puede saltear la Edge Function ni pegarle directo a Auth con un email adivinable. Introduce el concepto `aula` (estructurado para multi-escuela en Fase 2) y la primera Edge Function (que se reutiliza para SOL en Etapa 2). El secreto de aula vive en `localStorage` del device (secreto compartido de aula, no por chico). Hardening futuro: throttle por-aula al adivinar el secreto.
+
 ---
 
 ## Preguntas abiertas (a decidir)
