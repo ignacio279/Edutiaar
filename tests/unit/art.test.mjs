@@ -1,8 +1,8 @@
-// Tests unitarios de las funciones puras de arte (frontend/app/art.js).
-// Sin red ni DOM → corren con `npm test`.
+// Tests unitarios de las funciones puras de arte (web/lib/art.ts).
+// Sin red ni DOM → corren con `npm test` (Node strippea los tipos del .ts).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { uri, alpha, catmull, sol, animal, nodeIcon, starBadge, lockBadge } from '../../frontend/app/art.js';
+import { uri, alpha, catmull, sol, animal, nodeIcon, starBadge, lockBadge } from '../../web/lib/art.ts';
 
 test('uri: wrappea con comillas simples y escapa las internas', () => {
   const u = uri("<svg a='b'></svg>");

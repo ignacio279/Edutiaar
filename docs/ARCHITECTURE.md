@@ -9,7 +9,7 @@
                        + Edge Functions)
 ```
 
-- **Vercel** sirve el frontend (HTML/CSS/JS) bajo `edutia.ar`.
+- **Vercel** sirve el frontend (**Next.js** / App Router / React, en `web/`) bajo `edutia.ar`.
 - **Supabase** es todo el backend: base de datos Postgres, autenticación (docente y alumno), y Edge Functions (lógica de servidor en TypeScript/Deno). Las APIs REST de cada tabla se generan automáticamente.
 - **Claude API** es el cerebro de SOL. Se llama **desde una Edge Function de Supabase**, nunca desde el navegador.
 
