@@ -3,11 +3,10 @@
 // (vía Edge Function) → PIN → Edge Function valida (secreto+PIN+lockout) y
 // devuelve la sesión. El browser nunca ve las credenciales del chico.
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
 const cfg = window.EDUTIA_CONFIG;
 if (!cfg) throw new Error('Falta ../config.js (window.EDUTIA_CONFIG)');
-const supabase = createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+if (!window.supabase) throw new Error('Falta vendor/supabase.js');
+const supabase = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
 
 // ---------- helper ----------
 const uri = (s) => "url('data:image/svg+xml," + encodeURIComponent(s).replace(/'/g, '%27') + "')";
@@ -49,6 +48,50 @@ function animal(key) {
 const ARROW = '‹';
 const solHappy = sol('happy');
 
+// ---------- arte/data del mapa (verbatim del mockup, solo Lengua) ----------
+const SC = { domina: '#7FB069', camino: '#E89B42', reforzar: '#D46A5A', bloqueado: '#C9BCA6' };
+const COORDS = [[14, 22], [36, 40], [58, 25], [81, 44], [60, 68], [33, 80]];
+const alpha = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`; };
+function catmull(pts) {
+  if (pts.length < 2) return '';
+  let d = `M ${pts[0][0]} ${pts[0][1]}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2;
+    const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
+    const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
+    d += ` C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${p2[0]} ${p2[1]}`;
+  }
+  return d;
+}
+function nodeIcon(key) {
+  const p = {
+    vocales: `<path d="M28 76 L50 26 L72 76 M37 58 L63 58" />`,
+    silabas: `<rect x="22" y="40" width="24" height="24" rx="6"/><rect x="54" y="40" width="24" height="24" rx="6"/>`,
+    palabras: `<path d="M28 40 H72 M28 54 H72 M28 68 H54"/>`,
+    oraciones: `<path d="M26 34 H74 a8 8 0 0 1 8 8 V60 a8 8 0 0 1 -8 8 H46 L34 80 V68 H26 a8 8 0 0 1 -8 -8 V42 a8 8 0 0 1 8 -8 Z"/>`,
+    lectura: `<path d="M50 36 C40 30 28 30 22 33 V72 C28 69 40 69 50 75 C60 69 72 69 78 72 V33 C72 30 60 30 50 36 Z M50 36 V75"/>`,
+    cuento: `<path d="M50 24 L58 44 L80 46 L63 60 L68 82 L50 70 L32 82 L37 60 L20 46 L42 44 Z"/>`,
+  };
+  return uri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" stroke="#FFFDF8" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">${p[key] || p.vocales}</svg>`);
+}
+const starBadge = () => uri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><circle cx="20" cy="20" r="19" fill="#F4A93B" stroke="#FFFCF5" stroke-width="2"/><path d="M20 9 l3.2 6.6 7.2 1 -5.2 5 1.3 7.2 -6.5 -3.4 -6.5 3.4 1.3 -7.2 -5.2 -5 7.2 -1 z" fill="#FFFCF5"/></svg>`);
+const lockBadge = () => uri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><circle cx="20" cy="20" r="19" fill="#C9BCA6" stroke="#FFFCF5" stroke-width="2"/><rect x="13" y="19" width="14" height="11" rx="3" fill="#FFFCF5"/><path d="M16 19 v-3 a4 4 0 0 1 8 0 v3" stroke="#FFFCF5" stroke-width="3" fill="none"/></svg>`);
+
+// Una materia (Lengua) — contenido estático de muestra (los nodos reales vienen en etapa 2)
+const LENGUA = {
+  nombre: 'Lengua', color: '#F4A93B',
+  labels: ['Vocales', 'Sílabas', 'Palabras', 'Oraciones', 'Lectura', 'Cuento'],
+  icons: ['vocales', 'silabas', 'palabras', 'oraciones', 'lectura', 'cuento'],
+  states: ['domina', 'domina', 'reforzar', 'camino', 'bloqueado', 'bloqueado'],
+  greeting: '¡Hola! Soy SOL. Cuando esté listo, vamos a practicar Lengua juntos: te voy a mostrar un dibujo y vos tocás la respuesta.',
+};
+const LEGEND = [
+  { label: 'Lo domina', c: '#7FB069' },
+  { label: 'En camino', c: '#E89B42' },
+  { label: 'A reforzar', c: '#D46A5A' },
+  { label: 'Bloqueado', c: '#C9BCA6' },
+];
+
 // ---------- aula en el device (localStorage) ----------
 const AULA_LS = 'edutia_aula';
 const getAula = () => { try { return JSON.parse(localStorage.getItem(AULA_LS)) || null; } catch { return null; } };
@@ -73,7 +116,8 @@ async function callFn(name, body) {
 
 // ---------- estado ----------
 const state = {
-  screen: 'inicio', // inicio | aulaGate | alumnoLogin | alumnoPin | docenteLogin | homeAlumno | homeDocente
+  screen: 'inicio', // inicio | aulaSetup | alumnoLogin | alumnoPin | docenteLogin | homeAlumno | homeDocente
+  setup: { escuelas: [], aulas: [], escuelaId: '', aulaId: '' }, // selección colegio→aula
   alumnosAula: [],   // grilla de avatares del aula (de la Edge Function)
   pinPerfil: null,   // alumno elegido {id,nombre,avatar}
   pin: '',
@@ -108,26 +152,42 @@ function scInicio() {
   </div>`;
 }
 
-function scAulaGate() {
+function scAulaSetup() {
+  const s = state.setup;
+  const fieldStyle = "width:100%;padding:14px 16px;border:2px solid #EFE3CE;border-radius:14px;font-family:'Nunito';font-size:16px;color:#3A332A;background:#FBF4E6;margin-bottom:16px;outline:none";
+  const colOpts = s.escuelas.length
+    ? s.escuelas.map((e) => `<option value="${e.id}" ${e.id === s.escuelaId ? 'selected' : ''}>${e.nombre}</option>`).join('')
+    : '<option>Cargando…</option>';
+  const aulaOpts = s.aulas.length
+    ? s.aulas.map((a) => `<option value="${a.id}" ${a.id === s.aulaId ? 'selected' : ''}>${a.nombre}</option>`).join('')
+    : '<option>—</option>';
   return `
   <div style="position:relative;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px 22px;animation:edFade .3s ease">
     <button data-action="goInicio" style="position:absolute;top:24px;left:24px;display:inline-flex;align-items:center;gap:7px;background:none;border:none;color:#7A6F5F;font-weight:700;font-size:16px;cursor:pointer">${ARROW} Volver</button>
     <div style="width:100%;max-width:392px;background:#FFFCF5;border:2px solid #EFE3CE;border-radius:30px;padding:34px 34px;box-shadow:0 12px 34px rgba(120,90,40,.14);text-align:center">
       <div style="width:72px;height:72px;margin:0 auto 6px;background:${solHappy} center/contain no-repeat"></div>
-      <h1 style="font-family:'Baloo 2',cursive;font-weight:800;font-size:26px;color:#3A332A;margin:0 0 4px">Entrar al aula</h1>
-      <p style="font-size:15px;color:#7A6F5F;margin:0 0 22px;font-weight:600">Lo configura la seño, una sola vez en la compu.</p>
+      <h1 style="font-family:'Baloo 2',cursive;font-weight:800;font-size:26px;color:#3A332A;margin:0 0 4px">Configurar el aula</h1>
+      <p style="font-size:15px;color:#7A6F5F;margin:0 0 22px;font-weight:600">Lo hace la seño, una sola vez en la compu.</p>
       <div style="text-align:left">
+        <label style="display:block;font-size:14px;font-weight:700;color:#7A6F5F;margin-bottom:7px">Colegio</label>
+        <select id="ed-colegio" style="${fieldStyle}">${colOpts}</select>
+        <label style="display:block;font-size:14px;font-weight:700;color:#7A6F5F;margin-bottom:7px">Aula</label>
+        <select id="ed-aula" style="${fieldStyle}">${aulaOpts}</select>
         <label style="display:block;font-size:14px;font-weight:700;color:#7A6F5F;margin-bottom:7px">Código del aula</label>
-        <input id="ed-codigo" type="text" value="CERRO-3A" style="width:100%;padding:14px 16px;border:2px solid #EFE3CE;border-radius:14px;font-family:'Nunito';font-size:16px;color:#3A332A;background:#FBF4E6;margin-bottom:16px;outline:none"/>
-        <label style="display:block;font-size:14px;font-weight:700;color:#7A6F5F;margin-bottom:7px">Contraseña del aula</label>
-        <input id="ed-secreto" type="password" value="aula2026" style="width:100%;padding:14px 16px;border:2px solid #EFE3CE;border-radius:14px;font-family:'Nunito';font-size:16px;color:#3A332A;background:#FBF4E6;margin-bottom:24px;outline:none"/>
+        <input id="ed-secreto" type="password" value="aula2026" style="${fieldStyle};margin-bottom:24px"/>
       </div>
-      <button data-action="submitAula" class="ed-primary" style="width:100%;background:#F4A93B;color:#fff;border:none;border-radius:14px;padding:15px;font-family:'Baloo 2',cursive;font-weight:700;font-size:18px;cursor:pointer;box-shadow:0 8px 20px rgba(244,169,59,.3)">${state.busy ? 'Abriendo…' : 'Abrir el aula'}</button>
+      <button data-action="submitSetup" class="ed-primary" style="width:100%;background:#F4A93B;color:#fff;border:none;border-radius:14px;padding:15px;font-family:'Baloo 2',cursive;font-weight:700;font-size:18px;cursor:pointer;box-shadow:0 8px 20px rgba(244,169,59,.3)">${state.busy ? 'Abriendo…' : 'Abrir el aula'}</button>
     </div>
   </div>`;
 }
 
 function scAlumnoLogin() {
+  if (state.busy && state.alumnosAula.length === 0) {
+    return `<div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;animation:edFade .3s ease">
+      <div style="width:74px;height:74px;animation:edBob 1.6s ease-in-out infinite;background:${solHappy} center/contain no-repeat"></div>
+      <p style="font-family:'Baloo 2',cursive;font-weight:700;font-size:19px;color:#7A6F5F">Entrando al aula…</p>
+    </div>`;
+  }
   const cards = state.alumnosAula.map((s) => `
     <button data-action="pickStudent" data-id="${s.id}" class="ed-student" style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:22px 14px 18px;background:#FFFCF5;border:2.5px solid #EFE3CE;border-radius:28px;cursor:pointer;box-shadow:0 6px 18px rgba(120,90,40,.1)">
       <div style="width:clamp(96px,13vw,120px);height:clamp(96px,13vw,120px);background:${animal(s.avatar)} center/contain no-repeat"></div>
@@ -230,9 +290,71 @@ function scHomeDocente() {
   </div>`;
 }
 
+// Header compartido del alumno (avatar + nombre + toggle Mi mapa / Practicar + Salir)
+function alumnoHeader(active) {
+  const me = state.me || {};
+  const pill = (label, action, on) =>
+    `<button data-action="${action}" style="display:flex;align-items:center;gap:8px;border:none;cursor:pointer;border-radius:999px;padding:10px 20px;font-family:'Baloo 2',cursive;font-weight:700;font-size:16px;background:${on ? '#F4A93B' : 'transparent'};color:${on ? '#fff' : '#7A6F5F'}">${label}</button>`;
+  return `
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:14px clamp(16px,4vw,40px);background:#FFFCF5;border-bottom:2px solid #EFE3CE;position:sticky;top:0;z-index:6">
+    <div style="display:flex;align-items:center;gap:12px"><div style="width:48px;height:48px;background:${animal(me.avatar || 'fox')} center/contain no-repeat"></div><div style="line-height:1.15"><div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:19px;color:#3A332A">Hola, ${me.nombre || ''}</div><div style="font-size:13px;color:#7A6F5F;font-weight:700">Lengua</div></div></div>
+    <div style="display:flex;gap:6px;background:#FBEFD9;border-radius:999px;padding:5px">${pill('Mi mapa', 'goMapa', active === 'mapa')}${pill('Practicar', 'goPracticar', active === 'practicar')}</div>
+    <button data-action="signOut" style="background:none;border:none;color:#7A6F5F;font-weight:700;font-size:15px;cursor:pointer">Salir</button>
+  </div>`;
+}
+
+function scMapa() {
+  const nodes = LENGUA.labels.map((label, i) => {
+    const st = LENGUA.states[i], color = SC[st];
+    const badge = st === 'domina' ? starBadge() : st === 'bloqueado' ? lockBadge() : null;
+    const [x, y] = COORDS[i];
+    return `
+    <button style="position:absolute;left:${x}%;top:${y}%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:10px;background:none;border:none;cursor:pointer;width:clamp(92px,12vw,118px);padding:0">
+      <span style="position:relative;width:clamp(74px,9.5vw,94px);height:clamp(74px,9.5vw,94px);border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;box-shadow:0 8px 18px ${alpha(color, .34)};border:5px solid #FFFCF5">
+        <div style="width:48%;height:48%;background:${nodeIcon(LENGUA.icons[i])} center/contain no-repeat"></div>
+        ${badge ? `<div style="position:absolute;top:-5px;right:-5px;width:24px;height:24px;background:${badge} center/contain no-repeat"></div>` : ''}
+      </span>
+      <span style="font-family:'Baloo 2',cursive;font-weight:700;font-size:clamp(12px,1.5vw,15px);color:#4A3B32;background:#FFFCF5;border:1.5px solid #EFE3CE;border-radius:999px;padding:4px 13px;white-space:nowrap;box-shadow:0 2px 6px rgba(120,90,40,.08)">${label}</span>
+    </button>`;
+  }).join('');
+  const legend = LEGEND.map((l) => `<div style="display:flex;align-items:center;gap:8px"><span style="width:16px;height:16px;border-radius:50%;background:${l.c};display:inline-block;box-shadow:0 2px 5px ${alpha(l.c, .4)}"></span><span style="font-size:14px;color:#7A6F5F;font-weight:700">${l.label}</span></div>`).join('');
+  return `
+  <div style="min-height:100vh;display:flex;flex-direction:column;animation:edFade .3s ease">
+    ${alumnoHeader('mapa')}
+    <div style="flex:1;width:100%;max-width:1000px;margin:0 auto;padding:24px clamp(16px,4vw,40px) 48px">
+      <h1 style="font-family:'Baloo 2',cursive;font-weight:800;font-size:clamp(26px,4.5vw,40px);margin:0;color:#3A332A;display:flex;align-items:center;gap:12px"><span style="width:22px;height:22px;border-radius:8px;background:${LENGUA.color}"></span>Tu mapa de Lengua</h1>
+      <p style="font-size:16px;color:#7A6F5F;margin:6px 0 0;font-weight:600">Seguí el camino. Tocá una parada para practicar.</p>
+      <div style="position:relative;width:min(920px,100%);aspect-ratio:920/540;margin:18px auto 0">
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible"><path d="${catmull(COORDS)}" fill="none" stroke="#E2C9A0" stroke-width="5" stroke-linecap="round" stroke-dasharray="0.5 9" vector-effect="non-scaling-stroke"/></svg>
+        ${nodes}
+      </div>
+      <div style="display:flex;gap:18px;flex-wrap:wrap;justify-content:center;margin-top:24px">${legend}</div>
+      <div style="text-align:center;margin-top:28px">
+        <button data-action="goPracticar" style="display:inline-flex;align-items:center;gap:10px;background:#F4A93B;color:#fff;border:none;border-radius:999px;padding:16px 34px;font-family:'Baloo 2',cursive;font-weight:700;font-size:20px;cursor:pointer;box-shadow:0 8px 22px rgba(244,169,59,.32)">Practicar Lengua con SOL</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function scPracticar() {
+  const me = state.me || {};
+  const greeting = me.nombre ? `¡Hola ${me.nombre}! ${LENGUA.greeting.replace('¡Hola! ', '')}` : LENGUA.greeting;
+  return `
+  <div style="min-height:100vh;display:flex;flex-direction:column;animation:edFade .3s ease">
+    ${alumnoHeader('practicar')}
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 22px;text-align:center">
+      <div style="width:120px;height:120px;animation:edBob 4.5s ease-in-out infinite;background:${sol('cheer')} center/contain no-repeat"></div>
+      <div style="max-width:520px;margin:18px 0 0;background:#FFFCF5;border:2px solid #EFE3CE;border-radius:20px;border-bottom-left-radius:6px;padding:16px 20px;box-shadow:0 4px 12px rgba(120,90,40,.08)">
+        <p style="margin:0;font-family:'Nunito';font-weight:700;font-size:18px;color:#3A332A;line-height:1.35">${greeting}</p>
+      </div>
+      <p style="margin:22px 0 0;color:#7A6F5F;font-weight:600">Muy pronto vas a practicar de verdad con SOL.</p>
+    </div>
+  </div>`;
+}
+
 const SCREENS = {
-  inicio: scInicio, aulaGate: scAulaGate, alumnoLogin: scAlumnoLogin, alumnoPin: scAlumnoPin,
-  docenteLogin: scDocenteLogin, homeAlumno: scHomeAlumno, homeDocente: scHomeDocente,
+  inicio: scInicio, aulaSetup: scAulaSetup, alumnoLogin: scAlumnoLogin, alumnoPin: scAlumnoPin,
+  docenteLogin: scDocenteLogin, mapa: scMapa, practicar: scPracticar, homeDocente: scHomeDocente,
 };
 
 function render() { root.innerHTML = (SCREENS[state.screen] || scInicio)(); }
@@ -261,30 +383,54 @@ async function loadMeAndRoute() {
     state.alumnos = alumnos || [];
     go('homeDocente');
   } else {
-    const { data: esc } = await supabase.from('escuela').select('nombre,zona').limit(1).maybeSingle();
-    state.escuela = esc || {};
-    go('homeAlumno');
+    go('mapa');
   }
 }
 
 // ---------- flujos alumno ----------
+// Tap "Soy alumno": si el aula ya está configurada en el device → directo a
+// los avatares; si no → setup colegio→aula→código.
 async function openAlumnoFlow() {
   const aula = getAula();
-  if (!aula) { go('aulaGate'); return; }
+  if (!aula) { enterSetup(); return; }
+  state.alumnosAula = []; state.busy = true; go('alumnoLogin');
   const { ok, data } = await callFn('aula-students', aula);
-  if (ok && data.alumnos) { state.alumnosAula = data.alumnos; go('alumnoLogin'); }
-  else { clearAula(); go('aulaGate'); }
+  state.busy = false;
+  if (ok && data.alumnos) { state.alumnosAula = data.alumnos; render(); }
+  else { clearAula(); enterSetup(); }
 }
 
-async function submitAula() {
+// Setup: cargar colegios (REST anon, rápido) → elegir aula → código.
+async function enterSetup() {
+  state.setup = { escuelas: [], aulas: [], escuelaId: '', aulaId: '' };
+  go('aulaSetup');
+  const { data: escuelas } = await supabase.from('escuela').select('id,nombre').order('nombre');
+  state.setup.escuelas = escuelas || [];
+  if (state.setup.escuelas.length) await selectColegio(state.setup.escuelas[0].id);
+  else render();
+}
+
+async function selectColegio(id) {
+  state.setup.escuelaId = id;
+  const { data: aulas } = await supabase.from('aula').select('id,nombre,codigo').eq('escuela_id', id).order('nombre');
+  state.setup.aulas = aulas || [];
+  state.setup.aulaId = state.setup.aulas[0]?.id || '';
+  render();
+}
+
+async function submitSetup() {
   if (state.busy) return;
-  const codigo = (document.getElementById('ed-codigo') || {}).value?.trim() || '';
+  const aula = state.setup.aulas.find((a) => a.id === state.setup.aulaId);
   const secreto = (document.getElementById('ed-secreto') || {}).value || '';
+  if (!aula) { toast('Elegí un aula'); return; }
   state.busy = true; render();
-  const { ok, data } = await callFn('aula-students', { codigo, secreto });
+  const { ok, data } = await callFn('aula-students', { codigo: aula.codigo, secreto });
   state.busy = false;
-  if (ok && data.alumnos) { setAula({ codigo, secreto }); state.alumnosAula = data.alumnos; go('alumnoLogin'); }
-  else { render(); toast('Código o contraseña del aula incorrectos'); }
+  if (ok && data.alumnos) {
+    setAula({ codigo: aula.codigo, secreto });
+    state.alumnosAula = data.alumnos;
+    go('alumnoLogin');
+  } else { render(); toast('El código del aula no es correcto'); }
 }
 
 async function loginAlumno() {
@@ -301,7 +447,7 @@ async function loginAlumno() {
     return;
   }
   state.pin = '';
-  if (data.error === 'aula_invalida') { clearAula(); toast('El aula cambió. Avisale a la seño.'); go('aulaGate'); return; }
+  if (data.error === 'aula_invalida') { clearAula(); toast('El aula cambió. Avisale a la seño.'); enterSetup(); return; }
   state.shake = true; render();
   setTimeout(() => { state.shake = false; if (state.screen === 'alumnoPin') render(); }, 450);
   if (data.error === 'bloqueado') toast(`Demasiados intentos. Esperá ${Math.ceil((data.dato || 900) / 60)} min`);
@@ -334,8 +480,8 @@ root.addEventListener('click', (e) => {
     case 'goAlumno': state.pin = ''; openAlumnoFlow(); break;
     case 'goDocenteLogin': go('docenteLogin'); break;
     case 'goInicio': go('inicio'); break;
-    case 'submitAula': submitAula(); break;
-    case 'changeAula': clearAula(); state.alumnosAula = []; go('aulaGate'); break;
+    case 'submitSetup': submitSetup(); break;
+    case 'changeAula': clearAula(); state.alumnosAula = []; enterSetup(); break;
     case 'pickStudent': {
       const s = state.alumnosAula.find((x) => x.id === el.dataset.id);
       if (s) { state.pinPerfil = s; state.pin = ''; go('alumnoPin'); }
@@ -348,6 +494,8 @@ root.addEventListener('click', (e) => {
       if (state.pin.length === 4) loginAlumno();
       break;
     case 'del': state.pin = state.pin.slice(0, -1); render(); break;
+    case 'goMapa': go('mapa'); break;
+    case 'goPracticar': go('practicar'); break;
     case 'loginDocente': loginDocente(); break;
     case 'signOut': signOut(); break;
   }
@@ -355,7 +503,12 @@ root.addEventListener('click', (e) => {
 root.addEventListener('keydown', (e) => {
   if (e.key !== 'Enter') return;
   if (e.target.id === 'ed-email' || e.target.id === 'ed-pass') { e.preventDefault(); loginDocente(); }
-  if (e.target.id === 'ed-codigo' || e.target.id === 'ed-secreto') { e.preventDefault(); submitAula(); }
+  if (e.target.id === 'ed-secreto') { e.preventDefault(); submitSetup(); }
+});
+// selects del setup (colegio / aula)
+root.addEventListener('change', (e) => {
+  if (e.target.id === 'ed-colegio') selectColegio(e.target.value);
+  else if (e.target.id === 'ed-aula') state.setup.aulaId = e.target.value;
 });
 
 // ---------- init: ¿sesión activa? ----------
