@@ -1,9 +1,10 @@
 'use client';
-// Header del alumno por materia: avatar + nombre + materia actual + toggle
-// Mi mapa / Practicar (scopeado a la materia) + "‹ Materias" + Salir.
+// Header del alumno (diseño Edutia): avatar + "Hola, {nombre}" + materia actual,
+// toggle Mi mapa / Practicar (con íconos, activo en naranja) y "Salir". El volver
+// a materias se hace con el link "Cambiar materia" del cuerpo de cada pantalla.
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { animal } from '@/lib/art';
+import { animal, uiIcon } from '@/lib/art';
 import type { Perfil } from '@/lib/me-context';
 
 const BALOO = 'var(--font-baloo), cursive';
@@ -28,7 +29,7 @@ export default function AlumnoHeader({
     router.refresh();
   }
 
-  const pill = (label: string, to: string, on: boolean) => (
+  const pill = (label: string, to: string, on: boolean, icon: string) => (
     <button
       onClick={() => router.push(to)}
       style={{
@@ -46,6 +47,7 @@ export default function AlumnoHeader({
         color: on ? '#fff' : '#7A6F5F',
       }}
     >
+      <span style={{ width: 20, height: 20, background: `${uiIcon(icon)} center/contain no-repeat` }} />
       {label}
     </button>
   );
@@ -67,13 +69,6 @@ export default function AlumnoHeader({
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button
-          onClick={() => router.push('/alumno')}
-          aria-label="Volver a materias"
-          style={{ background: 'none', border: 'none', color: '#7A6F5F', fontWeight: 700, fontSize: 15, cursor: 'pointer', padding: 0 }}
-        >
-          ‹
-        </button>
         <div style={{ width: 48, height: 48, background: `${animal(me?.avatar || 'fox')} center/contain no-repeat` }} />
         <div style={{ lineHeight: 1.15 }}>
           <div style={{ fontFamily: BALOO, fontWeight: 700, fontSize: 19, color: '#3A332A' }}>
@@ -83,8 +78,8 @@ export default function AlumnoHeader({
         </div>
       </div>
       <div style={{ display: 'flex', gap: 6, background: '#FBEFD9', borderRadius: 999, padding: 5 }}>
-        {pill('Mi mapa', `/alumno/${programaId}/mapa`, active === 'mapa')}
-        {pill('Practicar', `/alumno/${programaId}/practicar`, active === 'practicar')}
+        {pill('Mi mapa', `/alumno/${programaId}/mapa`, active === 'mapa', active === 'mapa' ? 'mapW' : 'mapI')}
+        {pill('Practicar', `/alumno/${programaId}/practicar`, active === 'practicar', active === 'practicar' ? 'sunW' : 'sunI')}
       </div>
       <button
         onClick={signOut}

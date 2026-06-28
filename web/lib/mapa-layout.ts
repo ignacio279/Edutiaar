@@ -45,6 +45,34 @@ export function serpentine(n: number, perRow = 3): [number, number][] {
   return coords;
 }
 
+// Coordenadas hand-tuned del diseño para las dos variantes del mapa (hasta 6
+// paradas). Para N>6 caemos a la serpentina (con densidad distinta por variante
+// para que "Camino" y "Colinas" sigan viéndose diferentes). Devuelven [x,y] en
+// el viewBox 0..100, en orden de recorrido (para que catmull dibuje bien).
+const COORDS_CAMINO: [number, number][] = [
+  [14, 22], [36, 40], [58, 25], [81, 44], [60, 68], [33, 80],
+];
+const COORDS_COLINAS: [number, number][] = [
+  [10, 56], [27, 36], [44, 58], [62, 36], [80, 56], [93, 38],
+];
+
+export function coordsCamino(n: number): [number, number][] {
+  if (n <= 0) return [];
+  if (n <= COORDS_CAMINO.length) return COORDS_CAMINO.slice(0, n);
+  return serpentine(n, 3);
+}
+
+export function coordsColinas(n: number): [number, number][] {
+  if (n <= 0) return [];
+  if (n <= COORDS_COLINAS.length) return COORDS_COLINAS.slice(0, n);
+  return serpentine(n, 4);
+}
+
+// Variante del mapa → coordenadas. 'A' = Camino (default), 'B' = Colinas.
+export function coordsVariante(variante: string, n: number): [number, number][] {
+  return variante === 'B' ? coordsColinas(n) : coordsCamino(n);
+}
+
 // Saludo cálido de SOL para la pantalla de practicar (tono rioplatense).
 export function saludoMateria(materia: string, alumno?: string): string {
   const hola = alumno ? `¡Hola ${alumno}!` : '¡Hola!';

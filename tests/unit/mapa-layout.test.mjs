@@ -1,7 +1,7 @@
 // Tests unitarios del layout puro del mapa (web/lib/mapa-layout.ts). `npm test`.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { serpentine, estadoColor, LEGEND, saludoMateria } from '../../web/lib/mapa-layout.ts';
+import { serpentine, estadoColor, LEGEND, saludoMateria, coordsCamino, coordsColinas, coordsVariante } from '../../web/lib/mapa-layout.ts';
 
 test('serpentine: 0 → [], 1 → centro', () => {
   assert.deepEqual(serpentine(0), []);
@@ -46,4 +46,30 @@ test('saludoMateria: incluye nombre del alumno y la materia', () => {
   assert.match(s, /Mateo/);
   assert.match(s, /Lengua/);
   assert.match(saludoMateria('', undefined), /¡Hola!/);
+});
+
+test('coordsCamino / coordsColinas: 0 → [], hasta 6 = coords del diseño', () => {
+  assert.deepEqual(coordsCamino(0), []);
+  assert.deepEqual(coordsColinas(0), []);
+  assert.deepEqual(coordsCamino(3), [[14, 22], [36, 40], [58, 25]]);
+  assert.deepEqual(coordsColinas(2), [[10, 56], [27, 36]]);
+  assert.equal(coordsCamino(6).length, 6);
+  assert.equal(coordsColinas(6).length, 6);
+});
+
+test('coordsCamino / coordsColinas: N>6 generan N coords en rango 0..100', () => {
+  for (const fn of [coordsCamino, coordsColinas]) {
+    const c = fn(10);
+    assert.equal(c.length, 10);
+    for (const [x, y] of c) {
+      assert.ok(x >= 0 && x <= 100, `x en rango: ${x}`);
+      assert.ok(y >= 0 && y <= 100, `y en rango: ${y}`);
+    }
+  }
+});
+
+test('coordsVariante: B = Colinas, default = Camino', () => {
+  assert.deepEqual(coordsVariante('B', 2), coordsColinas(2));
+  assert.deepEqual(coordsVariante('A', 4), coordsCamino(4));
+  assert.deepEqual(coordsVariante('x', 4), coordsCamino(4));
 });

@@ -1,29 +1,43 @@
 'use client';
-// Detalle del alumno para la docente (Fase 2 / SP-4c + Etapa 4): su mapa (estados de
-// nodo + override), la actividad de hoy ("Lo de hoy", con fallback a la última vez),
-// el último análisis cualitativo de SOL (evaluacion_sesion) y el histórico mes a mes.
-// RLS deja a la docente ver solo a sus alumnos (es_mi_alumno). Protección de rol acá.
+// Detalle del alumno para la docente (diseño Edutia / SP-4c + Etapa 4 + SP-4e):
+// barra lateral, "Su mapa" (mini-mapa por materia; tocar un nodo fija su estado a
+// mano = override), "Lo de hoy" (con fallback a la última vez), "Cómo viene" (barras
+// mes a mes) y "Sugerencia de SOL" (de evaluacion_sesion). RLS deja ver solo a sus
+// alumnos (es_mi_alumno); la lógica de fechas/meses sale de panel.ts (pura).
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { animal } from '@/lib/art';
-import { estadoColor } from '@/lib/mapa-layout';
-import { ESTADO_LABEL, rangoHoy, resumenHoy, ultimaSesion, haceCuanto, agruparPorMes } from '@/lib/panel';
+import { animal, sol, uiIcon, nodeIcon, starBadge, lockBadge } from '@/lib/art';
+import { estadoColor, LEGEND, coordsCamino } from '@/lib/mapa-layout';
+import { temaMateria, iconoNodo } from '@/lib/materia-tema';
+import { ESTADO_LABEL, etiquetaEstado, rangoHoy, resumenHoy, ultimaSesion, haceCuanto, agruparPorMes, type EstadoNodo } from '@/lib/panel';
 
+const BALOO = 'var(--font-baloo), cursive';
 const QUICK = 'var(--font-quicksand), sans-serif';
-const NUNITO = 'var(--font-nunito)';
+const NUNITO = 'var(--font-nunito), sans-serif';
+const solHappy = `${sol('happy')} center/contain no-repeat`;
 
 type Alumno = { nombre: string; avatar: string; grado: number };
-type NodoEstado = { nodo_id: string; estado: string; override: boolean; nombre: string };
-type Error = { pregunta: string; respondio: string; esperaba: string };
-type Eval = { resumen: string; errores: Error[]; a_reforzar: string[] } | null;
+type NodoEstado = { nodo_id: string; estado: string; override: boolean; nombre: string; orden: number; materia: string };
+type Err = { pregunta: string; respondio: string; esperaba: string };
+type Eval = { resumen: string; errores: Err[]; a_reforzar: string[] } | null;
 type Sesion = { fecha: string; aciertos: number; total: number; duracion_seg: number; nodo: string };
 
-function pct(aciertos: number, total: number): string {
-  return total > 0 ? `${Math.round((aciertos / total) * 100)}%` : '—';
+const TAG: Record<EstadoNodo, [string, string]> = {
+  dominado: ['#E6F0DC', '#4E7A3A'],
+  en_construccion: ['#FBEBD6', '#B9722A'],
+  a_reforzar: ['#F7E2DD', '#BB4F3F'],
+  no_empezado: ['#EDE6D6', '#8A7D63'],
+};
+const MES_CORTO = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+const GREENS = ['#C9D9BC', '#A8CE93', '#8FBF78', '#7FB069'];
+
+function mesCorto(mesISO: string): string {
+  const m = Number(mesISO.split('-')[1]);
+  return MES_CORTO[m - 1] || mesISO;
 }
 function duracionTxt(seg: number): string {
-  if (!seg) return '';
+  if (!seg) return '—';
   return seg >= 60 ? `${Math.round(seg / 60)} min` : `${seg} s`;
 }
 
@@ -38,6 +52,8 @@ export default function DetalleAlumno() {
   const [analisis, setAnalisis] = useState<Eval>(null);
   const [sesiones, setSesiones] = useState<Sesion[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [materiaSel, setMateriaSel] = useState('');
+  const [selNode, setSelNode] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -51,10 +67,16 @@ export default function DetalleAlumno() {
 
       const { data: an } = await supabase
         .from('alumno_nodo')
-        .select('nodo_id, estado, estado_override, nodo:nodo_id(nombre)')
+        .select('nodo_id, estado, estado_override, nodo:nodo_id(nombre, orden, programa:programa_id(materia:materia_id(nombre)))')
         .eq('alumno_id', alumnoId);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      setNodos(((an as any[]) || []).map((r) => ({ nodo_id: r.nodo_id, estado: r.estado, override: r.estado_override, nombre: r.nodo?.nombre ?? 'Nodo' })));
+      const ns: NodoEstado[] = ((an as any[]) || []).map((r) => ({
+        nodo_id: r.nodo_id, estado: r.estado, override: r.estado_override,
+        nombre: r.nodo?.nombre ?? 'Nodo', orden: r.nodo?.orden ?? 0,
+        materia: r.nodo?.programa?.materia?.nombre ?? 'Materia',
+      }));
+      setNodos(ns);
+      setMateriaSel((prev) => prev || ns[0]?.materia || '');
 
       const { data: ses } = await supabase
         .from('sesion')
@@ -71,7 +93,7 @@ export default function DetalleAlumno() {
         .eq('sesion.alumno_id', alumnoId)
         .order('created_at', { ascending: false })
         .limit(1);
-      const row = ((ev as unknown[]) || [])[0] as { resumen: string; errores: Error[]; a_reforzar: string[] } | undefined;
+      const row = ((ev as unknown[]) || [])[0] as { resumen: string; errores: Err[]; a_reforzar: string[] } | undefined;
       setAnalisis(row ? { resumen: row.resumen, errores: row.errores || [], a_reforzar: row.a_reforzar || [] } : null);
       setLoaded(true);
     })();
@@ -79,7 +101,6 @@ export default function DetalleAlumno() {
   }, [alumnoId]);
 
   async function fijarEstado(nodoId: string, valor: string) {
-    // valor 'auto' = devolver a la regla; cualquier otro = override docente
     const override = valor !== 'auto';
     const estado = override ? valor : (nodos.find((n) => n.nodo_id === nodoId)?.estado ?? 'no_empezado');
     await supabase.from('alumno_nodo').upsert(
@@ -97,114 +118,208 @@ export default function DetalleAlumno() {
     return t >= new Date(desde).getTime() && t < new Date(hasta).getTime();
   });
   const ultima = ultimaSesion(sesiones);
+  const tiempoHoy = sesionesHoy.reduce((acc, s) => acc + s.duracion_seg, 0);
   const meses = agruparPorMes(sesiones);
+  const barras = meses.slice(0, 4).reverse().map((m) => ({ label: mesCorto(m.mes), pct: m.total ? Math.round((m.aciertos / m.total) * 100) : 0 }));
+  const maxPct = Math.max(1, ...barras.map((b) => b.pct));
+
+  const materias = [...new Set(nodos.map((n) => n.materia))];
+  const matActual = materiaSel || materias[0] || '';
+  const nodosMat = nodos.filter((n) => n.materia === matActual).sort((a, b) => a.orden - b.orden);
+  const coords = coordsCamino(nodosMat.length);
+  const { estado: estadoPeor, label: tagLabel } = etiquetaEstado(nodos);
+  const [tagBg, tagCo] = TAG[estadoPeor] ?? TAG.no_empezado;
+  const nodoSel = nodos.find((n) => n.nodo_id === selNode) || null;
+
+  const sugerencia = analisis?.resumen
+    || (loaded && nodos.length === 0 ? 'Todavía no practicó. Invitala/o a empezar por la primera parada.' : 'Cuando practique un poco más, SOL te deja acá una sugerencia.');
 
   return (
-    <div style={{ minHeight: '100vh', padding: 'clamp(24px,5vw,48px) 22px', animation: 'edFade .3s ease' }}>
-      <div style={{ maxWidth: 600, margin: '0 auto' }}>
-        <button onClick={() => router.push('/docente')} style={{ background: 'none', border: 'none', color: '#7A6F5F', fontWeight: 700, fontSize: 15, cursor: 'pointer', marginBottom: 14 }}>
-          ‹ Mis alumnos
+    <div style={{ minHeight: '100vh', display: 'flex', background: '#FBF4E6', animation: 'edFade .3s ease' }}>
+      <aside style={{ width: 236, flexShrink: 0, background: '#FFFCF5', borderRight: '2px solid #EFE3CE', padding: '26px 18px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '6px 10px 22px' }}>
+          <div style={{ width: 36, height: 36, background: solHappy }} />
+          <span style={{ fontFamily: BALOO, fontWeight: 800, fontSize: 22, color: '#3A332A', letterSpacing: '-.5px' }}>EDUTIA</span>
+        </div>
+        <button onClick={() => router.push('/docente')} className="ed-side" style={{ ...sideBtn, background: '#E3EEF4', color: '#3A332A' }}>
+          <span style={{ width: 22, height: 22, background: `${uiIcon('people')} center/contain no-repeat` }} />Mis alumnos
         </button>
+        <div style={{ flex: 1 }} />
+        <button onClick={async () => { await supabase.auth.signOut(); router.replace('/'); router.refresh(); }} className="ed-side" style={sideBtn}>Cerrar sesión</button>
+      </aside>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 22 }}>
-          <div style={{ width: 56, height: 56, background: `${animal(alumno?.avatar || 'fox')} center/contain no-repeat` }} />
+      <main style={{ flex: 1, minWidth: 0, padding: 'clamp(22px,3.5vw,40px)' }}>
+        <button onClick={() => router.push('/docente')} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: 'none', border: 'none', color: '#7A6F5F', fontWeight: 700, fontSize: 15, cursor: 'pointer', marginBottom: 18 }}>‹ Mis alumnos</button>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 26, flexWrap: 'wrap' }}>
+          <div style={{ width: 64, height: 64, background: `${animal(alumno?.avatar || 'fox')} center/contain no-repeat` }} />
           <div>
-            <h1 style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 'clamp(24px,4.5vw,30px)', color: '#3A332A', margin: 0 }}>{alumno?.nombre || ''}</h1>
-            <p style={{ fontSize: 14, color: '#7A6F5F', margin: '2px 0 0', fontWeight: 600 }}>{(alumno?.grado || 3)}° grado</p>
+            <h1 style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 'clamp(26px,4vw,34px)', color: '#3A332A', margin: 0 }}>{alumno?.nombre || ''}</h1>
+            <p style={{ fontSize: 15, color: '#7A6F5F', margin: '4px 0 0', fontWeight: 600 }}>{(alumno?.grado || 3)}° grado</p>
           </div>
+          {nodos.length > 0 && (
+            <span style={{ background: tagBg, color: tagCo, padding: '7px 14px', borderRadius: 999, fontFamily: QUICK, fontWeight: 700, fontSize: 13.5, whiteSpace: 'nowrap' }}>{tagLabel}</span>
+          )}
         </div>
 
-        {/* Mapa: estados por nodo */}
-        <h2 style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 18, color: '#3A332A', margin: '0 0 10px' }}>Su recorrido</h2>
-        {nodos.length === 0 ? (
-          <p style={{ color: '#7A6F5F', fontWeight: 600 }}>{loaded ? 'Todavía no practicó.' : 'Cargando…'}</p>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {nodos.map((n) => (
-              <div key={n.nodo_id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#FFFCF5', border: '1.5px solid #EFE3CE', borderRadius: 14, padding: '10px 14px' }}>
-                <span style={{ width: 16, height: 16, borderRadius: '50%', background: estadoColor(n.estado), flexShrink: 0 }} />
-                <span style={{ flex: 1, fontFamily: QUICK, fontWeight: 700, color: '#3A332A' }}>{n.nombre}</span>
-                <span style={{ fontSize: 13, color: '#7A6F5F', fontWeight: 700 }}>{ESTADO_LABEL[n.estado as keyof typeof ESTADO_LABEL] ?? n.estado}{n.override ? ' ·fijado' : ''}</span>
-                <select
-                  value={n.override ? n.estado : 'auto'}
-                  onChange={(e) => fijarEstado(n.nodo_id, e.target.value)}
-                  style={{ fontFamily: NUNITO, fontWeight: 700, fontSize: 13, color: '#3A332A', border: '1.5px solid #EFE3CE', borderRadius: 10, padding: '4px 8px', background: '#FBF4E6' }}
-                  aria-label={`Fijar estado de ${n.nombre}`}
-                >
-                  <option value="auto">Auto (según práctica)</option>
-                  <option value="no_empezado">Sin empezar</option>
-                  <option value="en_construccion">En camino</option>
-                  <option value="a_reforzar">A reforzar</option>
-                  <option value="dominado">Lo domina</option>
-                </select>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(310px,1fr))', gap: 20, alignItems: 'start' }}>
+          {/* Su mapa */}
+          <div style={card}>
+            <h3 style={cardTitle}>Su mapa</h3>
+            <p style={cardSub}>Cómo va en cada tema. Tocá una parada para fijar su estado.</p>
+            {materias.length > 1 && (
+              <div style={{ display: 'flex', gap: 7, marginBottom: 14, flexWrap: 'wrap' }}>
+                {materias.map((mm) => {
+                  const on = mm === matActual;
+                  const t = temaMateria(mm);
+                  return (
+                    <button key={mm} onClick={() => { setMateriaSel(mm); setSelNode(null); }} style={on
+                      ? { background: t.tint, color: t.color, border: `2px solid ${t.tintBorder}`, borderRadius: 999, padding: '7px 16px', fontFamily: QUICK, fontWeight: 700, fontSize: 14, cursor: 'pointer' }
+                      : { background: 'transparent', color: '#7A6F5F', border: '1.5px solid #EFE3CE', borderRadius: 999, padding: '7px 16px', fontFamily: QUICK, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>{mm}</button>
+                  );
+                })}
               </div>
-            ))}
-          </div>
-        )}
-
-        {/* Lo de hoy */}
-        <h2 style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 18, color: '#3A332A', margin: '26px 0 10px' }}>Lo de hoy</h2>
-        {hoy.cantidad > 0 ? (
-          <div style={{ background: '#FFFCF5', border: '1.5px solid #EFE3CE', borderRadius: 18, padding: '16px 18px' }}>
-            <p style={{ margin: '0 0 10px', fontFamily: NUNITO, fontWeight: 800, fontSize: 16, color: '#3A332A' }}>
-              {hoy.cantidad} {hoy.cantidad === 1 ? 'sesión' : 'sesiones'} hoy{hoy.total > 0 ? ` · ${hoy.aciertos}/${hoy.total} aciertos` : ''}
-            </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {sesionesHoy.map((s, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, color: '#5C5345', fontWeight: 600 }}>
-                  <span style={{ flex: 1, fontFamily: QUICK, fontWeight: 700, color: '#3A332A' }}>{s.nodo}</span>
-                  <span>{s.aciertos}/{s.total}</span>
-                  {s.duracion_seg > 0 && <span style={{ color: '#9A8E7C' }}>· {duracionTxt(s.duracion_seg)}</span>}
+            )}
+            {nodosMat.length === 0 ? (
+              <p style={{ color: '#7A6F5F', fontWeight: 600 }}>{loaded ? 'Todavía no practicó.' : 'Cargando…'}</p>
+            ) : (
+              <>
+                <div style={{ position: 'relative', width: '100%', aspectRatio: '520/360' }}>
+                  <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', overflow: 'visible' }}>
+                    <path d={catmullPath(coords)} fill="none" stroke="#E6DAC2" strokeWidth="3.5" strokeLinecap="round" strokeDasharray="0.5 8" vectorEffect="non-scaling-stroke" />
+                  </svg>
+                  {nodosMat.map((n, i) => {
+                    const color = estadoColor(n.estado);
+                    const [x, y] = coords[i];
+                    const badge = n.estado === 'dominado' ? starBadge() : n.estado === 'no_empezado' ? lockBadge() : null;
+                    const on = selNode === n.nodo_id;
+                    return (
+                      <button key={n.nodo_id} onClick={() => setSelNode(on ? null : n.nodo_id)} style={{ position: 'absolute', left: `${x}%`, top: `${y}%`, transform: 'translate(-50%,-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, background: 'none', border: 'none', cursor: 'pointer', width: 'clamp(64px,11vw,82px)', padding: 0 }}>
+                        <span style={{ position: 'relative', width: 'clamp(50px,8vw,64px)', height: 'clamp(50px,8vw,64px)', borderRadius: '50%', background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 3px 9px rgba(120,90,40,.16)', border: on ? '3px solid #F4A93B' : '3px solid #FFFCF5' }}>
+                          <span style={{ width: '46%', height: '46%', background: `${nodeIcon(iconoNodo(i))} center/contain no-repeat` }} />
+                          {badge && <span style={{ position: 'absolute', top: -3, right: -3, width: 17, height: 17, background: `${badge} center/contain no-repeat` }} />}
+                        </span>
+                        <span style={{ fontFamily: NUNITO, fontWeight: 700, fontSize: 11.5, color: '#4A3B32', background: '#FFFCF5', border: '1.5px solid #EFE3CE', borderRadius: 999, padding: '2px 9px', whiteSpace: 'nowrap', boxShadow: '0 2px 6px rgba(120,90,40,.08)' }}>{n.nombre}</span>
+                      </button>
+                    );
+                  })}
                 </div>
-              ))}
+                <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', justifyContent: 'center', marginTop: 10 }}>
+                  {LEGEND.map((l) => (
+                    <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ width: 12, height: 12, borderRadius: '50%', background: l.c, display: 'inline-block' }} />
+                      <span style={{ fontSize: 12.5, color: '#7A6F5F', fontWeight: 700 }}>{l.label}</span>
+                    </div>
+                  ))}
+                </div>
+                {nodoSel && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, background: '#FBF4E6', borderRadius: 14, padding: '10px 14px', flexWrap: 'wrap' }}>
+                    <span style={{ flex: 1, minWidth: 120, fontFamily: QUICK, fontWeight: 700, color: '#3A332A' }}>
+                      {nodoSel.nombre} <span style={{ fontSize: 12.5, color: '#7A6F5F', fontWeight: 700 }}>· {ESTADO_LABEL[nodoSel.estado as EstadoNodo] ?? nodoSel.estado}{nodoSel.override ? ' (fijado)' : ''}</span>
+                    </span>
+                    <select
+                      value={nodoSel.override ? nodoSel.estado : 'auto'}
+                      onChange={(e) => fijarEstado(nodoSel.nodo_id, e.target.value)}
+                      style={{ fontFamily: NUNITO, fontWeight: 700, fontSize: 13, color: '#3A332A', border: '1.5px solid #EFE3CE', borderRadius: 10, padding: '6px 10px', background: '#FFFCF5' }}
+                      aria-label={`Fijar estado de ${nodoSel.nombre}`}
+                    >
+                      <option value="auto">Auto (según práctica)</option>
+                      <option value="no_empezado">Sin empezar</option>
+                      <option value="en_construccion">En camino</option>
+                      <option value="a_reforzar">A reforzar</option>
+                      <option value="dominado">Lo domina</option>
+                    </select>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* columna derecha */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <div style={card}>
+              <h3 style={cardTitle}>Lo de hoy</h3>
+              {hoy.cantidad > 0 ? (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 14 }}>
+                  <Stat label="Tema" value={sesionesHoy[0]?.nodo || '—'} />
+                  <Stat label="Aciertos" value={hoy.total > 0 ? `${hoy.aciertos} de ${hoy.total}` : '—'} />
+                  <Stat label="Tiempo" value={duracionTxt(tiempoHoy)} />
+                  <Stat label="Sesiones" value={String(hoy.cantidad)} />
+                </div>
+              ) : (
+                <p style={{ color: '#7A6F5F', fontWeight: 600, margin: '12px 0 0' }}>
+                  {!loaded ? 'Cargando…' : ultima ? `Sin práctica hoy · última vez ${haceCuanto(ultima, now)}.` : 'Todavía no practicó.'}
+                </p>
+              )}
+            </div>
+
+            <div style={card}>
+              <h3 style={{ ...cardTitle, marginBottom: 4 }}>Cómo viene</h3>
+              <p style={cardSub}>Aciertos por mes</p>
+              {barras.length === 0 ? (
+                <p style={{ color: '#7A6F5F', fontWeight: 600 }}>{loaded ? 'Todavía no hay historial.' : 'Cargando…'}</p>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-around', gap: 14, height: 120, paddingBottom: 26, position: 'relative' }}>
+                  {barras.map((b, i) => (
+                    <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%', position: 'relative' }}>
+                      <div style={{ width: '70%', maxWidth: 42, height: `${Math.round((b.pct / maxPct) * 100)}%`, background: GREENS[Math.min(i, GREENS.length - 1)], borderRadius: '10px 10px 4px 4px' }} title={`${b.pct}%`} />
+                      <span style={{ position: 'absolute', bottom: -24, fontSize: 13, color: '#7A6F5F', fontWeight: 700 }}>{b.label}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, background: '#FBEFD9', border: '1.5px solid #F4D9A6', borderRadius: 22, padding: '20px 22px' }}>
+              <div style={{ width: 46, height: 46, flexShrink: 0, background: solHappy }} />
+              <div>
+                <div style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 15, color: '#B9722A', marginBottom: 3 }}>Sugerencia de SOL</div>
+                <div style={{ fontSize: 16, color: '#3A332A', fontWeight: 600, lineHeight: 1.4 }}>{sugerencia}</div>
+                {analisis?.a_reforzar && analisis.a_reforzar.length > 0 && (
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
+                    {analisis.a_reforzar.map((t, i) => (
+                      <span key={i} style={{ background: '#FBE6E0', color: '#C0573F', borderRadius: 999, padding: '4px 12px', fontSize: 13, fontWeight: 700 }}>A reforzar: {t}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        ) : (
-          <p style={{ color: '#7A6F5F', fontWeight: 600 }}>
-            {!loaded ? 'Cargando…' : ultima ? `Sin práctica hoy · última vez ${haceCuanto(ultima, now)}.` : 'Todavía no practicó.'}
-          </p>
-        )}
-
-        {/* Análisis de SOL */}
-        <h2 style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 18, color: '#3A332A', margin: '26px 0 10px' }}>Último análisis de SOL</h2>
-        {!analisis ? (
-          <p style={{ color: '#7A6F5F', fontWeight: 600 }}>{loaded ? 'Todavía no hay análisis.' : 'Cargando…'}</p>
-        ) : (
-          <div style={{ background: '#FFFCF5', border: '1.5px solid #EFE3CE', borderRadius: 18, padding: '16px 18px' }}>
-            <p style={{ margin: 0, fontFamily: NUNITO, fontWeight: 700, fontSize: 16, color: '#3A332A', lineHeight: 1.4 }}>{analisis.resumen}</p>
-            {analisis.a_reforzar.length > 0 && (
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
-                {analisis.a_reforzar.map((t, i) => (
-                  <span key={i} style={{ background: '#FBE6E0', color: '#C0573F', borderRadius: 999, padding: '4px 12px', fontSize: 13, fontWeight: 700 }}>A reforzar: {t}</span>
-                ))}
-              </div>
-            )}
-            {analisis.errores.length > 0 && (
-              <ul style={{ margin: '12px 0 0', paddingLeft: 18, color: '#7A6F5F', fontSize: 14, fontWeight: 600 }}>
-                {analisis.errores.slice(0, 5).map((e, i) => (
-                  <li key={i}>{e.pregunta} → respondió <b>{e.respondio}</b> (era <b>{e.esperaba}</b>)</li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
-
-        {/* Histórico mes a mes */}
-        <h2 style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 18, color: '#3A332A', margin: '26px 0 10px' }}>Mes a mes</h2>
-        {meses.length === 0 ? (
-          <p style={{ color: '#7A6F5F', fontWeight: 600 }}>{loaded ? 'Todavía no hay historial.' : 'Cargando…'}</p>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {meses.map((m) => (
-              <div key={m.mes} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#FFFCF5', border: '1.5px solid #EFE3CE', borderRadius: 14, padding: '10px 14px' }}>
-                <span style={{ flex: 1, fontFamily: QUICK, fontWeight: 700, color: '#3A332A' }}>{m.label}</span>
-                <span style={{ fontSize: 13.5, color: '#7A6F5F', fontWeight: 600 }}>{m.cantidad} {m.cantidad === 1 ? 'sesión' : 'sesiones'}</span>
-                <span style={{ fontSize: 13.5, color: '#5C5345', fontWeight: 800 }}>{pct(m.aciertos, m.total)}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+        </div>
+      </main>
     </div>
   );
 }
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ background: '#FBF4E6', borderRadius: 14, padding: '14px 16px' }}>
+      <div style={{ fontSize: 13, color: '#7A6F5F', fontWeight: 700, marginBottom: 3 }}>{label}</div>
+      <div style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 21, color: '#3A332A' }}>{value}</div>
+    </div>
+  );
+}
+
+// catmull local (evita importar art en un módulo standalone; igual fórmula).
+function catmullPath(pts: [number, number][]): string {
+  if (pts.length < 2) return pts.length === 1 ? `M ${pts[0][0]} ${pts[0][1]}` : '';
+  let d = `M ${pts[0][0]} ${pts[0][1]}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2;
+    const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
+    const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
+    d += ` C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${p2[0]} ${p2[1]}`;
+  }
+  return d;
+}
+
+const sideBtn: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 11, padding: '13px 14px', borderRadius: 14,
+  background: 'none', border: 'none', color: '#7A6F5F', fontFamily: QUICK, fontWeight: 700,
+  fontSize: 16, cursor: 'pointer', textAlign: 'left',
+};
+const card: React.CSSProperties = {
+  background: '#FFFCF5', border: '1.5px solid #EFE3CE', borderRadius: 22, padding: 22, boxShadow: '0 4px 14px rgba(120,90,40,.07)',
+};
+const cardTitle: React.CSSProperties = { fontFamily: QUICK, fontWeight: 700, fontSize: 17, color: '#3A332A', margin: '0 0 4px' };
+const cardSub: React.CSSProperties = { fontSize: 14, color: '#7A6F5F', margin: '0 0 14px', fontWeight: 600 };

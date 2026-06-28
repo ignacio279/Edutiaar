@@ -1,23 +1,30 @@
 'use client';
-// Practicar (Fase 2 / SP-4a): loop real de práctica de un nodo. Sirve ejercicios de
-// opción múltiple del pool, corrige local (vs ejercicio.correcta), registra reintentos
-// y tiempo, y al terminar crea la sesion + las respuestas. (El mapa NO cambia todavía:
-// la regla de dominio que mueve alumno_nodo es SP-4b.)
+// Practicar (diseño Edutia / SP-4): la práctica ES un chat con SOL. SOL saluda,
+// hace cada pregunta como burbuja, el chico toca una opción (botones grandes en el
+// pie), y SOL festeja o alienta. Confeti al acertar. Por debajo sigue el loop real:
+// ejercicios del pool (elegirEjercicios), corrección local (vs ejercicio.correcta),
+// reintentos + tiempo, y al terminar crea la sesion + respuestas, mueve alumno_nodo
+// con la regla de dominio (calcularEstado/resolverEstado) y dispara evaluar-sesion.
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useMe } from '@/lib/me-context';
-import { sol } from '@/lib/art';
-import { toast } from '@/lib/toast';
+import { sol, item, uiIcon, alpha } from '@/lib/art';
+import { temaMateria } from '@/lib/materia-tema';
+import { saludo, cierre, praise, encourage } from '@/lib/practica-copy';
 import { elegirEjercicios, resumen, type Ejercicio, type RespuestaReg, type HistorialEjercicio } from '@/lib/practica';
 import { calcularEstado, resolverEstado, type EstadoNodo } from '@/lib/dominio';
 
+const BALOO = "var(--font-baloo), cursive";
+const NUNITO = 'var(--font-nunito), sans-serif';
 const QUICK = 'var(--font-quicksand), sans-serif';
-const NUNITO = 'var(--font-nunito)';
 const MAX_REINTENTOS = 2;
-const CHAT_CAP = 20; // tope de mensajes del chico por sesión (guardarraíl de costo)
+const solHappy = sol('happy');
 
-type ChatMsg = { role: 'user' | 'sol'; content: string };
+type Msg = { who: 'sol' | 'kid'; kind: 'text' | 'q'; text?: string; ejIdx?: number };
+type ConfPiece = { left: string; top: string; w: number; h: number; bg: string; rot: number; round: boolean; dur: number; delay: number };
+
+const CONF_COLS = ['#F4A93B', '#6FB7D4', '#7FB069', '#D98E5A', '#FFC24B'];
 
 function PracticarInner() {
   const supabase = createClient();
@@ -33,21 +40,36 @@ function PracticarInner() {
   const [ejercicios, setEjercicios] = useState<Ejercicio[] | null>(null);
   const [idx, setIdx] = useState(0);
   const [reintentos, setReintentos] = useState(0);
-  const tsRef = useRef<number | null>(null); // timeStamp (puro, del evento) del inicio del ejercicio
-  const [feedback, setFeedback] = useState<'' | 'bien' | 'casi' | 'revelado'>('');
+  const [selWrong, setSelWrong] = useState<number | null>(null);
+  const [msgs, setMsgs] = useState<Msg[]>([]);
   const [respuestas, setRespuestas] = useState<RespuestaReg[]>([]);
   const [fin, setFin] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [nuevoEstado, setNuevoEstado] = useState<EstadoNodo | null>(null);
+  const [celebrate, setCelebrate] = useState(false);
+  const [ringing, setRinging] = useState(false);
 
-  // Chat con SOL (efímero, vive mientras dura la sesión de practicar).
-  const [chatAbierto, setChatAbierto] = useState(false);
-  const [chatMsgs, setChatMsgs] = useState<ChatMsg[]>([]);
-  const [chatCargando, setChatCargando] = useState(false);
-  const [chatInput, setChatInput] = useState('');
+  const tsRef = useRef<number | null>(null);
+  const threadRef = useRef<HTMLDivElement | null>(null);
+  const celTok = useRef(0);
+  const ringTok = useRef(0);
+  const confettiRef = useRef<ConfPiece[] | null>(null);
+  if (!confettiRef.current) {
+    confettiRef.current = Array.from({ length: 18 }).map((_, i) => {
+      const sz = 8 + Math.random() * 8;
+      const round = Math.random() > 0.5;
+      return {
+        left: `${6 + Math.random() * 88}%`, top: '-20px',
+        w: sz, h: round ? sz : sz * 0.6, bg: CONF_COLS[i % CONF_COLS.length],
+        rot: Math.random() * 360, round, dur: 1.6 + Math.random() * 1.2, delay: Math.random() * 0.5,
+      };
+    });
+  }
+
+  const tema = temaMateria(materia);
 
   useEffect(() => {
-    if (!nodoId) return; // el render ya muestra el prompt de "elegí una parada"
+    if (!nodoId) return;
     (async () => {
       const { data: nodo } = await supabase.from('nodo').select('nombre').eq('id', nodoId).single();
       setNodoNombre((nodo as { nombre?: string } | null)?.nombre || '');
@@ -59,7 +81,6 @@ function PracticarInner() {
         .select('id,enunciado,opciones,correcta,dificultad,tipo')
         .eq('nodo_id', nodoId);
 
-      // Historia reciente del chico en el nodo (más reciente primero) → escalera + adaptiva.
       let historial: HistorialEjercicio[] = [];
       if (me) {
         const { data: win } = await supabase
@@ -77,6 +98,32 @@ function PracticarInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodoId, me]);
 
+  // Sembrar el chat (saludo + primera pregunta) cuando llegan los ejercicios.
+  useEffect(() => {
+    if (ejercicios && ejercicios.length && msgs.length === 0) {
+      setMsgs([{ who: 'sol', kind: 'text', text: saludo(materia, me?.nombre) }, { who: 'sol', kind: 'q', ejIdx: 0 }]);
+      tsRef.current = null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ejercicios, materia]);
+
+  // Auto-scroll del hilo al último mensaje.
+  useEffect(() => {
+    const el = threadRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [msgs, celebrate]);
+
+  function celebrar() {
+    setCelebrate(true);
+    const tk = ++celTok.current;
+    setTimeout(() => { if (celTok.current === tk) setCelebrate(false); }, 1500);
+  }
+  function audio() {
+    setRinging(true);
+    const tk = ++ringTok.current;
+    setTimeout(() => { if (ringTok.current === tk) setRinging(false); }, 900);
+  }
+
   async function guardarSesion(regs: RespuestaReg[]) {
     if (!me || !nodoId) return;
     setGuardando(true);
@@ -93,7 +140,6 @@ function PracticarInner() {
         regs.map((x) => ({ sesion_id: sesId, ejercicio_id: x.ejercicio_id, dada: x.dada, correcta: x.correcta, reintentos: x.reintentos, tiempo_seg: x.tiempo_seg })),
       );
 
-      // SP-4b: regla de dominio determinística → actualiza alumno_nodo (el mapa cambia).
       const { data: win } = await supabase
         .from('respuesta')
         .select('correcta, reintentos, created_at, ejercicio:ejercicio_id!inner(tipo,dificultad), sesion:sesion_id!inner(nodo_id)')
@@ -112,81 +158,67 @@ function PracticarInner() {
         { onConflict: 'alumno_id,nodo_id' },
       );
       setNuevoEstado(res.estado);
-
-      // SP-4c: diagnóstico cualitativo de SOL (no bloquea, no mueve el estado).
       supabase.functions.invoke('evaluar-sesion', { body: { sesion_id: sesId, mock: true } }).catch(() => {});
     }
     setGuardando(false);
   }
 
-  function avanzar(regs: RespuestaReg[], ts: number) {
-    if (idx + 1 >= (ejercicios?.length || 0)) {
-      setRespuestas(regs);
-      setFin(true);
-      guardarSesion(regs);
-    } else {
-      setRespuestas(regs);
-      setIdx(idx + 1);
-      setReintentos(0);
-      setFeedback('');
-      tsRef.current = ts; // el inicio del próximo ejercicio = este click
-    }
-  }
-
-  function responder(opcion: string, e: React.MouseEvent) {
-    if (!ejercicios || feedback === 'bien' || feedback === 'revelado') return;
+  function selectChat(i: number, e: React.MouseEvent) {
+    if (fin || !ejercicios) return;
     const ej = ejercicios[idx];
-    const ahora = e.timeStamp; // ms desde la carga (puro, viene del evento)
+    const ahora = e.timeStamp;
     if (tsRef.current === null) tsRef.current = ahora;
     const tiempo = Math.max(1, Math.round((ahora - tsRef.current) / 1000));
+    const opcion = ej.opciones[i];
+    const conKid: Msg[] = [...msgs, { who: 'kid', kind: 'text', text: opcion }];
+    const ni = idx + 1;
+    const ultimo = ni >= ejercicios.length;
+
     if (opcion === ej.correcta) {
-      setFeedback('bien');
+      setSelWrong(null);
       const reg: RespuestaReg = { ejercicio_id: ej.id, dada: opcion, correcta: true, reintentos, tiempo_seg: tiempo };
-      setTimeout(() => avanzar([...respuestas, reg], ahora), 700);
+      const nextRegs = [...respuestas, reg];
+      setRespuestas(nextRegs);
+      celebrar();
+      if (ultimo) {
+        setMsgs([...conKid, { who: 'sol', kind: 'text', text: praise(idx) }, { who: 'sol', kind: 'text', text: cierre(materia, me?.nombre, nodoNombre) }]);
+        setFin(true);
+        guardarSesion(nextRegs);
+      } else {
+        setMsgs([...conKid, { who: 'sol', kind: 'text', text: praise(idx) }, { who: 'sol', kind: 'q', ejIdx: ni }]);
+        setIdx(ni);
+        setReintentos(0);
+        tsRef.current = ahora;
+      }
     } else if (reintentos + 1 >= MAX_REINTENTOS) {
-      setFeedback('revelado');
+      setSelWrong(null);
       const reg: RespuestaReg = { ejercicio_id: ej.id, dada: opcion, correcta: false, reintentos: reintentos + 1, tiempo_seg: tiempo };
-      setTimeout(() => avanzar([...respuestas, reg], ahora), 1100);
+      const nextRegs = [...respuestas, reg];
+      setRespuestas(nextRegs);
+      const reveal: Msg = { who: 'sol', kind: 'text', text: `Casi. La respuesta era ${ej.correcta}. ¡Seguimos!` };
+      if (ultimo) {
+        setMsgs([...conKid, reveal, { who: 'sol', kind: 'text', text: cierre(materia, me?.nombre, nodoNombre) }]);
+        setFin(true);
+        guardarSesion(nextRegs);
+      } else {
+        setMsgs([...conKid, reveal, { who: 'sol', kind: 'q', ejIdx: ni }]);
+        setIdx(ni);
+        setReintentos(0);
+        tsRef.current = ahora;
+      }
     } else {
+      setMsgs([...conKid, { who: 'sol', kind: 'text', text: encourage(reintentos) }]);
       setReintentos(reintentos + 1);
-      setFeedback('casi');
+      setSelWrong(i);
     }
   }
 
-  async function enviarChat(texto: string, esAyuda: boolean) {
-    const t = texto.trim();
-    if (!t || chatCargando) return;
-    if (chatMsgs.filter((m) => m.role === 'user').length >= CHAT_CAP) {
-      toast('Por hoy ya charlamos bastante 🌞 ¡Seguí practicando!');
-      return;
-    }
-    const ejActual = ejercicios?.[idx];
-    const contexto = {
-      materia,
-      nodoNombre,
-      ejercicio: ejActual ? { enunciado: ejActual.enunciado, opciones: ejActual.opciones, correcta: ejActual.correcta } : undefined,
-    };
-    const nuevos: ChatMsg[] = [...chatMsgs, { role: 'user', content: t }];
-    setChatMsgs(nuevos);
-    setChatInput('');
-    setChatAbierto(true);
-    setChatCargando(true);
-    const { data, error } = await supabase.functions.invoke('sol-chat', {
-      body: { mensajes: nuevos, contexto, esAyuda, mock: true },
-    });
-    setChatCargando(false);
-    if (error || !data?.texto) {
-      toast('SOL no pudo responder ahora 🙈 Probá de nuevo.');
-      return;
-    }
-    setChatMsgs([...nuevos, { role: 'sol', content: String(data.texto) }]);
-  }
-
+  // ----- guards -----
   if (!nodoId) {
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 22px', textAlign: 'center' }}>
         <p style={{ color: '#7A6F5F', fontWeight: 600 }}>Elegí una parada en tu mapa para practicar.</p>
-        <button onClick={() => router.push(`/alumno/${programaId}/mapa`)} style={btnPrimary}>Ir al mapa</button>
+        <button onClick={() => router.push(`/alumno/${programaId}/mapa`)} className="ed-primary" style={btnPrimary}>Ir al mapa</button>
       </div>
     );
   }
@@ -196,111 +228,104 @@ function PracticarInner() {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 22px', textAlign: 'center' }}>
         <div style={{ width: 90, height: 90, background: `${sol('soft')} center/contain no-repeat` }} />
         <p style={{ color: '#7A6F5F', fontWeight: 600, marginTop: 12 }}>{nodoNombre || 'Este nodo'} todavía no tiene ejercicios.</p>
-        <button onClick={() => router.push(`/alumno/${programaId}/mapa`)} style={btnPrimary}>Volver al mapa</button>
-      </div>
-    );
-  }
-
-  if (fin) {
-    const r = resumen(respuestas);
-    const dominado = nuevoEstado === 'dominado';
-    const reforzar = nuevoEstado === 'a_reforzar';
-    const titulo = dominado ? `¡Dominaste ${nodoNombre}! ⭐` : reforzar ? 'Lo vamos a reforzar 💪' : '¡Muy bien!';
-    const mood = dominado ? 'cheer' : reforzar ? 'soft' : 'happy';
-    return (
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 22px', textAlign: 'center', animation: 'edFade .3s ease' }}>
-        <div style={{ width: 120, height: 120, animation: 'edBob 4.5s ease-in-out infinite', background: `${sol(mood)} center/contain no-repeat` }} />
-        <h2 style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 26, color: '#3A332A', margin: '14px 0 4px' }}>{titulo}</h2>
-        <p style={{ color: '#7A6F5F', fontWeight: 700, fontSize: 18 }}>Acertaste {r.aciertos} de {r.total}{guardando ? ' · guardando…' : ''}</p>
-        <button onClick={() => router.push(`/alumno/${programaId}/mapa`)} style={btnPrimary}>Volver al mapa</button>
+        <button onClick={() => router.push(`/alumno/${programaId}/mapa`)} className="ed-primary" style={btnPrimary}>Volver al mapa</button>
       </div>
     );
   }
 
   const ej = ejercicios[idx];
-  const bloqueado = feedback === 'bien' || feedback === 'revelado';
+  const r = resumen(respuestas);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const imgKey = (ej as any).imagen as string | undefined;
+
   return (
-    <div style={{ flex: 1, maxWidth: 560, width: '100%', margin: '0 auto', padding: '24px 22px 48px', animation: 'edFade .3s ease' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-        <span style={{ fontFamily: QUICK, fontWeight: 700, color: '#7A6F5F' }}>{nodoNombre}</span>
-        <span style={{ fontSize: 14, color: '#7A6F5F', fontWeight: 700 }}>{idx + 1} / {ejercicios.length}</span>
+    <div style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', animation: 'edFade .3s ease' }}>
+      {/* sub-barra de materia */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '9px clamp(16px,4vw,40px)', background: '#FFFCF5', borderBottom: '1.5px solid #EFE3CE' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+          <span style={{ width: 12, height: 12, borderRadius: '50%', background: tema.color, display: 'inline-block' }} />
+          <span style={{ fontFamily: BALOO, fontWeight: 700, fontSize: 16, color: '#3A332A' }}>Practicando {materia || ''}</span>
+        </div>
+        <button onClick={() => router.push('/alumno')} style={{ background: 'none', border: 'none', color: '#C77E3A', fontWeight: 800, fontSize: 14, cursor: 'pointer' }}>Cambiar materia</button>
       </div>
 
-      <div style={{ background: '#FFFCF5', border: '2px solid #EFE3CE', borderRadius: 20, padding: '20px 18px', boxShadow: '0 4px 12px rgba(120,90,40,.08)' }}>
-        <p style={{ margin: '0 0 16px', fontFamily: NUNITO, fontWeight: 700, fontSize: 19, color: '#3A332A', lineHeight: 1.35 }}>{ej.enunciado}</p>
-        <div style={{ display: 'grid', gap: 10 }}>
-          {ej.opciones.map((op) => {
-            const esCorrecta = op === ej.correcta;
-            const mostrar = feedback === 'revelado' && esCorrecta;
-            const bg = mostrar ? '#EAF4E2' : '#FBF4E6';
-            const bd = mostrar ? '#7FB069' : '#EFE3CE';
+      {/* hilo */}
+      <div ref={threadRef} style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '20px clamp(16px,4vw,28px) 8px' }}>
+        <div style={{ maxWidth: 720, margin: '0 auto', width: '100%' }}>
+          {msgs.map((m, i) => {
+            const isSol = m.who === 'sol';
+            const text = m.kind === 'q' ? ejercicios[m.ejIdx!].enunciado : m.text;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const qimg = m.kind === 'q' ? ((ejercicios[m.ejIdx!] as any).imagen as string | undefined) : undefined;
             return (
-              <button
-                key={op}
-                onClick={(e) => responder(op, e)}
-                disabled={bloqueado}
-                style={{ textAlign: 'left', padding: '14px 16px', borderRadius: 14, border: `2px solid ${bd}`, background: bg, fontFamily: NUNITO, fontSize: 16, fontWeight: 700, color: '#3A332A', cursor: bloqueado ? 'default' : 'pointer' }}
-              >
-                {op}
-              </button>
+              <div key={i} style={{ display: 'flex', alignItems: 'flex-end', gap: 10, margin: '12px 0', justifyContent: isSol ? 'flex-start' : 'flex-end', animation: 'edIn .25s ease' }}>
+                {isSol && <div style={{ width: 40, height: 40, flexShrink: 0, borderRadius: '50%', background: `${solHappy} center/contain no-repeat` }} />}
+                <div style={isSol
+                  ? { maxWidth: '80%', background: '#FFFCF5', border: '2px solid #EFE3CE', borderRadius: 20, borderBottomLeftRadius: 6, padding: '13px 17px', boxShadow: '0 4px 12px rgba(120,90,40,.08)' }
+                  : { maxWidth: '80%', background: tema.color, borderRadius: 20, borderBottomRightRadius: 6, padding: '12px 20px', boxShadow: `0 6px 14px ${alpha(tema.color, 0.3)}` }}>
+                  {qimg && <div style={{ width: 'clamp(120px,32vw,148px)', height: 'clamp(120px,32vw,148px)', margin: '2px 0 10px', background: `${item(qimg)} center/contain no-repeat` }} />}
+                  <p style={{ margin: 0, fontFamily: NUNITO, fontWeight: 700, fontSize: 'clamp(16px,2.3vw,18px)', lineHeight: 1.35, color: isSol ? '#3A332A' : '#fff' }}>{text}</p>
+                </div>
+              </div>
             );
           })}
         </div>
       </div>
 
-      <div style={{ textAlign: 'center', minHeight: 28, marginTop: 14, fontWeight: 700 }}>
-        {feedback === 'bien' && <span style={{ color: '#7FB069' }}>¡Correcto! 🎉</span>}
-        {feedback === 'casi' && <span style={{ color: '#E89B42' }}>Casi… probá de nuevo 💪</span>}
-        {feedback === 'revelado' && <span style={{ color: '#7A6F5F' }}>La respuesta era: <b>{ej.correcta}</b></span>}
+      {/* pie: opciones o cierre */}
+      <div style={{ flexShrink: 0, background: '#FFFCF5', borderTop: '2px solid #EFE3CE', padding: '14px clamp(16px,4vw,28px) 20px' }}>
+        <div style={{ maxWidth: 720, margin: '0 auto', width: '100%' }}>
+          {!fin ? (
+            <div style={{ display: 'flex', alignItems: 'stretch', gap: 12 }}>
+              <button onClick={audio} aria-label="Escuchar" style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 60, flexShrink: 0, borderRadius: 18, background: '#FBEFD9', border: '2px solid #F4D9A6', cursor: 'pointer' }}>
+                <span style={{ width: 28, height: 28, background: `${uiIcon('speaker')} center/contain no-repeat` }} />
+                {ringing && <span style={{ position: 'absolute', inset: -2, borderRadius: 18, border: '2.5px solid #F4A93B', animation: 'edRing .9s ease-out' }} />}
+              </button>
+              <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(108px,1fr))', gap: 12 }}>
+                {ej.opciones.map((op, i) => {
+                  const big = op.length <= 2;
+                  const wrong = selWrong === i;
+                  return (
+                    <button
+                      key={op + i}
+                      onClick={(e) => selectChat(i, e)}
+                      style={{
+                        minHeight: 66, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center',
+                        fontFamily: BALOO, fontWeight: 800, fontSize: big ? 'clamp(32px,7vw,46px)' : 'clamp(16px,3vw,21px)',
+                        color: wrong ? '#BB4F3F' : '#3A332A', background: wrong ? '#F7E2DD' : '#FFFCF5',
+                        border: `2.5px solid ${wrong ? '#D46A5A' : '#EFE3CE'}`, borderRadius: 18, cursor: 'pointer',
+                        boxShadow: '0 4px 12px rgba(120,90,40,.07)', padding: '8px 12px', transition: 'transform .1s ease',
+                        animation: wrong ? 'edShake .4s ease' : undefined,
+                      }}
+                    >
+                      {op}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+              <p style={{ margin: 0, color: '#7A6F5F', fontWeight: 700, fontSize: 15 }}>
+                Acertaste {r.aciertos} de {r.total}{guardando ? ' · guardando…' : nuevoEstado === 'dominado' ? ' · ¡lo dominaste! ⭐' : ''}
+              </p>
+              <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+                <button onClick={() => router.push(`/alumno/${programaId}/mapa`)} className="ed-primary" style={{ background: '#F4A93B', color: '#fff', border: 'none', borderRadius: 999, padding: '15px 32px', fontFamily: BALOO, fontWeight: 700, fontSize: 19, cursor: 'pointer', boxShadow: '0 8px 20px rgba(244,169,59,.32)' }}>Volver al mapa</button>
+                <button onClick={() => router.push('/alumno')} className="ed-signout" style={{ background: '#FFFCF5', color: '#7A6F5F', border: '2px solid #EFE3CE', borderRadius: 999, padding: '15px 28px', fontFamily: BALOO, fontWeight: 700, fontSize: 19, cursor: 'pointer' }}>Practicar otra materia</button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Chat con SOL: pedir ayuda del ejercicio o preguntar libre del tema. */}
-      <div style={{ marginTop: 18 }}>
-        {!chatAbierto ? (
-          <button
-            onClick={() => { setChatAbierto(true); if (chatMsgs.length === 0) enviarChat('¿Me ayudás con esto? 🙏', true); }}
-            style={btnAyuda}
-          >
-            💬 Pedir ayuda a SOL
-          </button>
-        ) : (
-          <div style={chatCard}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ width: 28, height: 28, display: 'inline-block', background: `${sol('happy')} center/contain no-repeat` }} />
-                <b style={{ fontFamily: QUICK, color: '#3A332A' }}>SOL</b>
-              </span>
-              <button onClick={() => setChatAbierto(false)} style={chatClose} aria-label="Cerrar chat">✕</button>
-            </div>
-            <div style={chatMsgsBox}>
-              {chatMsgs.length === 0 && (
-                <p style={{ color: '#7A6F5F', fontWeight: 600, textAlign: 'center', margin: '8px 0' }}>
-                  Preguntame lo que quieras sobre {nodoNombre} 🌞
-                </p>
-              )}
-              {chatMsgs.map((m, i) => (
-                <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
-                  <span style={m.role === 'user' ? burbujaUser : burbujaSol}>{m.content}</span>
-                </div>
-              ))}
-              {chatCargando && (
-                <div style={{ display: 'flex', justifyContent: 'flex-start' }}><span style={burbujaSol}>SOL está pensando…</span></div>
-              )}
-            </div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-              <input
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') enviarChat(chatInput, false); }}
-                placeholder="Escribile a SOL…"
-                disabled={chatCargando}
-                style={chatInputStyle}
-              />
-              <button onClick={() => enviarChat(chatInput, false)} disabled={chatCargando || !chatInput.trim()} style={chatSend}>Enviar</button>
-            </div>
-          </div>
-        )}
-      </div>
+      {/* confeti */}
+      {celebrate && (
+        <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none', zIndex: 8 }}>
+          {confettiRef.current!.map((c, i) => (
+            <span key={i} style={{ position: 'absolute', left: c.left, top: c.top, width: c.w, height: c.h, background: c.bg, borderRadius: c.round ? '50%' : 3, transform: `rotate(${c.rot}deg)`, animation: `edFall ${c.dur.toFixed(2)}s ease-in ${c.delay.toFixed(2)}s forwards` }} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -308,35 +333,6 @@ function PracticarInner() {
 const btnPrimary: React.CSSProperties = {
   marginTop: 18, background: '#F4A93B', color: '#fff', border: 'none', borderRadius: 999,
   padding: '14px 30px', fontFamily: QUICK, fontWeight: 700, fontSize: 17, cursor: 'pointer',
-};
-
-const btnAyuda: React.CSSProperties = {
-  width: '100%', background: '#FBF4E6', color: '#3A332A', border: '2px solid #EFE3CE', borderRadius: 14,
-  padding: '12px 16px', fontFamily: QUICK, fontWeight: 700, fontSize: 16, cursor: 'pointer',
-};
-const chatCard: React.CSSProperties = {
-  background: '#FFFCF5', border: '2px solid #EFE3CE', borderRadius: 20, padding: '14px 14px 16px',
-  boxShadow: '0 4px 12px rgba(120,90,40,.08)', animation: 'edFade .25s ease',
-};
-const chatClose: React.CSSProperties = {
-  background: 'transparent', border: 'none', color: '#7A6F5F', fontWeight: 700, fontSize: 16, cursor: 'pointer', lineHeight: 1,
-};
-const chatMsgsBox: React.CSSProperties = {
-  display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 240, overflowY: 'auto', padding: '4px 2px',
-};
-const burbujaBase: React.CSSProperties = {
-  maxWidth: '82%', padding: '9px 13px', borderRadius: 14, fontFamily: NUNITO, fontWeight: 600, fontSize: 15,
-  lineHeight: 1.35, whiteSpace: 'pre-wrap',
-};
-const burbujaUser: React.CSSProperties = { ...burbujaBase, background: '#F4A93B', color: '#fff', borderBottomRightRadius: 4 };
-const burbujaSol: React.CSSProperties = { ...burbujaBase, background: '#FBF4E6', color: '#3A332A', border: '1.5px solid #EFE3CE', borderBottomLeftRadius: 4 };
-const chatInputStyle: React.CSSProperties = {
-  flex: 1, minWidth: 0, border: '2px solid #EFE3CE', borderRadius: 12, padding: '10px 12px',
-  fontFamily: NUNITO, fontSize: 15, fontWeight: 600, color: '#3A332A', background: '#fff',
-};
-const chatSend: React.CSSProperties = {
-  background: '#F4A93B', color: '#fff', border: 'none', borderRadius: 12, padding: '10px 16px',
-  fontFamily: QUICK, fontWeight: 700, fontSize: 15, cursor: 'pointer',
 };
 
 export default function Practicar() {

@@ -2,7 +2,7 @@
 // Sin red ni DOM → corren con `npm test` (Node strippea los tipos del .ts).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { uri, alpha, catmull, sol, animal, nodeIcon, starBadge, lockBadge } from '../../web/lib/art.ts';
+import { uri, alpha, catmull, sol, animal, nodeIcon, starBadge, lockBadge, item, materiaEmblem, materiaPattern, uiIcon, NODE_ICON_KEYS } from '../../web/lib/art.ts';
 
 test('uri: wrappea con comillas simples y escapa las internas', () => {
   const u = uri("<svg a='b'></svg>");
@@ -50,4 +50,47 @@ test('nodeIcon / badges: data-uri', () => {
   }
   assert.ok(starBadge().includes('svg'));
   assert.ok(lockBadge().includes('svg'));
+});
+
+test('NODE_ICON_KEYS: 18 claves (lengua + mate + ciencias), nodeIcon resuelve todas', () => {
+  assert.equal(NODE_ICON_KEYS.length, 18);
+  for (const k of NODE_ICON_KEYS) {
+    assert.ok(nodeIcon(k).includes('data:image/svg+xml'), `nodeIcon ${k}`);
+  }
+  // clave desconocida cae a 'vocales'
+  assert.equal(nodeIcon('no-existe'), nodeIcon('vocales'));
+});
+
+test('item: ilustraciones de ejercicio, todas data-uri', () => {
+  for (const k of ['apples3', 'stars4', 'solcito', 'arbol', 'oveja', 'uva']) {
+    const u = item(k);
+    assert.ok(u.includes('data:image/svg+xml'), `item ${k}`);
+    assert.ok(u.includes('svg'), `item ${k} svg`);
+  }
+  // clave desconocida cae a 'arbol'
+  assert.equal(item('no-existe'), item('arbol'));
+});
+
+test('materiaEmblem: lengua/mate/ciencias data-uri y default lengua', () => {
+  for (const k of ['lengua', 'mate', 'ciencias']) {
+    assert.ok(materiaEmblem(k).includes('data:image/svg+xml'), `emblem ${k}`);
+  }
+  assert.equal(materiaEmblem('zzz'), materiaEmblem('lengua'));
+});
+
+test('materiaPattern: lengua/mate/ciencias data-uri', () => {
+  for (const k of ['lengua', 'mate', 'ciencias']) {
+    const u = materiaPattern(k);
+    assert.ok(u.includes('data:image/svg+xml'), `pattern ${k}`);
+  }
+  // mate y ciencias son distintos del default (lengua)
+  assert.notEqual(materiaPattern('mate'), materiaPattern('lengua'));
+  assert.notEqual(materiaPattern('ciencias'), materiaPattern('lengua'));
+});
+
+test('uiIcon: íconos de UI data-uri y default chevron', () => {
+  for (const k of ['speaker', 'people', 'mapW', 'mapI', 'sunW', 'sunI', 'chevron']) {
+    assert.ok(uiIcon(k).includes('data:image/svg+xml'), `uiIcon ${k}`);
+  }
+  assert.equal(uiIcon('zzz'), uiIcon('chevron'));
 });

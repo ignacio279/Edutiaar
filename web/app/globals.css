@@ -52,6 +52,38 @@ button {
   }
 }
 
+@keyframes edRing {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(1.7);
+    opacity: 0;
+  }
+}
+@keyframes edFall {
+  0% {
+    transform: translateY(-30px) rotate(0);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(440px) rotate(360deg);
+    opacity: 0;
+  }
+}
+@keyframes edIn {
+  from {
+    transform: translateY(8px);
+  }
+  to {
+    transform: none;
+  }
+}
+
 /* teclado numérico */
 .ed-key {
   transition: transform 0.1s ease, background 0.12s ease;
@@ -95,6 +127,30 @@ button {
 }
 .ed-primary:hover {
   filter: brightness(1.04);
+}
+/* cards de materia (pick) */
+.ed-materia-card {
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+.ed-materia-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 18px 34px rgba(120, 90, 40, 0.18);
+}
+/* filas de alumno (panel docente) */
+.ed-roster-row {
+  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+}
+.ed-roster-row:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 18px rgba(120, 90, 40, 0.12);
+  border-color: #d9c9ac;
+}
+/* item de barra lateral (docente) */
+.ed-side {
+  transition: background 0.15s ease;
+}
+.ed-side:hover {
+  background: #fbf4e6;
 }
 .ed-toast {
   position: fixed;
