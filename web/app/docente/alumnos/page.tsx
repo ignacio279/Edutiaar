@@ -148,7 +148,7 @@ function CrearAula({ onDone }: { onDone: () => void }) {
   }
 
   if (!open) {
-    return <button onClick={() => setOpen(true)} className="ed-primary" style={{ ...btnPrimary, marginBottom: 12 }}>+ Crear aula</button>;
+    return <button onClick={() => setOpen(true)} className="ed-primary" style={{ ...btnPrimary, marginRight: 14, marginBottom: 12 }}>+ Crear aula</button>;
   }
   return (
     <div style={{ ...card, display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 12 }}>

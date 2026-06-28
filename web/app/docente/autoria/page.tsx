@@ -6,10 +6,12 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from '@/lib/toast';
-import { sol } from '@/lib/art';
+import { sol, uiIcon } from '@/lib/art';
 
 const QUICK = 'var(--font-quicksand), sans-serif';
 const NUNITO = 'var(--font-nunito)';
+const BALOO = 'var(--font-baloo), cursive';
+const solHappy = `${sol('happy')} center/contain no-repeat`;
 const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
@@ -127,18 +129,35 @@ export default function Autoria() {
     toast('¡Publicado! Ya lo pueden practicar.');
   }
 
+  async function signOut() {
+    await supabase.auth.signOut();
+    router.replace('/');
+    router.refresh();
+  }
+
   if (!loaded) return <p style={{ padding: 40, color: '#7A6F5F', fontWeight: 600 }}>Cargando…</p>;
 
   return (
-    <div style={{ minHeight: '100vh', padding: 'clamp(24px,5vw,48px) 22px', animation: 'edFade .3s ease' }}>
-      <div style={{ maxWidth: 620, margin: '0 auto' }}>
-        <button
-          onClick={() => router.push('/docente')}
-          style={{ background: 'none', border: 'none', color: '#7A6F5F', fontWeight: 700, fontSize: 15, cursor: 'pointer', marginBottom: 14 }}
-        >
-          ‹ Volver al panel
+    <div style={{ minHeight: '100vh', display: 'flex', background: '#FBF4E6', animation: 'edFade .3s ease' }}>
+      <aside style={{ width: 236, flexShrink: 0, background: '#FFFCF5', borderRight: '2px solid #EFE3CE', padding: '26px 18px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '6px 10px 22px' }}>
+          <div style={{ width: 36, height: 36, background: solHappy }} />
+          <span style={{ fontFamily: BALOO, fontWeight: 800, fontSize: 22, color: '#3A332A', letterSpacing: '-.5px' }}>EDUTIA</span>
+        </div>
+        <button onClick={() => router.push('/docente')} className="ed-side" style={sideBtn}>
+          <span style={{ width: 22, height: 22, background: `${uiIcon('people')} center/contain no-repeat` }} />Mis alumnos
         </button>
+        <button onClick={() => router.push('/docente/alumnos')} className="ed-side" style={sideBtn}>
+          <span style={{ width: 22, height: 22, background: `${uiIcon('people')} center/contain no-repeat` }} />Mi clase
+        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '13px 14px', borderRadius: 14, background: '#E3EEF4', color: '#3A332A', fontFamily: QUICK, fontWeight: 700, fontSize: 16 }}>
+          <span style={{ width: 22, height: 22, background: `${uiIcon('mapI')} center/contain no-repeat` }} />Subir un plan
+        </div>
+        <div style={{ flex: 1 }} />
+        <button onClick={signOut} className="ed-side" style={sideBtn}>Cerrar sesión</button>
+      </aside>
 
+      <main style={{ flex: 1, minWidth: 0, padding: 'clamp(22px,3.5vw,40px)', maxWidth: 760 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
           <div style={{ width: 48, height: 48, background: `${sol('happy')} center/contain no-repeat` }} />
           <div>
@@ -216,7 +235,13 @@ export default function Autoria() {
             </div>
           </div>
         )}
-      </div>
+      </main>
     </div>
   );
 }
+
+const sideBtn: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 11, padding: '13px 14px', borderRadius: 14,
+  background: 'none', border: 'none', color: '#7A6F5F', fontFamily: QUICK, fontWeight: 700,
+  fontSize: 16, cursor: 'pointer', textAlign: 'left',
+};
