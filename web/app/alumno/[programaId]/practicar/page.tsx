@@ -9,9 +9,10 @@ import { Suspense, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useMe } from '@/lib/me-context';
-import { sol, item, uiIcon, alpha } from '@/lib/art';
+import { sol, item, alpha } from '@/lib/art';
 import { temaMateria } from '@/lib/materia-tema';
 import { saludo, cierre, praise, encourage } from '@/lib/practica-copy';
+import { toast } from '@/lib/toast';
 import { elegirEjercicios, resumen, type Ejercicio, type RespuestaReg, type HistorialEjercicio } from '@/lib/practica';
 import { calcularEstado, resolverEstado, type EstadoNodo } from '@/lib/dominio';
 
@@ -19,6 +20,7 @@ const BALOO = "var(--font-baloo), cursive";
 const NUNITO = 'var(--font-nunito), sans-serif';
 const QUICK = 'var(--font-quicksand), sans-serif';
 const MAX_REINTENTOS = 2;
+const CHAT_CAP = 20; // tope de mensajes libres del chico por sesión (guardarraíl de costo)
 const solHappy = sol('happy');
 
 type Msg = { who: 'sol' | 'kid'; kind: 'text' | 'q'; text?: string; ejIdx?: number };
@@ -47,12 +49,13 @@ function PracticarInner() {
   const [guardando, setGuardando] = useState(false);
   const [nuevoEstado, setNuevoEstado] = useState<EstadoNodo | null>(null);
   const [celebrate, setCelebrate] = useState(false);
-  const [ringing, setRinging] = useState(false);
+  const [chatInput, setChatInput] = useState('');
+  const [chatCargando, setChatCargando] = useState(false);
 
   const tsRef = useRef<number | null>(null);
   const threadRef = useRef<HTMLDivElement | null>(null);
   const celTok = useRef(0);
-  const ringTok = useRef(0);
+  const chatCountRef = useRef(0);
   const confettiRef = useRef<ConfPiece[] | null>(null);
   if (!confettiRef.current) {
     confettiRef.current = Array.from({ length: 18 }).map((_, i) => {
@@ -118,10 +121,31 @@ function PracticarInner() {
     const tk = ++celTok.current;
     setTimeout(() => { if (celTok.current === tk) setCelebrate(false); }, 1500);
   }
-  function audio() {
-    setRinging(true);
-    const tk = ++ringTok.current;
-    setTimeout(() => { if (ringTok.current === tk) setRinging(false); }, 900);
+  // Chat libre con SOL (efímero, vía Edge Function sol-chat; mock por ahora).
+  async function enviarChat() {
+    const t = chatInput.trim();
+    if (!t || chatCargando || fin) return;
+    if (chatCountRef.current >= CHAT_CAP) {
+      toast('Por hoy ya charlamos bastante 🌞 ¡Seguí practicando!');
+      return;
+    }
+    chatCountRef.current += 1;
+    const conKid: Msg[] = [...msgs, { who: 'kid', kind: 'text', text: t }];
+    setMsgs(conKid);
+    setChatInput('');
+    setChatCargando(true);
+    const mensajes = conKid
+      .map((m) => ({ role: m.who === 'kid' ? 'user' : 'sol', content: m.kind === 'q' ? ejercicios?.[m.ejIdx!]?.enunciado ?? '' : m.text ?? '' }))
+      .filter((m) => m.content);
+    const ejAct = ejercicios?.[idx];
+    const contexto = { materia, nodoNombre, ejercicio: ejAct ? { enunciado: ejAct.enunciado, opciones: ejAct.opciones, correcta: ejAct.correcta } : undefined };
+    const { data, error } = await supabase.functions.invoke('sol-chat', { body: { mensajes, contexto, esAyuda: false, mock: true } });
+    setChatCargando(false);
+    if (error || !data?.texto) {
+      toast('SOL no pudo responder ahora 🙈 Probá de nuevo.');
+      return;
+    }
+    setMsgs((prev) => [...prev, { who: 'sol', kind: 'text', text: String(data.texto) }]);
   }
 
   async function guardarSesion(regs: RespuestaReg[]) {
@@ -235,8 +259,6 @@ function PracticarInner() {
 
   const ej = ejercicios[idx];
   const r = resumen(respuestas);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const imgKey = (ej as any).imagen as string | undefined;
 
   return (
     <div style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', animation: 'edFade .3s ease' }}>
@@ -276,12 +298,8 @@ function PracticarInner() {
       <div style={{ flexShrink: 0, background: '#FFFCF5', borderTop: '2px solid #EFE3CE', padding: '14px clamp(16px,4vw,28px) 20px' }}>
         <div style={{ maxWidth: 720, margin: '0 auto', width: '100%' }}>
           {!fin ? (
-            <div style={{ display: 'flex', alignItems: 'stretch', gap: 12 }}>
-              <button onClick={audio} aria-label="Escuchar" style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 60, flexShrink: 0, borderRadius: 18, background: '#FBEFD9', border: '2px solid #F4D9A6', cursor: 'pointer' }}>
-                <span style={{ width: 28, height: 28, background: `${uiIcon('speaker')} center/contain no-repeat` }} />
-                {ringing && <span style={{ position: 'absolute', inset: -2, borderRadius: 18, border: '2.5px solid #F4A93B', animation: 'edRing .9s ease-out' }} />}
-              </button>
-              <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(108px,1fr))', gap: 12 }}>
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(108px,1fr))', gap: 12 }}>
                 {ej.opciones.map((op, i) => {
                   const big = op.length <= 2;
                   const wrong = selWrong === i;
@@ -303,7 +321,20 @@ function PracticarInner() {
                   );
                 })}
               </div>
-            </div>
+              <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+                <input
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') enviarChat(); }}
+                  placeholder="Escribile a SOL…"
+                  disabled={chatCargando}
+                  style={{ flex: 1, minWidth: 0, border: '2px solid #EFE3CE', borderRadius: 14, padding: '12px 14px', fontFamily: NUNITO, fontSize: 15, fontWeight: 600, color: '#3A332A', background: '#FFFCF5', outline: 'none' }}
+                />
+                <button onClick={enviarChat} disabled={chatCargando || !chatInput.trim()} style={{ background: '#F4A93B', color: '#fff', border: 'none', borderRadius: 14, padding: '12px 20px', fontFamily: QUICK, fontWeight: 700, fontSize: 15, cursor: chatCargando || !chatInput.trim() ? 'default' : 'pointer', opacity: chatCargando || !chatInput.trim() ? 0.6 : 1 }}>
+                  {chatCargando ? '…' : 'Enviar'}
+                </button>
+              </div>
+            </>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
               <p style={{ margin: 0, color: '#7A6F5F', fontWeight: 700, fontSize: 15 }}>
