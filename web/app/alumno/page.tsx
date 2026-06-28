@@ -1,23 +1,33 @@
 'use client';
-// Picker de materias del alumno (Fase 2 / SP-3): muestra las sol_materia PUBLICADAS
-// de su escuela (RLS) cuyo programa es de SU grado. Tocar una → mapa de esa materia.
+// Landing del alumno (Fase 2 / SP-3, rediseño): header con avatar + toggle
+// Mi mapa / Practicar + Salir, y abajo las CARDS de materia (sol_materia
+// PUBLICADAS de su grado, vía RLS). Tocar una card → mapa de esa materia
+// (/alumno/[programaId]/mapa), donde el chico elige la parada para practicar.
+// El toggle solo cambia el encuadre del texto: ambas pestañas llevan al mapa
+// (la práctica se entra tocando un nodo del mapa).
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useMe } from '@/lib/me-context';
-import { animal, sol } from '@/lib/art';
+import { animal } from '@/lib/art';
 
 const BALOO = 'var(--font-baloo), cursive';
-const QUICK = 'var(--font-quicksand), sans-serif';
 const COLORES = ['#F4A93B', '#6FB7D4', '#7FB069', '#C98AB0', '#E2854E', '#5FA9C4'];
 
 type Materia = { programa_id: string; nombre: string; grado: number };
+type Tab = 'mapa' | 'practicar';
+
+const COPY: Record<Tab, { titulo: string; sub: string }> = {
+  mapa: { titulo: 'Tus materias', sub: 'Tocá una materia para ver tu mapa.' },
+  practicar: { titulo: '¿Qué querés practicar?', sub: 'Tocá una materia y elegí una parada.' },
+};
 
 export default function Materias() {
   const router = useRouter();
   const supabase = createClient();
   const me = useMe();
   const [materias, setMaterias] = useState<Materia[] | null>(null);
+  const [tab, setTab] = useState<Tab>('mapa');
 
   useEffect(() => {
     if (!me) return;
@@ -41,21 +51,37 @@ export default function Materias() {
     router.refresh();
   }
 
+  const pill = (label: string, t: Tab) => (
+    <button
+      onClick={() => setTab(t)}
+      style={{
+        border: 'none', cursor: 'pointer', borderRadius: 999, padding: '10px 20px',
+        fontFamily: BALOO, fontWeight: 700, fontSize: 16,
+        background: tab === t ? '#F4A93B' : 'transparent',
+        color: tab === t ? '#fff' : '#7A6F5F',
+      }}
+    >
+      {label}
+    </button>
+  );
+
   return (
     <div style={{ minHeight: '100vh' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px clamp(16px,4vw,40px)', background: '#FFFCF5', borderBottom: '2px solid #EFE3CE' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap', padding: '14px clamp(16px,4vw,40px)', background: '#FFFCF5', borderBottom: '2px solid #EFE3CE', position: 'sticky', top: 0, zIndex: 6 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ width: 48, height: 48, background: `${animal(me?.avatar || 'fox')} center/contain no-repeat` }} />
           <div style={{ fontFamily: BALOO, fontWeight: 700, fontSize: 19, color: '#3A332A' }}>Hola, {me?.nombre || ''}</div>
+        </div>
+        <div style={{ display: 'flex', gap: 6, background: '#FBEFD9', borderRadius: 999, padding: 5 }}>
+          {pill('Mi mapa', 'mapa')}
+          {pill('Practicar', 'practicar')}
         </div>
         <button onClick={signOut} style={{ background: 'none', border: 'none', color: '#7A6F5F', fontWeight: 700, fontSize: 15, cursor: 'pointer' }}>Salir</button>
       </div>
 
       <div style={{ maxWidth: 720, margin: '0 auto', padding: 'clamp(24px,5vw,44px) 22px', animation: 'edFade .3s ease' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 22 }}>
-          <div style={{ width: 54, height: 54, background: `${sol('happy')} center/contain no-repeat` }} />
-          <h1 style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 'clamp(24px,4.5vw,32px)', color: '#3A332A', margin: 0 }}>¿Qué querés practicar?</h1>
-        </div>
+        <h1 style={{ fontFamily: BALOO, fontWeight: 800, fontSize: 'clamp(24px,4.5vw,38px)', color: '#3A332A', margin: 0 }}>{COPY[tab].titulo}</h1>
+        <p style={{ fontSize: 16, color: '#7A6F5F', margin: '6px 0 22px', fontWeight: 600 }}>{COPY[tab].sub}</p>
 
         {materias === null ? (
           <p style={{ color: '#7A6F5F', fontWeight: 600 }}>Cargando…</p>
