@@ -52,3 +52,13 @@ export function calcularEstado(
 
   return { estado: 'en_construccion', puntaje };
 }
+
+// Override docente (D6): si la seño fijó el estado a mano, la regla lo respeta — devuelve el
+// estado manual y conserva el puntaje calculado (sigue alimentando el gradiente del mapa).
+export function resolverEstado(
+  calculo: { estado: EstadoNodo; puntaje: number },
+  override: boolean,
+  estadoManual: EstadoNodo,
+): { estado: EstadoNodo; puntaje: number } {
+  return override ? { estado: estadoManual, puntaje: calculo.puntaje } : calculo;
+}

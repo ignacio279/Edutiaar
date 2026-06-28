@@ -8,8 +8,8 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useMe } from '@/lib/me-context';
 import { sol } from '@/lib/art';
-import { elegirEjercicios, resumen, type Ejercicio, type RespuestaReg } from '@/lib/practica';
-import { calcularEstado, type EstadoNodo } from '@/lib/dominio';
+import { elegirEjercicios, resumen, type Ejercicio, type RespuestaReg, type HistorialEjercicio } from '@/lib/practica';
+import { calcularEstado, resolverEstado, type EstadoNodo } from '@/lib/dominio';
 
 const QUICK = 'var(--font-quicksand), sans-serif';
 const NUNITO = 'var(--font-nunito)';
@@ -44,10 +44,24 @@ function PracticarInner() {
         .from('ejercicio')
         .select('id,enunciado,opciones,correcta,dificultad,tipo')
         .eq('nodo_id', nodoId);
-      setEjercicios(elegirEjercicios((data as Ejercicio[]) || []));
+
+      // Historia reciente del chico en el nodo (más reciente primero) → escalera + adaptiva.
+      let historial: HistorialEjercicio[] = [];
+      if (me) {
+        const { data: win } = await supabase
+          .from('respuesta')
+          .select('correcta, reintentos, created_at, ejercicio:ejercicio_id!inner(tipo,dificultad), sesion:sesion_id!inner(alumno_id,nodo_id)')
+          .eq('sesion.nodo_id', nodoId)
+          .eq('sesion.alumno_id', me.id)
+          .order('created_at', { ascending: false })
+          .limit(8);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        historial = ((win as any[]) || []).map((x) => ({ correcta: x.correcta, reintentos: x.reintentos, tipo: x.ejercicio?.tipo, dificultad: x.ejercicio?.dificultad }));
+      }
+      setEjercicios(elegirEjercicios((data as Ejercicio[]) || [], historial));
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodoId]);
+  }, [nodoId, me]);
 
   async function guardarSesion(regs: RespuestaReg[]) {
     if (!me || !nodoId) return;
@@ -74,9 +88,11 @@ function PracticarInner() {
         .limit(8);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const ventana = ((win as any[]) || []).map((x) => ({ correcta: x.correcta, reintentos: x.reintentos, tipo: x.ejercicio?.tipo, dificultad: x.ejercicio?.dificultad }));
-      const { data: an } = await supabase.from('alumno_nodo').select('estado').eq('alumno_id', me.id).eq('nodo_id', nodoId).maybeSingle();
+      const { data: an } = await supabase.from('alumno_nodo').select('estado, estado_override').eq('alumno_id', me.id).eq('nodo_id', nodoId).maybeSingle();
+      const previo = an as { estado?: EstadoNodo; estado_override?: boolean } | null;
       const tasa = r.total ? r.aciertos / r.total : 0;
-      const res = calcularEstado(ventana, tasa, (an as { estado?: EstadoNodo } | null)?.estado || 'no_empezado');
+      const calculo = calcularEstado(ventana, tasa, previo?.estado || 'no_empezado');
+      const res = resolverEstado(calculo, previo?.estado_override ?? false, previo?.estado || 'no_empezado');
       await supabase.from('alumno_nodo').upsert(
         { alumno_id: me.id, nodo_id: nodoId, estado: res.estado, puntaje: res.puntaje, actualizado_at: new Date().toISOString() },
         { onConflict: 'alumno_id,nodo_id' },
