@@ -12,7 +12,7 @@ const QUICK = 'var(--font-quicksand), sans-serif';
 const NUNITO = 'var(--font-nunito)';
 
 type Alumno = { nombre: string; avatar: string; grado: number };
-type NodoEstado = { estado: string; nombre: string };
+type NodoEstado = { nodo_id: string; estado: string; override: boolean; nombre: string };
 type Error = { pregunta: string; respondio: string; esperaba: string };
 type Eval = { resumen: string; errores: Error[]; a_reforzar: string[] } | null;
 
@@ -43,10 +43,10 @@ export default function DetalleAlumno() {
 
       const { data: an } = await supabase
         .from('alumno_nodo')
-        .select('estado, nodo:nodo_id(nombre)')
+        .select('nodo_id, estado, estado_override, nodo:nodo_id(nombre)')
         .eq('alumno_id', alumnoId);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      setNodos(((an as any[]) || []).map((r) => ({ estado: r.estado, nombre: r.nodo?.nombre ?? 'Nodo' })));
+      setNodos(((an as any[]) || []).map((r) => ({ nodo_id: r.nodo_id, estado: r.estado, override: r.estado_override, nombre: r.nodo?.nombre ?? 'Nodo' })));
 
       const { data: ev } = await supabase
         .from('evaluacion_sesion')
@@ -60,6 +60,17 @@ export default function DetalleAlumno() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [alumnoId]);
+
+  async function fijarEstado(nodoId: string, valor: string) {
+    // valor 'auto' = devolver a la regla; cualquier otro = override docente
+    const override = valor !== 'auto';
+    const estado = override ? valor : (nodos.find((n) => n.nodo_id === nodoId)?.estado ?? 'no_empezado');
+    await supabase.from('alumno_nodo').upsert(
+      { alumno_id: alumnoId, nodo_id: nodoId, estado, estado_override: override },
+      { onConflict: 'alumno_id,nodo_id' },
+    );
+    setNodos((prev) => prev.map((n) => (n.nodo_id === nodoId ? { ...n, estado, override } : n)));
+  }
 
   return (
     <div style={{ minHeight: '100vh', padding: 'clamp(24px,5vw,48px) 22px', animation: 'edFade .3s ease' }}>
@@ -82,11 +93,23 @@ export default function DetalleAlumno() {
           <p style={{ color: '#7A6F5F', fontWeight: 600 }}>{loaded ? 'Todavía no practicó.' : 'Cargando…'}</p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {nodos.map((n, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#FFFCF5', border: '1.5px solid #EFE3CE', borderRadius: 14, padding: '10px 14px' }}>
+            {nodos.map((n) => (
+              <div key={n.nodo_id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#FFFCF5', border: '1.5px solid #EFE3CE', borderRadius: 14, padding: '10px 14px' }}>
                 <span style={{ width: 16, height: 16, borderRadius: '50%', background: estadoColor(n.estado), flexShrink: 0 }} />
                 <span style={{ flex: 1, fontFamily: QUICK, fontWeight: 700, color: '#3A332A' }}>{n.nombre}</span>
-                <span style={{ fontSize: 13, color: '#7A6F5F', fontWeight: 700 }}>{ESTADO_LABEL[n.estado] ?? n.estado}</span>
+                <span style={{ fontSize: 13, color: '#7A6F5F', fontWeight: 700 }}>{ESTADO_LABEL[n.estado] ?? n.estado}{n.override ? ' ·fijado' : ''}</span>
+                <select
+                  value={n.override ? n.estado : 'auto'}
+                  onChange={(e) => fijarEstado(n.nodo_id, e.target.value)}
+                  style={{ fontFamily: NUNITO, fontWeight: 700, fontSize: 13, color: '#3A332A', border: '1.5px solid #EFE3CE', borderRadius: 10, padding: '4px 8px', background: '#FBF4E6' }}
+                  aria-label={`Fijar estado de ${n.nombre}`}
+                >
+                  <option value="auto">Auto (según práctica)</option>
+                  <option value="no_empezado">Sin empezar</option>
+                  <option value="en_construccion">En camino</option>
+                  <option value="a_reforzar">A reforzar</option>
+                  <option value="dominado">Lo domina</option>
+                </select>
               </div>
             ))}
           </div>
