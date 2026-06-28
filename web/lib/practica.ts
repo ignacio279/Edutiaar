@@ -49,10 +49,26 @@ export function tiposPendientes(historial: HistorialEjercicio[]): string[] {
   return ORDEN_TIPO.filter((t) => !dominados.has(t));
 }
 
-// Sirve hasta `max` ejercicios del pool, de menor a mayor dificultad (la "escalera":
-// arranca fácil y sube). Determinístico para que los tests sean estables.
-export function elegirEjercicios(pool: Ejercicio[], max = 8): Ejercicio[] {
-  return [...pool].sort((a, b) => a.dificultad - b.dificultad).slice(0, max);
+// Sirve hasta `max` ejercicios del pool, personalizados a la historia del chico en el nodo:
+// (1) ESCALERA DE COBERTURA: prioriza los tipos que le faltan demostrar (reconocer→producir).
+// (2) DIFICULTAD ADAPTATIVA: dentro de eso, acerca la dificultad al nivel adaptativo (sube si
+//     viene acertando, baja si falla). Determinístico (tests estables): desempata por dificultad e id.
+export function elegirEjercicios(pool: Ejercicio[], historial: HistorialEjercicio[] = [], max = 8): Ejercicio[] {
+  const nivel = nivelAdaptativo(historial, pool);
+  const pendientes = tiposPendientes(historial);
+  const prioridadTipo = (t: string) => {
+    const i = pendientes.indexOf(t);
+    return i === -1 ? ORDEN_TIPO.length : i; // pendientes primero, en orden de demanda
+  };
+  return [...pool]
+    .sort(
+      (a, b) =>
+        prioridadTipo(a.tipo) - prioridadTipo(b.tipo) ||
+        Math.abs(a.dificultad - nivel) - Math.abs(b.dificultad - nivel) ||
+        a.dificultad - b.dificultad ||
+        a.id.localeCompare(b.id),
+    )
+    .slice(0, max);
 }
 
 // Resumen de la sesión: aciertos finales, total y aciertos al PRIMER intento

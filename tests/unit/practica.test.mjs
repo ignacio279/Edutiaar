@@ -3,21 +3,32 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { elegirEjercicios, resumen, nivelAdaptativo, tiposPendientes } from '../../web/lib/practica.ts';
 
-const ej = (id, dificultad, tipo = 'reconocer') => ({ id, enunciado: id, opciones: ['a', 'b'], correcta: 'a', dificultad, tipo });
+const ej = (id, tipo, dif) => ({ id, enunciado: '', opciones: [], correcta: '', dificultad: dif, tipo });
 
-test('elegirEjercicios: ordena por dificultad y respeta el tope', () => {
-  const pool = [ej('c', 3), ej('a', 1), ej('b', 2), ej('d', 2)];
-  const sel = elegirEjercicios(pool, 3);
-  assert.equal(sel.length, 3);
-  assert.deepEqual(sel.map((e) => e.dificultad), [1, 2, 2]);
-  assert.equal(sel[0].id, 'a');
+test('elegirEjercicios sin historia: arranca por reconocer fácil (cobertura + nivel mínimo)', () => {
+  const pool = [ej('p', 'producir', 3), ej('r', 'reconocer', 1), ej('c', 'completar', 2)];
+  const out = elegirEjercicios(pool, [], 3);
+  assert.equal(out[0].id, 'r'); // reconocer es el primer tipo pendiente, dif cercana al nivel min
 });
 
-test('elegirEjercicios: tope por defecto 8 y no muta el pool', () => {
-  const pool = Array.from({ length: 12 }, (_, i) => ej(String(i), (i % 3) + 1));
-  const sel = elegirEjercicios(pool);
-  assert.equal(sel.length, 8);
-  assert.equal(pool.length, 12);
+test('elegirEjercicios: si ya domina reconocer, prioriza el próximo tipo pendiente', () => {
+  const pool = [ej('r', 'reconocer', 1), ej('c', 'completar', 2), ej('p', 'producir', 3)];
+  const historia = [ft('reconocer', 1)]; // reconocer ya cubierto
+  const out = elegirEjercicios(pool, historia, 3);
+  assert.notEqual(out[0].tipo, 'reconocer'); // ya no lo prioriza
+});
+
+test('elegirEjercicios: determinístico — mismo input, mismo orden', () => {
+  const pool = [ej('b', 'reconocer', 2), ej('a', 'reconocer', 2)];
+  assert.deepEqual(
+    elegirEjercicios(pool, [], 2).map((x) => x.id),
+    elegirEjercicios(pool, [], 2).map((x) => x.id),
+  );
+});
+
+test('elegirEjercicios: corta en max', () => {
+  const pool = [ej('a', 'reconocer', 1), ej('b', 'completar', 1), ej('c', 'ordenar', 1)];
+  assert.equal(elegirEjercicios(pool, [], 2).length, 2);
 });
 
 test('resumen: cuenta aciertos, total y aciertos al primer intento', () => {
