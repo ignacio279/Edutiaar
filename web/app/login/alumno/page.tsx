@@ -128,11 +128,13 @@ export default function LoginAlumno() {
   // ----- paso PIN -----
   if (step === 'pin') {
     const s = pinPerfil || { nombre: '', avatar: 'fox', id: '' };
-    const keyBtn = (label: React.ReactNode, onClick: () => void) => (
+    const keyBtn = (label: React.ReactNode, onClick: () => void, keyVal: string) => (
       <button
+        key={keyVal}
         onClick={onClick}
         className="ed-key"
         style={{
+          width: '100%',
           height: 64,
           border: '2px solid #EFE3CE',
           background: '#FFFCF5',
@@ -224,12 +226,12 @@ export default function LoginAlumno() {
             maxWidth: 260,
           }}
         >
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => (
-            <span key={d}>{keyBtn(d, () => pressDigit(String(d)))}</span>
-          ))}
-          {keyBtn('⌫', () => setPin((p) => p.slice(0, -1)))}
-          {keyBtn(0, () => pressDigit('0'))}
-          <span />
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) =>
+            keyBtn(d, () => pressDigit(String(d)), `d${d}`),
+          )}
+          {keyBtn('⌫', () => setPin((p) => p.slice(0, -1)), 'del')}
+          {keyBtn(0, () => pressDigit('0'), 'd0')}
+          <span key="spacer" />
         </div>
       </div>
     );
