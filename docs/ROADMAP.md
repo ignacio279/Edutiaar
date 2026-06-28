@@ -2,6 +2,10 @@
 
 > Regla: **slices verticales.** Cada etapa termina en algo demostrable. Cada etapa (1–4) coincide con un hito que se le cobra al cliente. No diseñar etapas futuras en detalle: diseñar lo justo para la etapa actual.
 
+## Estado (2026-06-28)
+
+Etapas **0 y 1 cerradas**. La funcionalidad de las Etapas 2–4 (SOL genera, el chico practica, el mapa cambia, la seño ve el recorrido) **se construyó dentro de Fase 2 / SOL (SP-1 a SP-4)** y anda **de punta a punta en modo mock** (sin API key). Ver "Fase 2 — SOL" al final y `docs/superpowers/specs/`.
+
 ## Etapa 0 — Setup (el terreno)
 - [ ] Crear las tablas en Supabase (ver `DATA_MODEL.md`).
 - [ ] Activar **RLS** en todas las tablas.
@@ -52,3 +56,19 @@
 - [ ] Flujo mínimo de privacidad de menores.
 - [ ] Probar con un chico real.
 - [ ] Pasar Supabase a **Pro** al ir a producción (con tope de gasto).
+
+## Fase 2 — SOL (en curso)
+
+Diseño en `docs/superpowers/specs/`. Roto en slices verticales (cada uno spec → plan → build, con sus tests).
+
+- [x] **SP-1 — Edge Function SOL base.** Messages API + tool use (`supabase/functions/sol`, loop reusable en `_shared/loop.ts`).
+- [x] **SP-2 — Autoría docente.** La seño sube contenido → `dividir-nodos` genera `sol_materia` + nodos → revisa/publica (`/docente/autoria`). Migración `0006`.
+- [x] **SP-3 — Multi-materia (alumno).** Picker de materias publicadas → mapa real desde la DB. Migración `0007`.
+- [x] **SP-4 — Evaluador por sesión.** Práctica real + pool (`0008`) → **regla determinística de dominio** (`web/lib/dominio.ts`) mueve `alumno_nodo` → el mapa cambia → **diagnóstico cualitativo de SOL** (`evaluar-sesion` → `evaluacion_sesion`, `0009`) en el panel docente (`/docente/[alumnoId]`).
+- [ ] **SP-5 — Nodos editables por IA** (con OK de la seño). Solo el seam dejado, sin construir.
+
+**Modo mock vs real:** generación y diagnóstico corren con flag `mock` porque falta la **API key de Anthropic**. Con la key (+ quitar el flag) pasan a Claude real. Pool de ejercicios de Lengua sembrado a mano (`scripts/seed-demo-lengua.mjs`) hasta que el generador IA corra de verdad.
+
+**Otros pendientes de Fase 2:** decaimiento temporal / repaso espaciado (spec escrita), override docente del estado, roles director/familia, copilotos LUNA/TERRA, offline/satelital/multilingüe.
+
+**Demo del loop completo:** seño (`ana@edutia.ar` / `edutia123`) autora+publica un plan → alumno (aula `CERRO-3A`, PIN de seed) practica → el mapa cambia solo → la seño ve el análisis en el detalle del alumno.
