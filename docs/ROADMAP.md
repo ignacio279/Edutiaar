@@ -4,7 +4,7 @@
 
 ## Estado (2026-06-28)
 
-Etapas **0 y 1 cerradas**. **Etapa 3 cerrada** (SP-4d selección adaptiva + SP-4e override docente, 2026-06-28). La funcionalidad de las Etapas 2–4 (SOL genera, el chico practica, el mapa cambia, la seño ve el recorrido) **se construyó dentro de Fase 2 / SOL (SP-1 a SP-4e)** y anda **de punta a punta en modo mock** (sin API key — único blocker grande restante). Ver "Fase 2 — SOL" al final y `docs/superpowers/specs/`.
+Etapas **0 y 1 cerradas**. **Etapa 3 cerrada** (SP-4d selección adaptiva + SP-4e override docente, 2026-06-28). **Etapa 4 (panel docente) implementada** (2026-06-28): actividad del día + etiqueta "a quién atender" + "Lo de hoy" + histórico mes a mes; pendiente solo el smoke UI manual. La funcionalidad de las Etapas 2–4 (SOL genera, el chico practica, el mapa cambia, la seño ve el recorrido) **se construyó dentro de Fase 2 / SOL (SP-1 a SP-4e)** y anda **de punta a punta en modo mock** (sin API key — único blocker grande restante). Ver "Fase 2 — SOL" al final y `docs/superpowers/specs/`.
 
 ## Etapa 0 — Setup (el terreno)
 - [ ] Crear las tablas en Supabase (ver `DATA_MODEL.md`).
@@ -43,12 +43,14 @@ Etapas **0 y 1 cerradas**. **Etapa 3 cerrada** (SP-4d selección adaptiva + SP-4
 **Demo:** el chico practica y su mapa cambia de color solo.
 
 ## Etapa 4 — Panel de la docente (Hito 4)
-- [ ] **Mis alumnos**: lista con la actividad del día (sesiones de hoy).
-- [ ] Etiqueta de estado por alumno (a quién atender).
-- [ ] **Detalle del alumno**: su mapa + lo de hoy + sugerencia de SOL.
-- [ ] **Histórico mes a mes** (sesiones agrupadas por mes).
+- [x] **Mis alumnos**: lista con la actividad del día (sesiones de hoy).
+- [x] Etiqueta de estado por alumno (a quién atender).
+- [x] **Detalle del alumno**: su mapa + lo de hoy + sugerencia de SOL.
+- [x] **Histórico mes a mes** (sesiones agrupadas por mes).
 
 **Demo:** la maestra ve el recorrido completo de cada chico.
+
+**Implementada (2026-06-28).** Lógica pura en `web/lib/panel.ts` (etiqueta "a quién atender" = peor estado de nodo + actividad de hoy; actividad con fallback a "última vez"; histórico agrupado por mes), `web/app/docente/page.tsx` (lista) y `web/app/docente/[alumnoId]/page.tsx` (Lo de hoy + Mes a mes). 77/77 unit verdes (14 nuevos en `tests/unit/panel.test.mjs`). Pendiente no bloqueante: smoke UI manual + `npm run test:db` (`tests/integration/panel-rls.test.mjs`) con envs reales.
 
 ## Cierre — Pulido y piloto
 - [ ] Manejo de errores (SOL no responde / sin conexión).
