@@ -1,4 +1,4 @@
-# SOL Fase 2 — Diseño con el Agent SDK de Anthropic
+# SOL Fase 2 — Diseño (especialista por materia + evaluación por sesión)
 
 > Spec de diseño (planteo). Define QUÉ construir y por qué. No es plan de ejecución.
 > Fecha: 2026-06-27. Estado: **propuesta, fuera del MVP (Fase 2)**.
@@ -6,58 +6,65 @@
 
 ## Resumen
 
-SOL pasa de "Claude llamado desde una Edge Function" a un **agente real** construido con el **Agent SDK de Anthropic**, corriendo en un host propio. Cada materia tiene su **SOL especialista**: se sube el contenido de la materia, SOL lo entiende, se especializa en eso y solo eso, divide el contenido en **nodos**, y los alumnos avanzan por esos nodos. Al cerrar cada sesión de práctica, SOL **evalúa al chico por lote** (dónde falla, qué errores repite, qué reforzar) y mueve el estado del nodo del alumno. Queda preparado (sin construir) para que más adelante SOL **edite los nodos** según la evidencia.
+Cada materia tiene su **SOL especialista**: la seño sube el contenido de la materia, SOL lo entiende, se especializa en eso y solo eso, divide el contenido en **nodos**, y los alumnos avanzan por esos nodos. Al cerrar cada sesión de práctica, SOL **evalúa al chico por lote** (dónde falla, qué errores repite, qué reforzar) y mueve el estado del nodo del alumno. Queda preparado (sin construir) para que más adelante SOL **edite los nodos** según la evidencia.
 
-Esto **respeta el espíritu de ADR-002** (la app sigue corrigiendo cada respuesta; SOL no corrige por click) y agrega una capa de evaluación cualitativa de costo controlado.
+Respeta el espíritu de **ADR-002** (la app sigue corrigiendo cada respuesta; SOL no corrige por click) y agrega una capa de evaluación cualitativa de costo controlado.
+
+### Nota sobre el motor (Agent SDK vs Messages API)
+
+El pedido original fue usar el **Agent SDK de Anthropic**. Se evaluó: el Agent SDK necesita un runtime Node/Python persistente y **no corre dentro de las Edge Functions de Supabase** (Deno). Dado que el stack es Supabase + Vercel y el equipo es chico, se eligió arrancar con la **Messages API de Claude llamada desde Edge Functions** (cero servidor nuevo, lo más barato, respeta "diseñar lo justo"). Se conservan los **conceptos** del diseño agente (especialista por materia, trabajos separados, método reusable, tools, salida estructurada), traducidos a Messages API. El **Agent SDK en host propio** o **Managed Agents** (Anthropic hostea el loop) quedan como camino de upgrade si en el futuro se necesitan subagents/skills/hooks nativos.
 
 ## Decisiones tomadas (locks)
 
 | # | Decisión | Por qué |
 |---|---|---|
-| D1 | **Motor: Agent SDK en host propio** (servicio `sol-engine`, Python). | El pedido literal: SOL como agente con subagents por materia y tools. Convive con lo de hoy, no lo reemplaza. |
+| D1 | **Motor: Messages API de Claude desde Edge Functions de Supabase.** Sin servidor nuevo. | Todo el stack ya vive en Supabase; equipo chico; lo más barato y menos ops. |
 | D2 | **Evaluación por sesión (lote), no por click.** | Mantiene ADR-002 y el tope de costo (1 llamada por sesión, no 10). |
-| D3 | **Especialización generada y guardada al subir el contenido.** SOL se especializa + divide en nodos de una vez; ambos quedan guardados; la seño revisa antes de publicar. | Barato (corre una vez por plan), versionable, controlable. |
+| D3 | **Especialización generada y guardada al subir el contenido.** SOL se especializa + divide en nodos de una vez; ambos quedan guardados; **la seño revisa antes de publicar**. | Barato (corre una vez por plan), versionable, controlable. |
 | D4 | **SOL trabaja solo con los nodos guardados** durante las sesiones. No re-aprende todo cada vez. | Costo y previsibilidad. |
-| D5 | **Subagents por TRABAJO (no por materia)** + **skills** para el método pedagógico (reusable entre materias). | Separa el QUÉ (contenido por materia) del CÓMO (método compartido). |
-| D6 | **Groundwork de nodos editables: dejar el seam, no construirlo.** | Es Fase 2.x; sin datos reales de uso sería sobrediseñar. |
+| D5 | **Trabajos separados** (dividir, evaluar) + **plantillas de método reusables** entre materias. | Separa el QUÉ (contenido por materia) del CÓMO (método compartido). |
+| D6 | **La seño es quien sube el plan** (herramienta de autoría docente). | Resuelve OPEN-F2-1. Es Fase 2 según CLAUDE.md. |
+| D7 | **Groundwork de nodos editables: dejar el seam, no construirlo.** | Es Fase 2.x; sin datos reales de uso sería sobrediseñar. |
 
 ## Capas conceptuales (modelo ordenador)
 
-- **Skill = el MÉTODO** (cómo enseñar/evaluar; materia-agnóstico, reusable).
+- **Método = el CÓMO** (cómo dividir/evaluar; materia-agnóstico, reusable). Vive como **plantillas de prompt** versionadas, no atado a una materia.
 - **Perfil de materia (`sol_materia`) = el QUÉ** (el contenido, generado del plan).
-- **Subagent = el TRABAJO** (dividir, evaluar, en el futuro editar).
-- **Tool = las MANOS** (leer/escribir Supabase).
-- **Hook / `max_budget_usd` = los guardarraíles** (costo, menores).
+- **Trabajo = una tarea de SOL** (dividir, evaluar; en el futuro editar). Cada trabajo = su propia llamada/Edge Function con su prompt + tools.
+- **Tool (tool use) = las MANOS** (leer/escribir Supabase desde el loop de la Edge Function).
+- **Tope de costo en código = los guardarraíles** (límite de tokens/llamadas + control de menores).
 
-Cuando entra una materia nueva, **hereda el método** (skills); solo cambia el perfil. No se reescribe nada.
+Cuando entra una materia nueva, **hereda el método** (las plantillas); solo cambia el perfil. No se reescribe nada.
 
 ## Arquitectura
 
 ```
-[Vercel front]
+[Vercel front (Next.js)]
      │ (HTTPS)
      ▼
-[Supabase]  ──Edge Functions──►  cosas baratas / per-click
-     │        (pool de ejercicios, login, corrección)
-     │
-     │  ◄──MCP / service_role──►  [sol-engine  (Agent SDK, Python)]
-                                    · especializar materia (subir contenido)
-                                    · dividir en nodos
-                                    · evaluar sesión
-                                    · (futuro) editar nodos
+[Supabase]
+  ├─ Postgres (RLS)            contenido + progreso + sol_materia + evaluacion_sesion
+  ├─ Auth                      docente / alumno
+  └─ Edge Functions (Deno/TS)
+        ├─ pool de ejercicios, login, corrección  ← per-click, barato, sin IA
+        └─ SOL  ── Messages API ──►  [Claude API (Anthropic)]
+              · especializar materia (al subir contenido)
+              · dividir en nodos
+              · evaluar sesión (al cerrar)
 ```
 
-- El front **nunca** llama a sol-engine directo: pasa por Edge Function o por un endpoint con auth. La API key de Claude vive en sol-engine (server). Respeta **ADR-005**.
-- sol-engine lee/escribe Supabase vía **MCP de Supabase** (o `service_role`).
-- Las Edge Functions siguen con lo per-click barato. sol-engine solo corre en los **bordes** (subir contenido / cerrar sesión), nunca durante cada click.
+- La API key de Claude vive **solo en la Edge Function** (variable de entorno del servidor); el front nunca la ve. Respeta **ADR-005**.
+- El front nunca llama a Claude directo: todo pasa por Edge Functions.
+- Las Edge Functions de SOL corren solo en los **bordes** (subir contenido / cerrar sesión), nunca durante cada click.
+- La Edge Function usa el SDK de Anthropic para TypeScript (o `fetch` directo) contra la Messages API.
 
 ### "1 SOL por materia" = sesión especializada (no chat caro permanente)
 
-Durante la práctica **no corre ningún agente**: el chico responde opción múltiple del pool y la app corrige. El agente SOL aparece solo en dos momentos:
+Durante la práctica **no se llama a Claude**: el chico responde opción múltiple del pool y la app corrige. SOL aparece solo en dos momentos:
 - **Al subir contenido** (una vez): se especializa + divide en nodos.
 - **Al cerrar sesión** (una vez): evalúa.
 
-El botón "Mate" abre la práctica de esa materia; el SOL de Mate = perfil + skills + subagents scopeados a esa materia. Implementación recomendada: arrancar un cliente del SDK con `system_prompt = SOL base + perfil_materia` y el set de tools/skills correspondiente (más simple que pre-registrar N subagents formales; resultado visible idéntico).
+El botón "Mate" abre la práctica de esa materia; el SOL de Mate = `system_prompt` armado con `perfil_materia(mate)` + las plantillas de método. Distinto botón = distinto perfil cargado.
 
 ## Modelo de datos (cambios)
 
@@ -90,51 +97,51 @@ Lo de hoy se mantiene. Se agrega/ajusta:
 
 `materia` / `nodo` / `alumno_nodo` ya soportan N materias (solo agregar filas + RLS).
 
-## Subagents (por TRABAJO)
+## Trabajos de SOL (jobs)
 
-| Subagent | Cuándo | Tools | Skills | Modelo |
+| Trabajo | Cuándo | Tools | Método (plantilla) | Modelo |
 |---|---|---|---|---|
-| `divisor-nodos` | al subir el plan (1×) | `leer_programa`, `escribir_nodos` | `dividir-en-nodos` | `claude-sonnet-4-6` (Opus si el plan es difícil) |
-| `evaluador-sesion` | al cerrar sesión | `leer_respuestas`, `escribir_evaluacion`, `mover_alumno_nodo` | `evaluar-sesion`, `tono-sol` | `claude-haiku-4-5` (corre seguido) |
-| `editor-nodos` *(futuro)* | seña pide / evidencia | `editar_nodo` (con OK seño) | `dividir-en-nodos` | — |
+| `dividir-nodos` | al subir el plan (1×) | `leer_programa`, `escribir_nodos` | `dividir-en-nodos` | `claude-sonnet-4-6` (Opus si el plan es difícil) |
+| `evaluar-sesion` | al cerrar sesión | `leer_respuestas`, `escribir_evaluacion`, `mover_alumno_nodo` | `evaluar-sesion`, `tono-sol` | `claude-haiku-4-5` (corre seguido) |
+| `editar-nodos` *(futuro)* | seña pide / evidencia | `editar_nodo` (con OK seño) | `dividir-en-nodos` | — |
 
-Cada materia usa los **mismos** subagents con su perfil inyectado. `generador-ejercicios` queda en la Edge Function de hoy (ya anda, barato); moverlo a sol-engine es opcional futuro.
+Cada trabajo = una Edge Function (o un handler) que arma el prompt con el perfil de la materia + la plantilla de método, corre un loop chico de tool use contra la Messages API, y escribe el resultado en Supabase. `generador-ejercicios` queda como está hoy (ya anda, barato).
 
-## Skills (el método, reusable)
+## Método reusable (plantillas de prompt)
 
-Arrancar con cuatro, en formato `SKILL.md` (carga on-demand):
+Arrancar con cuatro bloques de instrucciones, guardados y versionados, inyectables en el `system_prompt` de cada trabajo:
 - `dividir-en-nodos` — granularidad, orden, prerrequisitos de un buen mapa de nodos.
 - `evaluar-sesion` — leer respuestas → detectar patrones de error → mapear a estado de nodo.
 - `tono-sol` — voz rioplatense, alienta, nunca castiga (convención de CLAUDE.md).
 - `ejemplos-de-zona` — usar `escuela.zona` para contextualizar.
 
-Ventaja sobre meterlo en el system_prompt: cargan on-demand (menos tokens), las comparten todas las materias y subagents, y el equipo/seño las mejora sin tocar código.
+Son materia-agnósticos: los comparten todas las materias y trabajos. (Si más adelante se migra al Agent SDK, estos bloques se convierten naturalmente en *skills* del SDK.)
 
 ## Tools (las manos sobre Supabase)
 
-Pocas, parejas a la DB: `leer_programa`, `escribir_nodos`, `leer_respuestas(sesion)`, `escribir_evaluacion`, `mover_alumno_nodo`, y *(futuro)* `editar_nodo`. Vía MCP de Supabase o `service_role`. Cada tool **scopeada por alumno/sesión**.
+Pocas, parejas a la DB: `leer_programa`, `escribir_nodos`, `leer_respuestas(sesion)`, `escribir_evaluacion`, `mover_alumno_nodo`, y *(futuro)* `editar_nodo`. Se implementan como **tool use** en el loop manual de la Edge Function (cada tool = una función que pega a Supabase con `service_role`). Cada tool **scopeada por alumno/sesión**.
 
 ## Guardarraíles y salida limpia
 
-- **Tope de costo:** `max_budget_usd` del SDK por corrida (built-in) → cumple Rule 4. Hook `PreToolUse` solo si después se quiere control fino.
-- **Menores:** el `evaluador` devuelve **salida estructurada** (`output_format` json_schema) que calza exacto con `evaluacion_sesion` → nunca texto libre suelto, no se cuelan datos personales. El schema es el contrato.
-- **Seguridad/tono:** hook `Stop` liviano que valida tono apropiado *(pulido, no bloqueante al inicio)*.
+- **Tope de costo:** se controla **en código** — límite de `max_tokens` por llamada, modelo barato (Haiku) para lo frecuente, y un contador/límite mensual de gasto. Cumple Rule 4. (Si se migra al Agent SDK, esto pasa a ser `max_budget_usd` built-in.)
+- **Menores:** el `evaluar-sesion` devuelve **salida estructurada** (`output_config.format` json_schema) que calza exacto con `evaluacion_sesion` → nunca texto libre suelto, no se cuelan datos personales. El schema es el contrato.
+- **Tono:** validación liviana del mensaje al chico *(pulido, no bloqueante al inicio)*.
 
 ## Flujo de evaluación por sesión (paso a paso)
 
 1. Chico practica: la app sirve ejercicios del pool, **corrige cada click (gratis)**, guarda `respuesta` + crea `sesion`. Sin IA.
-2. Cierra sesión → Edge Function dispara a sol-engine: *"evaluá sesión X"*.
-3. `evaluador-sesion` arranca: carga `sol_materia` (perfil) + skills (`evaluar-sesion`, `tono-sol`) → tool `leer_respuestas(sesion)` → razona patrones → devuelve **salida estructurada** (json_schema: `resumen`, `errores[]`, `a_reforzar[]`, `estado_nodo_sugerido`).
+2. Cierra sesión → el front llama a la Edge Function `evaluar-sesion` con la `sesion`.
+3. La Edge Function: carga `sol_materia` (perfil) + plantillas (`evaluar-sesion`, `tono-sol`) → tool `leer_respuestas(sesion)` → corre Messages API → devuelve **salida estructurada** (json_schema: `resumen`, `errores[]`, `a_reforzar[]`, `estado_nodo_sugerido`).
 4. tool `escribir_evaluacion` → `evaluacion_sesion`. tool `mover_alumno_nodo` → `alumno_nodo` (regla de dominio, OPEN-1).
 5. Front: mensaje cálido al chico (tono SOL) + la seño ve el análisis en su panel.
 
-Costo: **1 corrida Haiku por sesión**. `max_budget_usd` como tope.
+Costo: **1 llamada Haiku por sesión**. Tope en código.
 
 ## Seam para nodos editables (dejar listo, NO construir)
 
 Mañana SOL ajusta nodos según evidencia agregada (muchos chicos tropiezan en el mismo nodo → dividirlo, reordenar, agregar prerrequisito). Lo que se deja preparado **ahora**:
 - `nodo.actualizado_at` + `nodo.version` para auditar cambios.
-- tool `editar_nodo` **definida pero detrás del OK de la seño** (permission gate del SDK).
+- tool `editar_nodo` **definida pero detrás del OK de la seño** (gate).
 - Regla dura: **editar un nodo nunca resetea** el progreso del chico (`alumno_nodo`), salvo decisión explícita.
 - `evaluacion_sesion.a_reforzar` ya es la señal agregable que alimentará al editor.
 
@@ -144,32 +151,32 @@ Esto es grande → se rompe. Cada SP termina en algo demostrable y lleva sus tes
 
 | SP | Qué | Demo |
 |---|---|---|
-| **SP-1** | Infra `sol-engine` (host + Agent SDK + MCP a Supabase + 1 tool de prueba). | sol-engine lee un nodo de Supabase. |
-| **SP-2** | Especialización + división (subir contenido → `sol_materia` + nodos; seño revisa/publica). | subo un plan → salen nodos revisables. |
-| **SP-3** | Multi-materia en el front (cards/botones por materia = SOL especialista). | el chico elige materia y practica. |
+| **SP-1** | Edge Function SOL base (Messages API + tool use + 1 tool de prueba contra Supabase). | la función lee un nodo y responde algo de Claude. |
+| **SP-2** | Autoría docente: la seño sube contenido → `sol_materia` + nodos generados; los revisa/publica. | la seño sube un plan → salen nodos revisables. |
+| **SP-3** | Multi-materia en el front (Next.js): cards/botones por materia = SOL especialista. | el chico elige materia y practica. |
 | **SP-4** | Evaluador por sesión (`evaluacion_sesion` + mover `alumno_nodo` + panel de la seño). | chico practica → SOL evalúa → el mapa cambia + la seño ve el análisis. |
 | **SP-5** *(futuro)* | Nodos editables. | — |
 
 ## Costos, modelos y riesgos
 
-**Modelos** (US$/MTok, caché 2026-06; aliases del SDK):
+**Modelos** (US$/MTok, caché 2026-06; vía Messages API):
 - `claude-opus-4-8` — $5/$25. El más capaz (default del proyecto). Usar en división/especialización si la calidad lo pide.
 - `claude-sonnet-4-6` — $3/$15. Recomendado para división + especialización (corren raro; calidad/costo OK).
 - `claude-haiku-4-5` — $1/$5. Evaluador por sesión (corre seguido, barato).
 
-**Estimación gruesa:** eval en Haiku ≈ unos miles de tokens → ~US$0.003/sesión. 30 chicos × 1 sesión/día ≈ **< US$0.20/día**. + host chico ~US$5–10/mes. + división/especialización = one-time por materia.
+**Estimación gruesa:** eval en Haiku ≈ unos miles de tokens → ~US$0.003/sesión. 30 chicos × 1 sesión/día ≈ **< US$0.20/día**. División/especialización = one-time por materia. **Sin host nuevo** (corre en Edge Functions, plan Supabase que ya se paga).
 
-**Topes:** `max_budget_usd` por corrida (built-in del SDK) + límite mensual de gasto → cumple Rule 4.
+**Topes:** `max_tokens` por llamada + modelo barato para lo frecuente + límite mensual de gasto → cumple Rule 4.
 
 **Riesgos:**
-- **Host nuevo = más ops y superficie.** Mitigación: empezar por SP-1 mínimo. Alternativa a evaluar a futuro: **Managed Agents** de Anthropic (Anthropic hostea el loop del agente; cero servidor propio que mantener). Anotado, no decidido acá.
-- **Datos de menores:** sol-engine usa `service_role` → **bypassa RLS**. Crítico: scopear cada tool por alumno/sesión, salida estructurada sin PII, key server-side (ADR-005). Prever borrado/export por alumno.
-- **Latencia:** la evaluación corre async al cerrar sesión; no bloquea al chico.
+- **Datos de menores:** las Edge Functions de SOL usan `service_role` → **bypassan RLS**. Crítico: scopear cada tool por alumno/sesión, salida estructurada sin PII, key server-side (ADR-005). Prever borrado/export por alumno.
+- **Latencia:** la evaluación corre al cerrar sesión; mostrar "SOL está mirando tu práctica…" para que no bloquee al chico. Edge Functions tienen límite de tiempo de ejecución — la eval por lote (1 llamada Haiku) entra cómoda; vigilar si crece.
+- **Pérdida de comodidades del SDK:** subagents/skills/hooks se reimplementan a mano (loop chico, plantillas, tope en código). Aceptable al arranque; si pesa, migrar a Agent SDK (host propio) o Managed Agents.
 - **OPEN-1 (regla de "dominio" del nodo) sigue abierta** — el evaluador la necesita para mover `alumno_nodo`. Definir con la seño antes de SP-4.
 
-## Preguntas abiertas para esta fase
+## Preguntas — estado
 
-- **OPEN-F2-1:** ¿Quién sube el plan de la materia en Fase 2 — la seño (herramienta de autoría) o el equipo? Define el alcance de SP-2 (la autoría docente es Fase 2 según CLAUDE.md).
-- **OPEN-F2-2:** ¿Host propio (Railway/Fly/Render) vs Managed Agents? Decidir al arrancar SP-1.
-- **OPEN-F2-3:** Formato exacto del contenido que se le pasa al `divisor-nodos` (relacionado con OPEN-2 del MVP).
-- **OPEN-1 (heredada):** regla de dominio del nodo — bloquea SP-4.
+- **OPEN-F2-1 (resuelta):** la **seño** sube el plan (autoría docente). → D6. Define SP-2.
+- **OPEN-F2-2 (resuelta):** motor = **Messages API desde Edge Functions** (sin servidor nuevo). → D1.
+- **OPEN-F2-3 (abierta, no bloquea ahora):** ¿en qué forma sube la seño el contenido — caja de texto, archivo (PDF/Word), plantilla de temas? Importa para que el `dividir-nodos` trocee bien. Se decide al hacer SP-2 (junto con OPEN-2 del MVP).
+- **OPEN-1 (heredada, abierta):** regla de "dominio" del nodo (`en_construcción` → `dominado`): ¿aciertos seguidos, % de aciertos, puntaje? Decisión **pedagógica, con la seño**. Bloquea SP-4 (y Etapa 3 del MVP).
