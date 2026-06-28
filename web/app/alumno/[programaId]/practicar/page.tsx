@@ -9,7 +9,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useMe } from '@/lib/me-context';
 import { sol } from '@/lib/art';
 import { elegirEjercicios, resumen, type Ejercicio, type RespuestaReg, type HistorialEjercicio } from '@/lib/practica';
-import { calcularEstado, type EstadoNodo } from '@/lib/dominio';
+import { calcularEstado, resolverEstado, type EstadoNodo } from '@/lib/dominio';
 
 const QUICK = 'var(--font-quicksand), sans-serif';
 const NUNITO = 'var(--font-nunito)';
@@ -88,9 +88,11 @@ function PracticarInner() {
         .limit(8);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const ventana = ((win as any[]) || []).map((x) => ({ correcta: x.correcta, reintentos: x.reintentos, tipo: x.ejercicio?.tipo, dificultad: x.ejercicio?.dificultad }));
-      const { data: an } = await supabase.from('alumno_nodo').select('estado').eq('alumno_id', me.id).eq('nodo_id', nodoId).maybeSingle();
+      const { data: an } = await supabase.from('alumno_nodo').select('estado, estado_override').eq('alumno_id', me.id).eq('nodo_id', nodoId).maybeSingle();
+      const previo = an as { estado?: EstadoNodo; estado_override?: boolean } | null;
       const tasa = r.total ? r.aciertos / r.total : 0;
-      const res = calcularEstado(ventana, tasa, (an as { estado?: EstadoNodo } | null)?.estado || 'no_empezado');
+      const calculo = calcularEstado(ventana, tasa, previo?.estado || 'no_empezado');
+      const res = resolverEstado(calculo, previo?.estado_override ?? false, previo?.estado || 'no_empezado');
       await supabase.from('alumno_nodo').upsert(
         { alumno_id: me.id, nodo_id: nodoId, estado: res.estado, puntaje: res.puntaje, actualizado_at: new Date().toISOString() },
         { onConflict: 'alumno_id,nodo_id' },
