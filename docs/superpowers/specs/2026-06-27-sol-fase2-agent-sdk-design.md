@@ -25,6 +25,7 @@ El pedido original fue usar el **Agent SDK de Anthropic**. Se evaluó: el Agent 
 | D5 | **Trabajos separados** (dividir, evaluar) + **plantillas de método reusables** entre materias. | Separa el QUÉ (contenido por materia) del CÓMO (método compartido). |
 | D6 | **La seño es quien sube el plan** (herramienta de autoría docente). | Resuelve OPEN-F2-1. Es Fase 2 según CLAUDE.md. |
 | D7 | **Groundwork de nodos editables: dejar el seam, no construirlo.** | Es Fase 2.x; sin datos reales de uso sería sobrediseñar. |
+| D8 | **La seño sube el contenido en PDF.** Claude lee el PDF directo (sin OCR aparte). | Resuelve OPEN-F2-3. La Messages API soporta PDF nativo. |
 
 ## Capas conceptuales (modelo ordenador)
 
@@ -107,6 +108,8 @@ Lo de hoy se mantiene. Se agrega/ajusta:
 
 Cada trabajo = una Edge Function (o un handler) que arma el prompt con el perfil de la materia + la plantilla de método, corre un loop chico de tool use contra la Messages API, y escribe el resultado en Supabase. `generador-ejercicios` queda como está hoy (ya anda, barato).
 
+**Entrada de `dividir-nodos`:** la seño sube el contenido en **PDF** (D8). La Edge Function manda el PDF directo a Claude (document block base64, o vía Files API si es grande) — Claude lo lee sin pipeline de OCR aparte. PDF con texto nativo trocea mejor que foto escaneada; límite ~32MB/600 pág (un plan entra cómodo). De ahí salen `sol_materia` (perfil) + los `nodo`, que la seño revisa antes de publicar.
+
 ## Método reusable (plantillas de prompt)
 
 Arrancar con cuatro bloques de instrucciones, guardados y versionados, inyectables en el `system_prompt` de cada trabajo:
@@ -136,6 +139,18 @@ Pocas, parejas a la DB: `leer_programa`, `escribir_nodos`, `leer_respuestas(sesi
 5. Front: mensaje cálido al chico (tono SOL) + la seño ve el análisis en su panel.
 
 Costo: **1 llamada Haiku por sesión**. Tope en código.
+
+## Regla de dominio del nodo (propuesta, validar con la seño)
+
+El evaluador necesita una regla para mover `alumno_nodo` (OPEN-1). Propuesta default, simple y en tono SOL (festeja la racha, no castiga) — **a validar con la docente antes de SP-4**:
+
+- `no_empezado` → `en_construcción`: al primer ejercicio del nodo.
+- → `dominado`: **5 de las últimas 6** respuestas del nodo correctas **al primer intento**, incluyendo **≥2 de dificultad alta**.
+- → `a_reforzar`: 2 fallos seguidos en el nodo **o** sesión del nodo con <50% de aciertos. Señal suave, no castigo; vuelve a `en_construcción` al recuperarse.
+- **Nunca** retrocede a `no_empezado`.
+- `alumno_nodo.puntaje` = % de aciertos al primer intento, ponderado por dificultad → pinta el color/gradiente del mapa.
+
+Alternativa más simple (si la seño prefiere): solo umbral — `dominado` = ≥80% de aciertos en los últimos N ejercicios, sin racha ni peso por dificultad.
 
 ## Seam para nodos editables (dejar listo, NO construir)
 
@@ -178,5 +193,5 @@ Esto es grande → se rompe. Cada SP termina en algo demostrable y lleva sus tes
 
 - **OPEN-F2-1 (resuelta):** la **seño** sube el plan (autoría docente). → D6. Define SP-2.
 - **OPEN-F2-2 (resuelta):** motor = **Messages API desde Edge Functions** (sin servidor nuevo). → D1.
-- **OPEN-F2-3 (abierta, no bloquea ahora):** ¿en qué forma sube la seño el contenido — caja de texto, archivo (PDF/Word), plantilla de temas? Importa para que el `dividir-nodos` trocee bien. Se decide al hacer SP-2 (junto con OPEN-2 del MVP).
-- **OPEN-1 (heredada, abierta):** regla de "dominio" del nodo (`en_construcción` → `dominado`): ¿aciertos seguidos, % de aciertos, puntaje? Decisión **pedagógica, con la seño**. Bloquea SP-4 (y Etapa 3 del MVP).
+- **OPEN-F2-3 (resuelta):** la seño sube el contenido en **PDF**; Claude lo lee directo. → D8.
+- **OPEN-1 (propuesta, validar con la seño):** regla de dominio del nodo — ver sección "Regla de dominio del nodo". Default propuesto (racha 5/6 al 1er intento + ≥2 difíciles); alternativa simple por umbral. **Confirmar con la docente antes de SP-4** (y Etapa 3 del MVP).
