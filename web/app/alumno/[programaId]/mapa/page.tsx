@@ -67,7 +67,7 @@ export default function MapaMateria() {
               return (
                 <button
                   key={n.id}
-                  onClick={() => router.push(`/alumno/${programaId}/practicar`)}
+                  onClick={() => router.push(`/alumno/${programaId}/practicar?nodo=${n.id}`)}
                   style={{ position: 'absolute', left: `${x}%`, top: `${y}%`, transform: 'translate(-50%,-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, background: 'none', border: 'none', cursor: 'pointer', width: 'clamp(92px,12vw,118px)', padding: 0 }}
                 >
                   <span style={{ position: 'relative', width: 'clamp(64px,8.5vw,84px)', height: 'clamp(64px,8.5vw,84px)', borderRadius: '50%', background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 8px 18px ${alpha(color, 0.34)}`, border: '5px solid #FFFCF5', color: '#fff', fontFamily: BALOO, fontWeight: 800, fontSize: 'clamp(20px,2.6vw,26px)' }}>
