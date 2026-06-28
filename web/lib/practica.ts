@@ -42,6 +42,13 @@ export function nivelAdaptativo(historial: HistorialEjercicio[], pool: Ejercicio
   return Math.min(max, Math.max(min, nivel));
 }
 
+// Tipos que el chico todavía NO demostró al primer intento, en orden de demanda creciente
+// (reconocer→producir). Es la "escalera de cobertura": empuja hacia lo que le falta cubrir.
+export function tiposPendientes(historial: HistorialEjercicio[]): string[] {
+  const dominados = new Set(historial.filter(esPrimerIntento).map((h) => h.tipo));
+  return ORDEN_TIPO.filter((t) => !dominados.has(t));
+}
+
 // Sirve hasta `max` ejercicios del pool, de menor a mayor dificultad (la "escalera":
 // arranca fácil y sube). Determinístico para que los tests sean estables.
 export function elegirEjercicios(pool: Ejercicio[], max = 8): Ejercicio[] {

@@ -1,7 +1,7 @@
 // Tests unitarios de la lógica pura de práctica (web/lib/practica.ts). `npm test`.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { elegirEjercicios, resumen, nivelAdaptativo } from '../../web/lib/practica.ts';
+import { elegirEjercicios, resumen, nivelAdaptativo, tiposPendientes } from '../../web/lib/practica.ts';
 
 const ej = (id, dificultad, tipo = 'reconocer') => ({ id, enunciado: id, opciones: ['a', 'b'], correcta: 'a', dificultad, tipo });
 
@@ -61,4 +61,17 @@ test('nivelAdaptativo: clamp al máximo del pool (no se va de 3)', () => {
 
 test('nivelAdaptativo: clamp al mínimo del pool (no baja de 1)', () => {
   assert.equal(nivelAdaptativo([fail('reconocer', 1), fail('reconocer', 1)], pool), 1);
+});
+
+test('tiposPendientes: sin historia, faltan los 4 tipos en orden de demanda', () => {
+  assert.deepEqual(tiposPendientes([]), ['reconocer', 'completar', 'ordenar', 'producir']);
+});
+
+test('tiposPendientes: un acierto al 1er intento saca ese tipo de pendientes', () => {
+  assert.deepEqual(tiposPendientes([ft('reconocer', 1)]), ['completar', 'ordenar', 'producir']);
+});
+
+test('tiposPendientes: acertar con reintento NO cuenta como cubierto', () => {
+  const conReintento = { correcta: true, reintentos: 1, tipo: 'reconocer', dificultad: 1 };
+  assert.deepEqual(tiposPendientes([conReintento]), ['reconocer', 'completar', 'ordenar', 'producir']);
 });
