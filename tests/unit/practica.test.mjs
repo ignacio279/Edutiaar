@@ -1,7 +1,7 @@
 // Tests unitarios de la lógica pura de práctica (web/lib/practica.ts). `npm test`.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { elegirEjercicios, resumen } from '../../web/lib/practica.ts';
+import { elegirEjercicios, resumen, nivelAdaptativo } from '../../web/lib/practica.ts';
 
 const ej = (id, dificultad, tipo = 'reconocer') => ({ id, enunciado: id, opciones: ['a', 'b'], correcta: 'a', dificultad, tipo });
 
@@ -31,4 +31,34 @@ test('resumen: cuenta aciertos, total y aciertos al primer intento', () => {
 
 test('resumen: lista vacía', () => {
   assert.deepEqual(resumen([]), { aciertos: 0, total: 0, primerIntento: 0 });
+});
+
+// pool con dificultades 1..3 (como la semilla)
+const pool = [
+  { id: 'a', enunciado: '', opciones: [], correcta: '', dificultad: 1, tipo: 'reconocer' },
+  { id: 'b', enunciado: '', opciones: [], correcta: '', dificultad: 2, tipo: 'completar' },
+  { id: 'c', enunciado: '', opciones: [], correcta: '', dificultad: 3, tipo: 'producir' },
+];
+const ft = (tipo, dif) => ({ correcta: true, reintentos: 0, tipo, dificultad: dif });
+const fail = (tipo, dif) => ({ correcta: false, reintentos: 1, tipo, dificultad: dif });
+
+test('nivelAdaptativo: sin historia arranca en la dificultad más baja del pool', () => {
+  assert.equal(nivelAdaptativo([], pool), 1);
+});
+
+test('nivelAdaptativo: racha de >=2 al primer intento sube el nivel', () => {
+  // más reciente primero: dos aciertos al 1er intento en dif 2 => sube a 3
+  assert.equal(nivelAdaptativo([ft('completar', 2), ft('reconocer', 2)], pool), 3);
+});
+
+test('nivelAdaptativo: dos fallos seguidos al 1er intento bajan el nivel', () => {
+  assert.equal(nivelAdaptativo([fail('producir', 3), fail('producir', 3)], pool), 2);
+});
+
+test('nivelAdaptativo: clamp al máximo del pool (no se va de 3)', () => {
+  assert.equal(nivelAdaptativo([ft('producir', 3), ft('producir', 3)], pool), 3);
+});
+
+test('nivelAdaptativo: clamp al mínimo del pool (no baja de 1)', () => {
+  assert.equal(nivelAdaptativo([fail('reconocer', 1), fail('reconocer', 1)], pool), 1);
 });
