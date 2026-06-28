@@ -1,7 +1,7 @@
 // Tests unitarios de la regla de dominio (web/lib/dominio.ts). `npm test`.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { calcularEstado, puntajeNodo } from '../../web/lib/dominio.ts';
+import { calcularEstado, puntajeNodo, resolverEstado } from '../../web/lib/dominio.ts';
 
 // helper: respuesta (correcta, reintentos, tipo, dificultad)
 const r = (correcta, reintentos, tipo, dificultad) => ({ correcta, reintentos, tipo, dificultad });
@@ -57,4 +57,14 @@ test('puntajeNodo: 0..100 ponderado; todo al primer intento = 100', () => {
   // la mitad del peso logrado
   const mitad = puntajeNodo([ft('reconocer', 2), fail('reconocer', 2)]);
   assert.equal(mitad, 50);
+});
+
+test('resolverEstado: sin override devuelve el cálculo de la regla', () => {
+  const calculo = { estado: 'en_construccion', puntaje: 40 };
+  assert.deepEqual(resolverEstado(calculo, false, 'dominado'), calculo);
+});
+
+test('resolverEstado: con override gana el estado manual de la docente, pero conserva el puntaje', () => {
+  const calculo = { estado: 'a_reforzar', puntaje: 55 };
+  assert.deepEqual(resolverEstado(calculo, true, 'dominado'), { estado: 'dominado', puntaje: 55 });
 });
