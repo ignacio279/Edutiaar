@@ -8,7 +8,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useMe } from '@/lib/me-context';
 import { sol } from '@/lib/art';
-import { elegirEjercicios, resumen, type Ejercicio, type RespuestaReg } from '@/lib/practica';
+import { elegirEjercicios, resumen, type Ejercicio, type RespuestaReg, type HistorialEjercicio } from '@/lib/practica';
 import { calcularEstado, type EstadoNodo } from '@/lib/dominio';
 
 const QUICK = 'var(--font-quicksand), sans-serif';
@@ -44,10 +44,24 @@ function PracticarInner() {
         .from('ejercicio')
         .select('id,enunciado,opciones,correcta,dificultad,tipo')
         .eq('nodo_id', nodoId);
-      setEjercicios(elegirEjercicios((data as Ejercicio[]) || []));
+
+      // Historia reciente del chico en el nodo (más reciente primero) → escalera + adaptiva.
+      let historial: HistorialEjercicio[] = [];
+      if (me) {
+        const { data: win } = await supabase
+          .from('respuesta')
+          .select('correcta, reintentos, created_at, ejercicio:ejercicio_id!inner(tipo,dificultad), sesion:sesion_id!inner(alumno_id,nodo_id)')
+          .eq('sesion.nodo_id', nodoId)
+          .eq('sesion.alumno_id', me.id)
+          .order('created_at', { ascending: false })
+          .limit(8);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        historial = ((win as any[]) || []).map((x) => ({ correcta: x.correcta, reintentos: x.reintentos, tipo: x.ejercicio?.tipo, dificultad: x.ejercicio?.dificultad }));
+      }
+      setEjercicios(elegirEjercicios((data as Ejercicio[]) || [], historial));
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodoId]);
+  }, [nodoId, me]);
 
   async function guardarSesion(regs: RespuestaReg[]) {
     if (!me || !nodoId) return;
