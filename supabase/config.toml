@@ -17,3 +17,7 @@ verify_jwt = false
 # del JWT, así que SÍ se verifica.
 [functions.dividir-nodos]
 verify_jwt = true
+
+# Evaluador por sesión (Fase 2 / SP-4c): lo llama el alumno logueado para SU sesión.
+[functions.evaluar-sesion]
+verify_jwt = true

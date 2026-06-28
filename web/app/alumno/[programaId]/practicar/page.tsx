@@ -82,6 +82,9 @@ function PracticarInner() {
         { onConflict: 'alumno_id,nodo_id' },
       );
       setNuevoEstado(res.estado);
+
+      // SP-4c: diagnóstico cualitativo de SOL (no bloquea, no mueve el estado).
+      supabase.functions.invoke('evaluar-sesion', { body: { sesion_id: sesId, mock: true } }).catch(() => {});
     }
     setGuardando(false);
   }

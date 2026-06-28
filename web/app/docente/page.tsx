@@ -11,7 +11,7 @@ const QUICK = 'var(--font-quicksand), sans-serif';
 const solHappy = `${sol('happy')} center/contain no-repeat`;
 
 type Perfil = { nombre: string; rol: string };
-type Alumno = { nombre: string; avatar: string; grado: number };
+type Alumno = { id: string; nombre: string; avatar: string; grado: number };
 
 export default function PanelDocente() {
   const router = useRouter();
@@ -35,13 +35,13 @@ export default function PanelDocente() {
         .eq('id', user.id)
         .single();
       if ((perfil as Perfil | null)?.rol === 'alumno') {
-        router.replace('/alumno/mapa');
+        router.replace('/alumno');
         return;
       }
       setMe(perfil as Perfil);
       const { data: list } = await supabase
         .from('perfil')
-        .select('nombre,avatar,grado')
+        .select('id,nombre,avatar,grado')
         .eq('rol', 'alumno')
         .order('nombre');
       setAlumnos((list as Alumno[]) || []);
@@ -93,9 +93,10 @@ export default function PanelDocente() {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 22 }}>
           {alumnos.length ? (
-            alumnos.map((a, i) => (
-              <div
-                key={i}
+            alumnos.map((a) => (
+              <button
+                key={a.id}
+                onClick={() => router.push(`/docente/${a.id}`)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -104,6 +105,9 @@ export default function PanelDocente() {
                   border: '1.5px solid #EFE3CE',
                   borderRadius: 18,
                   padding: '13px 18px',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  width: '100%',
                 }}
               >
                 <div style={{ width: 48, height: 48, flexShrink: 0, background: `${animal(a.avatar)} center/contain no-repeat` }} />
@@ -111,7 +115,8 @@ export default function PanelDocente() {
                   <div style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 17, color: '#3A332A' }}>{a.nombre}</div>
                   <div style={{ fontSize: 13.5, color: '#7A6F5F', fontWeight: 600 }}>{a.grado || 3}° grado</div>
                 </div>
-              </div>
+                <span style={{ color: '#C9BCA6', fontSize: 22, fontWeight: 700 }}>›</span>
+              </button>
             ))
           ) : (
             <p style={{ color: '#7A6F5F', fontWeight: 600 }}>
