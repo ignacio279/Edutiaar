@@ -66,7 +66,7 @@ export default function DetalleAlumno() {
     const override = valor !== 'auto';
     const estado = override ? valor : (nodos.find((n) => n.nodo_id === nodoId)?.estado ?? 'no_empezado');
     await supabase.from('alumno_nodo').upsert(
-      { alumno_id: alumnoId, nodo_id: nodoId, estado, estado_override: override },
+      { alumno_id: alumnoId, nodo_id: nodoId, estado, estado_override: override, actualizado_at: new Date().toISOString() },
       { onConflict: 'alumno_id,nodo_id' },
     );
     setNodos((prev) => prev.map((n) => (n.nodo_id === nodoId ? { ...n, estado, override } : n)));
