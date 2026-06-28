@@ -71,6 +71,26 @@ export default function PanelDocente() {
           </div>
         </div>
 
+        <button
+          onClick={() => router.push('/docente/autoria')}
+          className="ed-primary"
+          style={{
+            marginTop: 18,
+            background: '#6FB7D4',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 14,
+            padding: '12px 22px',
+            fontFamily: QUICK,
+            fontWeight: 700,
+            fontSize: 16,
+            cursor: 'pointer',
+            boxShadow: '0 8px 20px rgba(111,183,212,.3)',
+          }}
+        >
+          + Subir un plan
+        </button>
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 22 }}>
           {alumnos.length ? (
             alumnos.map((a, i) => (

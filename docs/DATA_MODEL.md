@@ -67,6 +67,9 @@ Cada tema del programa (plantilla, igual para todos los chicos del grado).
 | programa_id | uuid | FK → programa |
 | nombre | text | "Vocales" |
 | orden | int | posición en el mapa |
+| descripcion | text | qué cubre el nodo *(Fase 2, mig. 0006)* |
+| actualizado_at | timestamptz | seam de edición *(Fase 2, mig. 0006)* |
+| version | int | seam de edición, default 1 *(Fase 2, mig. 0006)* |
 
 ### ejercicio
 Ejercicios que SOL genera para un nodo (pool, para abaratar la API).
@@ -120,6 +123,22 @@ Cada respuesta del chico. Registro fino para detectar patrones.
 | tiempo_seg | int | |
 | reintentos | int | |
 | created_at | timestamp | |
+
+### sol_materia *(Fase 2, mig. 0006)*
+El **especialista de SOL** para un programa: lo crea la autoría docente (la seño sube contenido → SOL divide en nodos + arma este perfil). A diferencia del resto del contenido (compartido), **tiene dueño** (`docente_id`), y la docente lo **revisa y publica**.
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| id | uuid | PK |
+| programa_id | uuid | FK → programa (on delete cascade) |
+| docente_id | uuid | FK → perfil (la dueña) |
+| escuela_id | uuid | FK → escuela |
+| perfil | jsonb | system_prompt + tono + criterios_eval + ejemplos_zona |
+| estado | enum | `borrador` \| `publicado` (la seño revisa antes) |
+| version | int | versionar regeneraciones, default 1 |
+| created_at | timestamptz | |
+
+> RLS: solo la docente dueña ve/edita su `sol_materia` y los `nodo` de su programa. El INSERT lo hace la Edge Function `dividir-nodos` con `service_role`.
 
 ## Notas del MVP
 
