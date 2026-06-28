@@ -9,6 +9,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useMe } from '@/lib/me-context';
 import { sol } from '@/lib/art';
 import { elegirEjercicios, resumen, type Ejercicio, type RespuestaReg } from '@/lib/practica';
+import { calcularEstado, type EstadoNodo } from '@/lib/dominio';
 
 const QUICK = 'var(--font-quicksand), sans-serif';
 const NUNITO = 'var(--font-nunito)';
@@ -32,6 +33,7 @@ function PracticarInner() {
   const [respuestas, setRespuestas] = useState<RespuestaReg[]>([]);
   const [fin, setFin] = useState(false);
   const [guardando, setGuardando] = useState(false);
+  const [nuevoEstado, setNuevoEstado] = useState<EstadoNodo | null>(null);
 
   useEffect(() => {
     if (!nodoId) return; // el render ya muestra el prompt de "elegí una parada"
@@ -62,6 +64,24 @@ function PracticarInner() {
       await supabase.from('respuesta').insert(
         regs.map((x) => ({ sesion_id: sesId, ejercicio_id: x.ejercicio_id, dada: x.dada, correcta: x.correcta, reintentos: x.reintentos, tiempo_seg: x.tiempo_seg })),
       );
+
+      // SP-4b: regla de dominio determinística → actualiza alumno_nodo (el mapa cambia).
+      const { data: win } = await supabase
+        .from('respuesta')
+        .select('correcta, reintentos, created_at, ejercicio:ejercicio_id!inner(tipo,dificultad), sesion:sesion_id!inner(nodo_id)')
+        .eq('sesion.nodo_id', nodoId)
+        .order('created_at', { ascending: false })
+        .limit(8);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const ventana = ((win as any[]) || []).map((x) => ({ correcta: x.correcta, reintentos: x.reintentos, tipo: x.ejercicio?.tipo, dificultad: x.ejercicio?.dificultad }));
+      const { data: an } = await supabase.from('alumno_nodo').select('estado').eq('alumno_id', me.id).eq('nodo_id', nodoId).maybeSingle();
+      const tasa = r.total ? r.aciertos / r.total : 0;
+      const res = calcularEstado(ventana, tasa, (an as { estado?: EstadoNodo } | null)?.estado || 'no_empezado');
+      await supabase.from('alumno_nodo').upsert(
+        { alumno_id: me.id, nodo_id: nodoId, estado: res.estado, puntaje: res.puntaje, actualizado_at: new Date().toISOString() },
+        { onConflict: 'alumno_id,nodo_id' },
+      );
+      setNuevoEstado(res.estado);
     }
     setGuardando(false);
   }
@@ -121,11 +141,15 @@ function PracticarInner() {
 
   if (fin) {
     const r = resumen(respuestas);
+    const dominado = nuevoEstado === 'dominado';
+    const reforzar = nuevoEstado === 'a_reforzar';
+    const titulo = dominado ? `¡Dominaste ${nodoNombre}! ⭐` : reforzar ? 'Lo vamos a reforzar 💪' : '¡Muy bien!';
+    const mood = dominado ? 'cheer' : reforzar ? 'soft' : 'happy';
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 22px', textAlign: 'center', animation: 'edFade .3s ease' }}>
-        <div style={{ width: 120, height: 120, animation: 'edBob 4.5s ease-in-out infinite', background: `${sol('cheer')} center/contain no-repeat` }} />
-        <h2 style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 26, color: '#3A332A', margin: '14px 0 4px' }}>¡Muy bien!</h2>
-        <p style={{ color: '#7A6F5F', fontWeight: 700, fontSize: 18 }}>Acertaste {r.aciertos} de {r.total} {guardando ? '· guardando…' : ''}</p>
+        <div style={{ width: 120, height: 120, animation: 'edBob 4.5s ease-in-out infinite', background: `${sol(mood)} center/contain no-repeat` }} />
+        <h2 style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 26, color: '#3A332A', margin: '14px 0 4px' }}>{titulo}</h2>
+        <p style={{ color: '#7A6F5F', fontWeight: 700, fontSize: 18 }}>Acertaste {r.aciertos} de {r.total}{guardando ? ' · guardando…' : ''}</p>
         <button onClick={() => router.push(`/alumno/${programaId}/mapa`)} style={btnPrimary}>Volver al mapa</button>
       </div>
     );
