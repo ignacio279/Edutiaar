@@ -13,15 +13,17 @@ El núcleo: cada alumno tiene un **programa** por materia → SOL lo divide en *
 
 **Etapas 0 y 1 cerradas.** Tablas + RLS en Supabase, datos semilla, login docente y alumno (endurecido: aula+PIN+lockout vía Edge Function), front en Next.js (`web/`) deployado en Vercel.
 
-**Fase 2 SOL — slices SP-1 a SP-4 completos (2026-06-28), deployados y commiteados.** El loop entero anda de punta a punta **en modo mock** (sin gastar API):
+**Etapa 3 cerrada (2026-06-28).** Fase 2 SOL — slices SP-1 a SP-4e completos, deployados y commiteados. El loop entero anda de punta a punta **en modo mock** (sin gastar API):
 - **SP-1** Edge Function SOL base (Messages API + tool use; `supabase/functions/sol`, `_shared/loop.ts`).
 - **SP-2** Autoría docente: la seño sube contenido → `dividir-nodos` genera `sol_materia` + nodos → revisa/publica (`/docente/autoria`).
 - **SP-3** Multi-materia en el front del alumno: picker → mapa real desde la DB.
 - **SP-4** Evaluador: práctica real (pool de ejercicios) → **regla determinística de dominio** mueve `alumno_nodo` → el mapa cambia → **diagnóstico cualitativo de SOL** (`evaluar-sesion`) en el panel docente (`/docente/[alumnoId]`).
+- **SP-4d** Selección adaptiva: `elegirEjercicios` usa la historia del chico (escalera de cobertura por tipo + dificultad adaptativa) en `web/lib/practica.ts`.
+- **SP-4e** Override docente: la seño fija el estado de un nodo a mano (`alumno_nodo.estado_override`, migración `0010`); `resolverEstado` en `web/lib/dominio.ts` hace que la regla lo respete. RLS verificada en DB real; 63/63 unit tests verdes.
 
-**Modo mock vs real:** la generación de nodos/ejercicios y el diagnóstico corren con un **flag `mock`** porque **todavía no hay API key de Anthropic** (la Messages API necesita key con billing; la suscripción de Claude no sirve para el backend). Con la key + quitar el flag, pasan a Claude real. Edge Functions desplegadas: `sol`, `dividir-nodos`, `evaluar-sesion` (+ login). Migraciones hasta `0009`.
+**Modo mock vs real — único blocker grande restante:** la generación de nodos/ejercicios y el diagnóstico corren con un **flag `mock`** porque **todavía no hay API key de Anthropic** (la Messages API necesita key con billing; la suscripción de Claude no sirve para el backend). Con la key + quitar el flag, pasan a Claude real. Edge Functions desplegadas: `sol`, `dividir-nodos`, `evaluar-sesion` (+ login). Migraciones hasta `0010`.
 
-**Pendiente de Fase 2:** API key real, decaimiento temporal / repaso espaciado (spec escrita), override docente del estado, roles director/familia, copilotos LUNA/TERRA, offline. Ver `docs/ROADMAP.md` y los specs en `docs/superpowers/specs/`.
+**Pendiente de Fase 2:** API key real, decaimiento temporal / repaso espaciado (spec escrita), roles director/familia, copilotos LUNA/TERRA, offline. Ver `docs/ROADMAP.md` y los specs en `docs/superpowers/specs/`.
 
 ## Stack
 
