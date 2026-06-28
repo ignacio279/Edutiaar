@@ -11,11 +11,11 @@ El núcleo: cada alumno tiene un **programa** por materia → SOL lo divide en *
 
 ## Estado actual
 
-**Etapa 0 — setup.** Recién arrancando: creando tablas en Supabase y armando el esqueleto. Ver `docs/ROADMAP.md` para las etapas.
+**Etapas 0 y 1 cerradas.** Tablas + RLS en Supabase, datos semilla, login docente y alumno (endurecido: aula+PIN+lockout vía Edge Function), front migrado a Next.js (`web/`) y deployado en Vercel. **En curso:** SOL (generación de ejercicios y división del programa en nodos vía Claude desde Edge Functions) y diseño de Fase 2. Ver `docs/ROADMAP.md` y los specs en `docs/superpowers/specs/`.
 
 ## Stack
 
-- **Frontend:** **Next.js** (App Router, TypeScript, React) en `web/`, deployado en **Vercel**, bajo `edutia.ar`. (Migrado desde el front estático original; ver `docs/NEXT_MIGRATION.md`.)
+- **Frontend:** **Next.js** (App Router, TypeScript, React) en `web/`, deployado en **Vercel** → <https://edutiaar.vercel.app/> (dominio final previsto `edutia.ar`). (Migrado desde el front estático original; ver `docs/NEXT_MIGRATION.md`.)
 - **Backend / base / auth:** **Supabase** (Postgres + Auth + Edge Functions). Plan Free para desarrollo; Pro ($25/mes) en producción.
 - **IA (SOL):** **API de Claude** (Anthropic), llamada desde una **Edge Function de Supabase**.
 
