@@ -50,7 +50,7 @@ export default function Autoria() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.replace('/'); return; }
       const { data: perfil } = await supabase.from('perfil').select('rol').eq('id', user.id).single();
-      if ((perfil as { rol?: string } | null)?.rol !== 'docente') { router.replace('/alumno/mapa'); return; }
+      if ((perfil as { rol?: string } | null)?.rol !== 'docente') { router.replace('/alumno'); return; }
       setLoaded(true);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
