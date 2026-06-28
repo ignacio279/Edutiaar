@@ -30,6 +30,12 @@ SOL usa Claude para **dos cosas, y solo dos**:
 
 **Lo que SOL NO hace:** corregir respuestas. Eso lo hace la app (comparación simple). Esto baja muchísimo el costo de la API.
 
+### Dos caminos para la generación (división de nodos + ejercicios)
+
+- **MVP local (hoy):** se generan con **scripts Node locales** (`scripts/dividir-nodos-local.mjs`, `scripts/generar-ejercicios-local.mjs`) que usan el **Claude Agent SDK** sobre la **suscripción de Claude Code del desarrollador** (sin API key, costo cero). Escriben el contenido real en Supabase con `service_role`. La lógica de prompt/validación es pura y compartida (`supabase/functions/dividir-nodos/dividir.ts`, `supabase/functions/generador-ejercicios/generar.ts`).
+- **Producción (cuando haya API key):** las mismas piezas puras se invocan desde **Edge Functions** (`dividir-nodos` ya existe; `generador-ejercicios` queda por desplegar) con la **API key server-side**. La suscripción NO sirve para el backend desplegado (la Messages API necesita key con billing).
+- El **diagnóstico por sesión** (`evaluar-sesion`) es runtime per-chico: corre en Edge Function (mock hasta tener key).
+
 ### Control de costos de la API
 
 - Generar en lotes (pool), no uno por click.

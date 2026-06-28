@@ -92,6 +92,18 @@ export function construirPromptDivision(materia: string, grado: number, contenid
   return { system, user };
 }
 
+// Variante one-shot (sin tools): pide la división como JSON pelado. La usa el script
+// local (motor = suscripción vía Agent SDK). parseDivision valida el mismo shape.
+export function construirPromptDivisionJSON(materia: string, grado: number, contenido: string): { system: string; user: string } {
+  const { system } = construirPromptDivision(materia, grado, contenido);
+  const systemJSON = system.replace(
+    'Devolvé el resultado llamando a la tool guardar_division.',
+    'Devolvé SOLO un JSON {"perfil": {"system_prompt": str, "tono": str, "criterios_eval": [str], "ejemplos_zona": [str]}, "nodos": [{"nombre": str, "orden": int, "descripcion": str}]}, sin texto extra.',
+  );
+  const user = `Contenido del programa a dividir en nodos:\n\n${contenido}`;
+  return { system: systemJSON, user };
+}
+
 // Tool del modo real: Claude devuelve la división estructurada vía tool use
 // (el input_schema es el contrato; parseDivision lo valida igual por las dudas).
 export const TOOL_GUARDAR_DIVISION = {
