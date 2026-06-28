@@ -132,6 +132,9 @@ export default function PanelDocente() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '13px 14px', borderRadius: 14, background: '#E3EEF4', color: '#3A332A', fontFamily: QUICK, fontWeight: 700, fontSize: 16 }}>
           <span style={{ width: 22, height: 22, background: `${uiIcon('people')} center/contain no-repeat` }} />Mis alumnos
         </div>
+        <button onClick={() => router.push('/docente/alumnos')} className="ed-side" style={sideBtn}>
+          <span style={{ width: 22, height: 22, background: `${uiIcon('people')} center/contain no-repeat` }} />Mi clase
+        </button>
         <button onClick={() => router.push('/docente/autoria')} className="ed-side" style={sideBtn}>
           <span style={{ width: 22, height: 22, background: `${uiIcon('mapI')} center/contain no-repeat` }} />Subir un plan
         </button>

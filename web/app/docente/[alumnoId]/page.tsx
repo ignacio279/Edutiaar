@@ -144,6 +144,9 @@ export default function DetalleAlumno() {
         <button onClick={() => router.push('/docente')} className="ed-side" style={{ ...sideBtn, background: '#E3EEF4', color: '#3A332A' }}>
           <span style={{ width: 22, height: 22, background: `${uiIcon('people')} center/contain no-repeat` }} />Mis alumnos
         </button>
+        <button onClick={() => router.push('/docente/alumnos')} className="ed-side" style={sideBtn}>
+          <span style={{ width: 22, height: 22, background: `${uiIcon('people')} center/contain no-repeat` }} />Mi clase
+        </button>
         <div style={{ flex: 1 }} />
         <button onClick={async () => { await supabase.auth.signOut(); router.replace('/'); router.refresh(); }} className="ed-side" style={sideBtn}>Cerrar sesión</button>
       </aside>
