@@ -12,7 +12,25 @@ import { useMe } from '@/lib/me-context';
 import { animal } from '@/lib/art';
 
 const BALOO = 'var(--font-baloo), cursive';
-const COLORES = ['#F4A93B', '#6FB7D4', '#7FB069', '#C98AB0', '#E2854E', '#5FA9C4'];
+
+// Tonos de card del design system (Euditiaar): tint + borde 300, ciclados por materia.
+const TONOS = [
+  { bg: '#FCEBC8', bd: '#FAD089' }, // sol
+  { bg: '#E0EFD7', bd: '#AED199' }, // campo
+  { bg: '#DCEEF5', bd: '#A6D4E6' }, // cielo
+  { bg: '#F6E2D2', bd: '#ECBE9C' }, // terracota
+];
+
+function iconoMateria(nombre: string) {
+  const n = nombre.toLowerCase();
+  if (n.includes('lengua')) return '📖';
+  if (n.includes('matem')) return '🔢';
+  if (n.includes('social')) return '🌎';
+  if (n.includes('cienci')) return '🌱';
+  if (n.includes('arte') || n.includes('plást') || n.includes('plast')) return '🎨';
+  if (n.includes('music') || n.includes('músic')) return '🎵';
+  return '📚';
+}
 
 type Materia = { programa_id: string; nombre: string; grado: number };
 type Tab = 'mapa' | 'practicar';
@@ -88,17 +106,20 @@ export default function Materias() {
         ) : materias.length === 0 ? (
           <p style={{ color: '#7A6F5F', fontWeight: 600 }}>Tu seño todavía no publicó materias. ¡Pronto!</p>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 14 }}>
-            {materias.map((m, i) => (
-              <button
-                key={m.programa_id}
-                onClick={() => router.push(`/alumno/${m.programa_id}/mapa`)}
-                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, background: '#FFFCF5', border: '2px solid #EFE3CE', borderRadius: 22, padding: '24px 16px', cursor: 'pointer' }}
-              >
-                <span style={{ width: 56, height: 56, borderRadius: '50%', background: COLORES[i % COLORES.length], boxShadow: `0 6px 14px ${COLORES[i % COLORES.length]}55` }} />
-                <span style={{ fontFamily: BALOO, fontWeight: 700, fontSize: 18, color: '#3A332A' }}>{m.nombre}</span>
-              </button>
-            ))}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
+            {materias.map((m, i) => {
+              const t = TONOS[i % TONOS.length];
+              return (
+                <button
+                  key={m.programa_id}
+                  onClick={() => router.push(`/alumno/${m.programa_id}/mapa`)}
+                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6, textAlign: 'left', background: t.bg, border: `1.5px solid ${t.bd}`, borderRadius: 24, padding: 20, cursor: 'pointer', boxShadow: '0 6px 16px rgba(122,86,56,0.12)' }}
+                >
+                  <span style={{ fontSize: 32, lineHeight: 1 }}>{iconoMateria(m.nombre)}</span>
+                  <span style={{ fontFamily: BALOO, fontWeight: 700, fontSize: 18, color: '#4A3B32' }}>{m.nombre}</span>
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
