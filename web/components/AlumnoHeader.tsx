@@ -1,6 +1,6 @@
 'use client';
-// Header compartido del alumno (portado de alumnoHeader): avatar + nombre +
-// toggle Mi mapa / Practicar + Salir.
+// Header del alumno por materia: avatar + nombre + materia actual + toggle
+// Mi mapa / Practicar (scopeado a la materia) + "‹ Materias" + Salir.
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { animal } from '@/lib/art';
@@ -11,9 +11,13 @@ const BALOO = 'var(--font-baloo), cursive';
 export default function AlumnoHeader({
   me,
   active,
+  materiaNombre,
+  programaId,
 }: {
   me: Perfil | null;
   active: 'mapa' | 'practicar';
+  materiaNombre: string;
+  programaId: string;
 }) {
   const router = useRouter();
   const supabase = createClient();
@@ -63,34 +67,28 @@ export default function AlumnoHeader({
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div
-          style={{
-            width: 48,
-            height: 48,
-            background: `${animal(me?.avatar || 'fox')} center/contain no-repeat`,
-          }}
-        />
+        <button
+          onClick={() => router.push('/alumno')}
+          aria-label="Volver a materias"
+          style={{ background: 'none', border: 'none', color: '#7A6F5F', fontWeight: 700, fontSize: 15, cursor: 'pointer', padding: 0 }}
+        >
+          ‹
+        </button>
+        <div style={{ width: 48, height: 48, background: `${animal(me?.avatar || 'fox')} center/contain no-repeat` }} />
         <div style={{ lineHeight: 1.15 }}>
           <div style={{ fontFamily: BALOO, fontWeight: 700, fontSize: 19, color: '#3A332A' }}>
             Hola, {me?.nombre || ''}
           </div>
-          <div style={{ fontSize: 13, color: '#7A6F5F', fontWeight: 700 }}>Lengua</div>
+          <div style={{ fontSize: 13, color: '#7A6F5F', fontWeight: 700 }}>{materiaNombre || '…'}</div>
         </div>
       </div>
       <div style={{ display: 'flex', gap: 6, background: '#FBEFD9', borderRadius: 999, padding: 5 }}>
-        {pill('Mi mapa', '/alumno/mapa', active === 'mapa')}
-        {pill('Practicar', '/alumno/practicar', active === 'practicar')}
+        {pill('Mi mapa', `/alumno/${programaId}/mapa`, active === 'mapa')}
+        {pill('Practicar', `/alumno/${programaId}/practicar`, active === 'practicar')}
       </div>
       <button
         onClick={signOut}
-        style={{
-          background: 'none',
-          border: 'none',
-          color: '#7A6F5F',
-          fontWeight: 700,
-          fontSize: 15,
-          cursor: 'pointer',
-        }}
+        style={{ background: 'none', border: 'none', color: '#7A6F5F', fontWeight: 700, fontSize: 15, cursor: 'pointer' }}
       >
         Salir
       </button>
