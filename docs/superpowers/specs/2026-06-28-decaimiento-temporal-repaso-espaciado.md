@@ -2,7 +2,7 @@
 
 > Spec de diseño. Define **QUÉ** construir y por qué. No es plan de ejecución.
 > Estado: **propuesta para Fase 2.** Depende de la Etapa 3 del MVP (regla de dominio del nodo) ya andando.
-> Relacionados: Spec *Evaluación y dominio de nodos* (Etapa 3), `DATA_MODEL.md`, `DECISIONS.md`, `ROADMAP.md`, `ARCHITECTURE.md`.
+> Relacionados: Spec *Evaluación y dominio de nodos* (`2026-06-28-evaluacion-y-dominio-de-nodos.md`, Etapa 3), `DATA_MODEL.md`, `DECISIONS.md`, `ROADMAP.md`, `ARCHITECTURE.md`.
 
 ## Resumen
 
@@ -10,7 +10,7 @@ Un nodo `dominado` **no queda dominado para siempre.** Si pasa el tiempo sin pra
 
 Es la pata que faltaba a "nodos permanentes que mejoran **mes a mes**": el mapa no es una foto de marzo, sino algo vivo que se mantiene. Y es **repaso espaciado** clásico (Leitner/SM-2) pero simplificado y **suave**, pensado para chicos: nunca castiga, solo invita a refrescar.
 
-Se apoya en la regla de dominio (Etapa 3): primero un nodo se **domina** (cobertura de formatos y dificultades, al primer intento, ventana reciente); recién entonces **empieza a decaer** con el tiempo.
+Se apoya en la regla de dominio (Etapa 3, `2026-06-28-evaluacion-y-dominio-de-nodos.md`): primero un nodo se **domina** (cobertura de formatos y dificultades, al primer intento, ventana reciente); recién entonces **empieza a decaer** con el tiempo.
 
 ## Decisiones (locks)
 
@@ -113,7 +113,7 @@ Si en la validación la maestra prefiere algo más sencillo: **un solo intervalo
 
 ## Qué resuelve
 
-Cierra el ítem **"Decaimiento temporal / repaso espaciado"** que el spec de *Evaluación y dominio de nodos* dejó abierto para Fase 2. Convierte el mapa en algo permanente que **mejora mes a mes**, con repaso espaciado suave.
+Cierra el ítem **"Decaimiento temporal / repaso espaciado"** que el spec de *Evaluación y dominio de nodos* (`2026-06-28-evaluacion-y-dominio-de-nodos.md`) dejó abierto para Fase 2. Convierte el mapa en algo permanente que **mejora mes a mes**, con repaso espaciado suave.
 
 ## A validar / abierto
 

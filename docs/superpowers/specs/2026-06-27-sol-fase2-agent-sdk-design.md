@@ -1,31 +1,36 @@
 # SOL Fase 2 — Diseño (especialista por materia + evaluación por sesión)
 
 > Spec de diseño (planteo). Define QUÉ construir y por qué. No es plan de ejecución.
-> Fecha: 2026-06-27. Estado: **propuesta, fuera del MVP (Fase 2)**.
-> Documentos relacionados: [`ARCHITECTURE.md`](../../ARCHITECTURE.md), [`DATA_MODEL.md`](../../DATA_MODEL.md), [`DECISIONS.md`](../../DECISIONS.md), [`Agents-sdk.md`](../../Agents-sdk.md).
+> Fecha: 2026-06-27 (rev. 2026-06-28). Estado: **propuesta, fuera del MVP (Fase 2)**.
+> Documentos relacionados: [`ARCHITECTURE.md`](../../ARCHITECTURE.md), [`DATA_MODEL.md`](../../DATA_MODEL.md), [`DECISIONS.md`](../../DECISIONS.md), `2026-06-28-evaluacion-y-dominio-de-nodos.md`, [`Agents-sdk.md`](../../Agents-sdk.md).
+>
+> **Cambio clave (rev.):** el estado del nodo (`dominado`/`a_reforzar`/etc.) lo decide una **regla determinística de la app** (ver `2026-06-28-evaluacion-y-dominio-de-nodos.md`, que resuelve OPEN-1), **no la IA**. La evaluación por sesión de SOL es **solo diagnóstico cualitativo**. Ajustado en todo el documento.
 
 ## Resumen
 
-Cada materia tiene su **SOL especialista**: la seño sube el contenido de la materia, SOL lo entiende, se especializa en eso y solo eso, divide el contenido en **nodos**, y los alumnos avanzan por esos nodos. Al cerrar cada sesión de práctica, SOL **evalúa al chico por lote** (dónde falla, qué errores repite, qué reforzar) y mueve el estado del nodo del alumno. Queda preparado (sin construir) para que más adelante SOL **edite los nodos** según la evidencia.
+Cada materia tiene su **SOL especialista**: la seño sube el contenido de la materia, SOL lo entiende, se especializa en eso y solo eso, divide el contenido en **nodos**, y los alumnos avanzan por esos nodos. Al cerrar cada sesión de práctica, SOL **evalúa al chico por lote** y produce un **diagnóstico cualitativo** (dónde falla, qué errores repite, qué reforzar). El **estado del nodo lo mueve la regla determinística de la app** (ver `2026-06-28-evaluacion-y-dominio-de-nodos.md`), no SOL. Queda preparado (sin construir) para que más adelante SOL **edite los nodos** según la evidencia.
 
 Respeta el espíritu de **ADR-002** (la app sigue corrigiendo cada respuesta; SOL no corrige por click) y agrega una capa de evaluación cualitativa de costo controlado.
 
 ### Nota sobre el motor (Agent SDK vs Messages API)
 
-El pedido original fue usar el **Agent SDK de Anthropic**. Se evaluó: el Agent SDK necesita un runtime Node/Python persistente y **no corre dentro de las Edge Functions de Supabase** (Deno). Dado que el stack es Supabase + Vercel y el equipo es chico, se eligió arrancar con la **Messages API de Claude llamada desde Edge Functions** (cero servidor nuevo, lo más barato, respeta "diseñar lo justo"). Se conservan los **conceptos** del diseño agente (especialista por materia, trabajos separados, método reusable, tools, salida estructurada), traducidos a Messages API. El **Agent SDK en host propio** o **Managed Agents** (Anthropic hostea el loop) quedan como camino de upgrade si en el futuro se necesitan subagents/skills/hooks nativos.
+El pedido original fue usar el **Agent SDK de Anthropic**. Se evaluó y se descartó, por dos razones. **La principal: SOL no necesita el Agent SDK.** El valor del SDK es el harness de Claude Code (leer/escribir archivos, correr bash, editar código, subagents); SOL solo tiene que llamar a Claude, usar 2–3 tools contra la base, y devolver datos estructurados — eso es exactamente lo que hace la **Messages API**, más simple y barato. **Secundaria:** el Agent SDK (TS) trae un binario de Claude Code y necesita un runtime Node con filesystem; **no corre en las Edge Functions de Supabase** (Deno). (Con Vercel sí hay funciones Node, así que si algún día se necesitara el SDK, el host sería una función de Vercel, no un servidor nuevo — pero no es el caso.)
+
+Se eligió la **Messages API de Claude llamada desde Edge Functions de Supabase** (cero servidor nuevo, lo más barato, respeta "diseñar lo justo"). Se conservan los **conceptos** del diseño agente (especialista por materia, trabajos separados, método reusable, tools, salida estructurada), traducidos a Messages API. El **Agent SDK** (en host propio o en una función Node de Vercel) o **Managed Agents** (Anthropic hostea el loop) quedan como camino de upgrade solo si en el futuro se necesitan subagents/skills/hooks nativos.
 
 ## Decisiones tomadas (locks)
 
 | # | Decisión | Por qué |
 |---|---|---|
-| D1 | **Motor: Messages API de Claude desde Edge Functions de Supabase.** Sin servidor nuevo. | Todo el stack ya vive en Supabase; equipo chico; lo más barato y menos ops. |
-| D2 | **Evaluación por sesión (lote), no por click.** | Mantiene ADR-002 y el tope de costo (1 llamada por sesión, no 10). |
+| D1 | **Motor: Messages API de Claude desde Edge Functions de Supabase.** Sin servidor nuevo. | SOL no necesita el harness del Agent SDK; todo el stack ya vive en Supabase; lo más barato y menos ops. |
+| D2 | **Evaluación por sesión (lote), no por click.** Es diagnóstico cualitativo. | Mantiene ADR-002 y el tope de costo (1 llamada por sesión, no 10). |
 | D3 | **Especialización generada y guardada al subir el contenido.** SOL se especializa + divide en nodos de una vez; ambos quedan guardados; **la seño revisa antes de publicar**. | Barato (corre una vez por plan), versionable, controlable. |
 | D4 | **SOL trabaja solo con los nodos guardados** durante las sesiones. No re-aprende todo cada vez. | Costo y previsibilidad. |
 | D5 | **Trabajos separados** (dividir, evaluar) + **plantillas de método reusables** entre materias. | Separa el QUÉ (contenido por materia) del CÓMO (método compartido). |
 | D6 | **La seño es quien sube el plan** (herramienta de autoría docente). | Resuelve OPEN-F2-1. Es Fase 2 según CLAUDE.md. |
 | D7 | **Groundwork de nodos editables: dejar el seam, no construirlo.** | Es Fase 2.x; sin datos reales de uso sería sobrediseñar. |
 | D8 | **La seño sube el contenido en PDF.** Claude lee el PDF directo (sin OCR aparte). | Resuelve OPEN-F2-3. La Messages API soporta PDF nativo. |
+| D9 | **El estado del nodo lo decide una regla determinística de la app, NO la IA.** SOL solo diagnostica. | Confianza (la maestra lo predice), costo (es contar, gratis) y menores (menos datos a la IA). Ver `2026-06-28-evaluacion-y-dominio-de-nodos.md`. |
 
 ## Capas conceptuales (modelo ordenador)
 
@@ -61,7 +66,7 @@ Cuando entra una materia nueva, **hereda el método** (las plantillas); solo cam
 
 ### "1 SOL por materia" = sesión especializada (no chat caro permanente)
 
-Durante la práctica **no se llama a Claude**: el chico responde opción múltiple del pool y la app corrige. SOL aparece solo en dos momentos:
+Durante la práctica **no se llama a Claude**: el chico responde ejercicios del pool (de varios tipos: reconocer, completar, ordenar, producir — ver `2026-06-28-evaluacion-y-dominio-de-nodos.md`) y la app corrige cada uno comparando contra la respuesta correcta. SOL aparece solo en dos momentos:
 - **Al subir contenido** (una vez): se especializa + divide en nodos.
 - **Al cerrar sesión** (una vez): evalúa.
 
@@ -86,7 +91,10 @@ Lo de hoy se mantiene. Se agrega/ajusta:
 - `actualizado_at timestamp` — seam de edición futura.
 - `version int` — seam de edición futura.
 
-### Nueva tabla `evaluacion_sesion` — la salida del evaluador
+### Tabla `ejercicio` — agregar columna
+- `tipo enum` — `reconocer` \| `completar` \| `ordenar` \| `producir`. Necesaria para que la regla de dominio (ver `2026-06-28-evaluacion-y-dominio-de-nodos.md`) pueda exigir cobertura por formato. (Ya existe `dificultad`.)
+
+### Nueva tabla `evaluacion_sesion` — la salida del evaluador (solo diagnóstico)
 | Columna | Tipo | Notas |
 |---|---|---|
 | id | uuid | PK |
@@ -96,6 +104,8 @@ Lo de hoy se mantiene. Se agrega/ajusta:
 | a_reforzar | jsonb | nodos/temas a reforzar (señal para el editor futuro) |
 | created_at | timestamp | |
 
+> Esta tabla es **solo diagnóstico cualitativo**. El estado del nodo (`alumno_nodo.estado`) **no** sale de acá: lo calcula la regla determinística de la app (ver `2026-06-28-evaluacion-y-dominio-de-nodos.md`).
+
 `materia` / `nodo` / `alumno_nodo` ya soportan N materias (solo agregar filas + RLS).
 
 ## Trabajos de SOL (jobs)
@@ -103,18 +113,18 @@ Lo de hoy se mantiene. Se agrega/ajusta:
 | Trabajo | Cuándo | Tools | Método (plantilla) | Modelo |
 |---|---|---|---|---|
 | `dividir-nodos` | al subir el plan (1×) | `leer_programa`, `escribir_nodos` | `dividir-en-nodos` | `claude-sonnet-4-6` (Opus si el plan es difícil) |
-| `evaluar-sesion` | al cerrar sesión | `leer_respuestas`, `escribir_evaluacion`, `mover_alumno_nodo` | `evaluar-sesion`, `tono-sol` | `claude-haiku-4-5` (corre seguido) |
+| `evaluar-sesion` | al cerrar sesión | `leer_respuestas`, `escribir_evaluacion` | `evaluar-sesion`, `tono-sol` | `claude-haiku-4-5` (corre seguido) |
 | `editar-nodos` *(futuro)* | seña pide / evidencia | `editar_nodo` (con OK seño) | `dividir-en-nodos` | — |
 
-Cada trabajo = una Edge Function (o un handler) que arma el prompt con el perfil de la materia + la plantilla de método, corre un loop chico de tool use contra la Messages API, y escribe el resultado en Supabase. `generador-ejercicios` queda como está hoy (ya anda, barato).
+Cada trabajo = una Edge Function (o un handler) que arma el prompt con el perfil de la materia + la plantilla de método, corre un loop chico de tool use contra la Messages API, y escribe el resultado en Supabase. **El estado del nodo NO lo mueve la IA:** lo calcula la regla determinística de la app (ver `2026-06-28-evaluacion-y-dominio-de-nodos.md`) al cerrar la sesión, en código aparte. `generador-ejercicios` queda como está hoy (ya anda, barato), pero debe generar **ejercicios de varios tipos** (reconocer/completar/ordenar/producir) y dificultades para que la regla de cobertura funcione.
 
-**Entrada de `dividir-nodos`:** la seño sube el contenido en **PDF** (D8). La Edge Function manda el PDF directo a Claude (document block base64, o vía Files API si es grande) — Claude lo lee sin pipeline de OCR aparte. PDF con texto nativo trocea mejor que foto escaneada; límite ~32MB/600 pág (un plan entra cómodo). De ahí salen `sol_materia` (perfil) + los `nodo`, que la seño revisa antes de publicar.
+**Entrada de `dividir-nodos`:** la seño sube el contenido en **PDF** (D8). La Edge Function manda el PDF directo a Claude (document block base64, o vía Files API si es grande) — Claude lo lee sin pipeline de OCR aparte. PDF con texto nativo trocea mejor que foto escaneada; límite ~32MB / ~100 páginas *(verificar contra la doc actual)* — un plan entra cómodo. De ahí salen `sol_materia` (perfil) + los `nodo`, que la seño revisa antes de publicar.
 
 ## Método reusable (plantillas de prompt)
 
 Arrancar con cuatro bloques de instrucciones, guardados y versionados, inyectables en el `system_prompt` de cada trabajo:
 - `dividir-en-nodos` — granularidad, orden, prerrequisitos de un buen mapa de nodos.
-- `evaluar-sesion` — leer respuestas → detectar patrones de error → mapear a estado de nodo.
+- `evaluar-sesion` — leer respuestas → detectar patrones de error → producir el **diagnóstico cualitativo** (`resumen`, `errores`, `a_reforzar`). **No** decide el estado del nodo (eso es la regla determinística).
 - `tono-sol` — voz rioplatense, alienta, nunca castiga (convención de CLAUDE.md).
 - `ejemplos-de-zona` — usar `escuela.zona` para contextualizar.
 
@@ -122,35 +132,38 @@ Son materia-agnósticos: los comparten todas las materias y trabajos. (Si más a
 
 ## Tools (las manos sobre Supabase)
 
-Pocas, parejas a la DB: `leer_programa`, `escribir_nodos`, `leer_respuestas(sesion)`, `escribir_evaluacion`, `mover_alumno_nodo`, y *(futuro)* `editar_nodo`. Se implementan como **tool use** en el loop manual de la Edge Function (cada tool = una función que pega a Supabase con `service_role`). Cada tool **scopeada por alumno/sesión**.
+Pocas, parejas a la DB: `leer_programa`, `escribir_nodos`, `leer_respuestas(sesion)`, `escribir_evaluacion`, y *(futuro)* `editar_nodo`. Se implementan como **tool use** en el loop manual de la Edge Function (cada tool = una función que pega a Supabase con `service_role`). Cada tool **scopeada por alumno/sesión**.
+
+> No hay tool de IA para mover el estado del nodo. La actualización de `alumno_nodo` la hace **código determinístico de la app** al cerrar la sesión (ver `2026-06-28-evaluacion-y-dominio-de-nodos.md`).
 
 ## Guardarraíles y salida limpia
 
 - **Tope de costo:** se controla **en código** — límite de `max_tokens` por llamada, modelo barato (Haiku) para lo frecuente, y un contador/límite mensual de gasto. Cumple Rule 4. (Si se migra al Agent SDK, esto pasa a ser `max_budget_usd` built-in.)
-- **Menores:** el `evaluar-sesion` devuelve **salida estructurada** (`output_config.format` json_schema) que calza exacto con `evaluacion_sesion` → nunca texto libre suelto, no se cuelan datos personales. El schema es el contrato.
+- **Menores:** el `evaluar-sesion` devuelve **salida estructurada** que calza exacto con `evaluacion_sesion` → nunca texto libre suelto, no se cuelan datos personales. El schema es el contrato. Implementación: o bien el parámetro `output_format` (`{type: "json_schema", schema}`) de la Messages API *(verificar que Haiku lo soporte; arrancó como beta `structured-outputs-2025-11-13`)*, o más simple, **tool use estricto** — como el resultado se escribe vía `escribir_evaluacion`, el `input_schema` de ese tool con `strict: true` ya garantiza la estructura, sin parámetro aparte y andando en todos los modelos.
 - **Tono:** validación liviana del mensaje al chico *(pulido, no bloqueante al inicio)*.
 
 ## Flujo de evaluación por sesión (paso a paso)
 
-1. Chico practica: la app sirve ejercicios del pool, **corrige cada click (gratis)**, guarda `respuesta` + crea `sesion`. Sin IA.
-2. Cierra sesión → el front llama a la Edge Function `evaluar-sesion` con la `sesion`.
-3. La Edge Function: carga `sol_materia` (perfil) + plantillas (`evaluar-sesion`, `tono-sol`) → tool `leer_respuestas(sesion)` → corre Messages API → devuelve **salida estructurada** (json_schema: `resumen`, `errores[]`, `a_reforzar[]`, `estado_nodo_sugerido`).
-4. tool `escribir_evaluacion` → `evaluacion_sesion`. tool `mover_alumno_nodo` → `alumno_nodo` (regla de dominio, OPEN-1).
-5. Front: mensaje cálido al chico (tono SOL) + la seño ve el análisis en su panel.
+1. Chico practica: la app sirve ejercicios del pool (de varios tipos), **corrige cada respuesta (gratis)**, guarda `respuesta` + crea `sesion`. Sin IA.
+2. Cierra sesión → **la app actualiza `alumno_nodo`** con la regla determinística (ver `2026-06-28-evaluacion-y-dominio-de-nodos.md`). Sin IA, gratis. El mapa cambia de color acá.
+3. En paralelo, el front llama a la Edge Function `evaluar-sesion` con la `sesion`.
+4. La Edge Function: carga `sol_materia` (perfil) + plantillas (`evaluar-sesion`, `tono-sol`) → tool `leer_respuestas(sesion)` → corre Messages API → devuelve el **diagnóstico estructurado** (`resumen`, `errores[]`, `a_reforzar[]`) → tool `escribir_evaluacion` → `evaluacion_sesion`.
+5. Front: mensaje cálido al chico (tono SOL) + la seño ve el análisis cualitativo en su panel.
 
-Costo: **1 llamada Haiku por sesión**. Tope en código.
+Costo: **1 llamada Haiku por sesión** (solo el diagnóstico; el estado del nodo no cuesta nada). Tope en código.
 
-## Regla de dominio del nodo (propuesta, validar con la seño)
+## Regla de dominio del nodo (resuelta — ver 2026-06-28-evaluacion-y-dominio-de-nodos.md)
 
-El evaluador necesita una regla para mover `alumno_nodo` (OPEN-1). Propuesta default, simple y en tono SOL (festeja la racha, no castiga) — **a validar con la docente antes de SP-4**:
+La regla de dominio quedó **definida y cerrada** en `2026-06-28-evaluacion-y-dominio-de-nodos.md` (resuelve OPEN-1). Resumen, para que este doc sea autocontenido:
 
-- `no_empezado` → `en_construcción`: al primer ejercicio del nodo.
-- → `dominado`: **5 de las últimas 6** respuestas del nodo correctas **al primer intento**, incluyendo **≥2 de dificultad alta**.
-- → `a_reforzar`: 2 fallos seguidos en el nodo **o** sesión del nodo con <50% de aciertos. Señal suave, no castigo; vuelve a `en_construcción` al recuperarse.
-- **Nunca** retrocede a `no_empezado`.
-- `alumno_nodo.puntaje` = % de aciertos al primer intento, ponderado por dificultad → pinta el color/gradiente del mapa.
+- Es **determinística** y la calcula la **app**, no la IA.
+- Mira una **ventana reciente** (últimos 8 del nodo), solo aciertos **al primer intento** (`correcta` Y `reintentos = 0`).
+- `dominado` exige **cobertura**, no repetición: ≥6 de 8 al primer intento, **≥2 de tipo `producir`** y **≥1 `dificil`** entre ellos. (Esto es lo que mata el adivinar — no se domina solo con opción múltiple.)
+- `a_reforzar` = 2 fallos seguidos o sesión <50%. Señal suave; **nunca** retrocede a `no_empezado`.
+- La **docente puede fijar el estado a mano** (override).
+- `alumno_nodo.puntaje` = % al primer intento ponderado por tipo y dificultad → pinta el gradiente del mapa.
 
-Alternativa más simple (si la seño prefiere): solo umbral — `dominado` = ≥80% de aciertos en los últimos N ejercicios, sin racha ni peso por dificultad.
+> Requiere `ejercicio.tipo` (ver Modelo de datos) y que el pool genere ejercicios de varios tipos y dificultades.
 
 ## Seam para nodos editables (dejar listo, NO construir)
 
@@ -169,7 +182,7 @@ Esto es grande → se rompe. Cada SP termina en algo demostrable y lleva sus tes
 | **SP-1** | Edge Function SOL base (Messages API + tool use + 1 tool de prueba contra Supabase). | la función lee un nodo y responde algo de Claude. |
 | **SP-2** | Autoría docente: la seño sube contenido → `sol_materia` + nodos generados; los revisa/publica. | la seño sube un plan → salen nodos revisables. |
 | **SP-3** | Multi-materia en el front (Next.js): cards/botones por materia = SOL especialista. | el chico elige materia y practica. |
-| **SP-4** | Evaluador por sesión (`evaluacion_sesion` + mover `alumno_nodo` + panel de la seño). | chico practica → SOL evalúa → el mapa cambia + la seño ve el análisis. |
+| **SP-4** | Evaluador por sesión: regla determinística que actualiza `alumno_nodo` (2026-06-28-evaluacion-y-dominio-de-nodos.md) + diagnóstico IA (`evaluacion_sesion`) + panel de la seño. | chico practica → el mapa cambia (regla) + la seño ve el análisis (IA). |
 | **SP-5** *(futuro)* | Nodos editables. | — |
 
 ## Costos, modelos y riesgos
@@ -185,13 +198,12 @@ Esto es grande → se rompe. Cada SP termina en algo demostrable y lleva sus tes
 
 **Riesgos:**
 - **Datos de menores:** las Edge Functions de SOL usan `service_role` → **bypassan RLS**. Crítico: scopear cada tool por alumno/sesión, salida estructurada sin PII, key server-side (ADR-005). Prever borrado/export por alumno.
-- **Latencia:** la evaluación corre al cerrar sesión; mostrar "SOL está mirando tu práctica…" para que no bloquee al chico. Edge Functions tienen límite de tiempo de ejecución — la eval por lote (1 llamada Haiku) entra cómoda; vigilar si crece.
-- **Pérdida de comodidades del SDK:** subagents/skills/hooks se reimplementan a mano (loop chico, plantillas, tope en código). Aceptable al arranque; si pesa, migrar a Agent SDK (host propio) o Managed Agents.
-- **OPEN-1 (regla de "dominio" del nodo) sigue abierta** — el evaluador la necesita para mover `alumno_nodo`. Definir con la seño antes de SP-4.
+- **Latencia del diagnóstico:** la evaluación IA corre al cerrar sesión; el estado del nodo ya se actualizó antes (regla, instantánea), así que el mapa no espera a la IA. Mostrar "SOL está mirando tu práctica…" para el diagnóstico. La eval por lote (1 llamada Haiku) entra cómoda en el límite de tiempo de las Edge Functions; vigilar si crece.
+- **Pérdida de comodidades del SDK:** subagents/skills/hooks se reimplementan a mano (loop chico, plantillas, tope en código). Aceptable al arranque; si pesa, migrar a Agent SDK (host propio o función Node de Vercel) o Managed Agents.
 
 ## Preguntas — estado
 
 - **OPEN-F2-1 (resuelta):** la **seño** sube el plan (autoría docente). → D6. Define SP-2.
 - **OPEN-F2-2 (resuelta):** motor = **Messages API desde Edge Functions** (sin servidor nuevo). → D1.
 - **OPEN-F2-3 (resuelta):** la seño sube el contenido en **PDF**; Claude lo lee directo. → D8.
-- **OPEN-1 (propuesta, validar con la seño):** regla de dominio del nodo — ver sección "Regla de dominio del nodo". Default propuesto (racha 5/6 al 1er intento + ≥2 difíciles); alternativa simple por umbral. **Confirmar con la docente antes de SP-4** (y Etapa 3 del MVP).
+- **OPEN-1 (resuelta):** regla de dominio del nodo → definida en `2026-06-28-evaluacion-y-dominio-de-nodos.md`. Determinística, calculada por la app, exige cobertura por formato (`producir`) y dificultad. La IA **no** decide el estado. *(Los números exactos siguen a validar con la docente, pero la decisión de diseño está cerrada.)*
