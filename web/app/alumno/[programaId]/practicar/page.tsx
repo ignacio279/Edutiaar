@@ -8,12 +8,16 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useMe } from '@/lib/me-context';
 import { sol } from '@/lib/art';
+import { toast } from '@/lib/toast';
 import { elegirEjercicios, resumen, type Ejercicio, type RespuestaReg, type HistorialEjercicio } from '@/lib/practica';
 import { calcularEstado, resolverEstado, type EstadoNodo } from '@/lib/dominio';
 
 const QUICK = 'var(--font-quicksand), sans-serif';
 const NUNITO = 'var(--font-nunito)';
 const MAX_REINTENTOS = 2;
+const CHAT_CAP = 20; // tope de mensajes del chico por sesión (guardarraíl de costo)
+
+type ChatMsg = { role: 'user' | 'sol'; content: string };
 
 function PracticarInner() {
   const supabase = createClient();
@@ -25,6 +29,7 @@ function PracticarInner() {
   const nodoId = search.get('nodo');
 
   const [nodoNombre, setNodoNombre] = useState('');
+  const [materia, setMateria] = useState('');
   const [ejercicios, setEjercicios] = useState<Ejercicio[] | null>(null);
   const [idx, setIdx] = useState(0);
   const [reintentos, setReintentos] = useState(0);
@@ -35,11 +40,20 @@ function PracticarInner() {
   const [guardando, setGuardando] = useState(false);
   const [nuevoEstado, setNuevoEstado] = useState<EstadoNodo | null>(null);
 
+  // Chat con SOL (efímero, vive mientras dura la sesión de practicar).
+  const [chatAbierto, setChatAbierto] = useState(false);
+  const [chatMsgs, setChatMsgs] = useState<ChatMsg[]>([]);
+  const [chatCargando, setChatCargando] = useState(false);
+  const [chatInput, setChatInput] = useState('');
+
   useEffect(() => {
     if (!nodoId) return; // el render ya muestra el prompt de "elegí una parada"
     (async () => {
       const { data: nodo } = await supabase.from('nodo').select('nombre').eq('id', nodoId).single();
       setNodoNombre((nodo as { nombre?: string } | null)?.nombre || '');
+      const { data: prog } = await supabase.from('programa').select('materia:materia_id(nombre)').eq('id', programaId).single();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setMateria((prog as any)?.materia?.nombre || '');
       const { data } = await supabase
         .from('ejercicio')
         .select('id,enunciado,opciones,correcta,dificultad,tipo')
@@ -139,6 +153,35 @@ function PracticarInner() {
     }
   }
 
+  async function enviarChat(texto: string, esAyuda: boolean) {
+    const t = texto.trim();
+    if (!t || chatCargando) return;
+    if (chatMsgs.filter((m) => m.role === 'user').length >= CHAT_CAP) {
+      toast('Por hoy ya charlamos bastante 🌞 ¡Seguí practicando!');
+      return;
+    }
+    const ejActual = ejercicios?.[idx];
+    const contexto = {
+      materia,
+      nodoNombre,
+      ejercicio: ejActual ? { enunciado: ejActual.enunciado, opciones: ejActual.opciones, correcta: ejActual.correcta } : undefined,
+    };
+    const nuevos: ChatMsg[] = [...chatMsgs, { role: 'user', content: t }];
+    setChatMsgs(nuevos);
+    setChatInput('');
+    setChatAbierto(true);
+    setChatCargando(true);
+    const { data, error } = await supabase.functions.invoke('sol-chat', {
+      body: { mensajes: nuevos, contexto, esAyuda, mock: true },
+    });
+    setChatCargando(false);
+    if (error || !data?.texto) {
+      toast('SOL no pudo responder ahora 🙈 Probá de nuevo.');
+      return;
+    }
+    setChatMsgs([...nuevos, { role: 'sol', content: String(data.texto) }]);
+  }
+
   if (!nodoId) {
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 22px', textAlign: 'center' }}>
@@ -210,6 +253,54 @@ function PracticarInner() {
         {feedback === 'casi' && <span style={{ color: '#E89B42' }}>Casi… probá de nuevo 💪</span>}
         {feedback === 'revelado' && <span style={{ color: '#7A6F5F' }}>La respuesta era: <b>{ej.correcta}</b></span>}
       </div>
+
+      {/* Chat con SOL: pedir ayuda del ejercicio o preguntar libre del tema. */}
+      <div style={{ marginTop: 18 }}>
+        {!chatAbierto ? (
+          <button
+            onClick={() => { setChatAbierto(true); if (chatMsgs.length === 0) enviarChat('¿Me ayudás con esto? 🙏', true); }}
+            style={btnAyuda}
+          >
+            💬 Pedir ayuda a SOL
+          </button>
+        ) : (
+          <div style={chatCard}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ width: 28, height: 28, display: 'inline-block', background: `${sol('happy')} center/contain no-repeat` }} />
+                <b style={{ fontFamily: QUICK, color: '#3A332A' }}>SOL</b>
+              </span>
+              <button onClick={() => setChatAbierto(false)} style={chatClose} aria-label="Cerrar chat">✕</button>
+            </div>
+            <div style={chatMsgsBox}>
+              {chatMsgs.length === 0 && (
+                <p style={{ color: '#7A6F5F', fontWeight: 600, textAlign: 'center', margin: '8px 0' }}>
+                  Preguntame lo que quieras sobre {nodoNombre} 🌞
+                </p>
+              )}
+              {chatMsgs.map((m, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
+                  <span style={m.role === 'user' ? burbujaUser : burbujaSol}>{m.content}</span>
+                </div>
+              ))}
+              {chatCargando && (
+                <div style={{ display: 'flex', justifyContent: 'flex-start' }}><span style={burbujaSol}>SOL está pensando…</span></div>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+              <input
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') enviarChat(chatInput, false); }}
+                placeholder="Escribile a SOL…"
+                disabled={chatCargando}
+                style={chatInputStyle}
+              />
+              <button onClick={() => enviarChat(chatInput, false)} disabled={chatCargando || !chatInput.trim()} style={chatSend}>Enviar</button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -217,6 +308,35 @@ function PracticarInner() {
 const btnPrimary: React.CSSProperties = {
   marginTop: 18, background: '#F4A93B', color: '#fff', border: 'none', borderRadius: 999,
   padding: '14px 30px', fontFamily: QUICK, fontWeight: 700, fontSize: 17, cursor: 'pointer',
+};
+
+const btnAyuda: React.CSSProperties = {
+  width: '100%', background: '#FBF4E6', color: '#3A332A', border: '2px solid #EFE3CE', borderRadius: 14,
+  padding: '12px 16px', fontFamily: QUICK, fontWeight: 700, fontSize: 16, cursor: 'pointer',
+};
+const chatCard: React.CSSProperties = {
+  background: '#FFFCF5', border: '2px solid #EFE3CE', borderRadius: 20, padding: '14px 14px 16px',
+  boxShadow: '0 4px 12px rgba(120,90,40,.08)', animation: 'edFade .25s ease',
+};
+const chatClose: React.CSSProperties = {
+  background: 'transparent', border: 'none', color: '#7A6F5F', fontWeight: 700, fontSize: 16, cursor: 'pointer', lineHeight: 1,
+};
+const chatMsgsBox: React.CSSProperties = {
+  display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 240, overflowY: 'auto', padding: '4px 2px',
+};
+const burbujaBase: React.CSSProperties = {
+  maxWidth: '82%', padding: '9px 13px', borderRadius: 14, fontFamily: NUNITO, fontWeight: 600, fontSize: 15,
+  lineHeight: 1.35, whiteSpace: 'pre-wrap',
+};
+const burbujaUser: React.CSSProperties = { ...burbujaBase, background: '#F4A93B', color: '#fff', borderBottomRightRadius: 4 };
+const burbujaSol: React.CSSProperties = { ...burbujaBase, background: '#FBF4E6', color: '#3A332A', border: '1.5px solid #EFE3CE', borderBottomLeftRadius: 4 };
+const chatInputStyle: React.CSSProperties = {
+  flex: 1, minWidth: 0, border: '2px solid #EFE3CE', borderRadius: 12, padding: '10px 12px',
+  fontFamily: NUNITO, fontSize: 15, fontWeight: 600, color: '#3A332A', background: '#fff',
+};
+const chatSend: React.CSSProperties = {
+  background: '#F4A93B', color: '#fff', border: 'none', borderRadius: 12, padding: '10px 16px',
+  fontFamily: QUICK, fontWeight: 700, fontSize: 15, cursor: 'pointer',
 };
 
 export default function Practicar() {
