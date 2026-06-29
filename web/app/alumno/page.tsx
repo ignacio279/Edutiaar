@@ -10,6 +10,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useMe } from '@/lib/me-context';
 import { animal, uiIcon, materiaEmblem, materiaPattern } from '@/lib/art';
 import { temaMateria } from '@/lib/materia-tema';
+import { proximamente } from '@/lib/prototipo';
 
 const BALOO = 'var(--font-baloo), cursive';
 
@@ -84,6 +85,7 @@ export default function Materias() {
 
   function elegir(m: Materia) {
     if (tab === 'practicar') {
+      if (proximamente()) return; // modo prototipo: SOL todavía no practica
       const nodo = nodoSugerido(m);
       router.push(nodo ? `/alumno/${m.programa_id}/practicar?nodo=${nodo}` : `/alumno/${m.programa_id}/mapa`);
     } else {

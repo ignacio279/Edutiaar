@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from '@/lib/toast';
+import { proximamente } from '@/lib/prototipo';
 import { sol, uiIcon } from '@/lib/art';
 
 const QUICK = 'var(--font-quicksand), sans-serif';
@@ -60,6 +61,7 @@ export default function Autoria() {
 
   async function generar() {
     if (busy) return;
+    if (proximamente('SOL está en camino 🌞 Pronto va a dividir tu plan en nodos.')) return;
     if (!contenido.trim()) { toast('Pegá el contenido del plan primero'); return; }
     setBusy(true);
     const { data: { session } } = await supabase.auth.getSession();

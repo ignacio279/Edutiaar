@@ -10,6 +10,7 @@ import { useMe } from '@/lib/me-context';
 import { alpha, catmull, nodeIcon, starBadge, lockBadge, uiIcon } from '@/lib/art';
 import { estadoColor, LEGEND, coordsVariante } from '@/lib/mapa-layout';
 import { temaMateria, iconoNodo } from '@/lib/materia-tema';
+import { proximamente } from '@/lib/prototipo';
 
 const BALOO = 'var(--font-baloo), cursive';
 
@@ -56,6 +57,7 @@ export default function MapaMateria() {
 
   function practicarSugerido() {
     if (!nodos?.length) return;
+    if (proximamente()) return; // modo prototipo: SOL todavía no practica
     const pendiente = nodos.find((n) => n.estado !== 'dominado');
     router.push(`/alumno/${programaId}/practicar?nodo=${(pendiente || nodos[0]).id}`);
   }
@@ -105,7 +107,7 @@ export default function MapaMateria() {
               return (
                 <button
                   key={n.id}
-                  onClick={() => router.push(`/alumno/${programaId}/practicar?nodo=${n.id}`)}
+                  onClick={() => { if (proximamente()) return; router.push(`/alumno/${programaId}/practicar?nodo=${n.id}`); }}
                   style={{ position: 'absolute', left: `${x}%`, top: `${y}%`, transform: 'translate(-50%,-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, background: 'none', border: 'none', cursor: 'pointer', width: 'clamp(92px,12vw,118px)', padding: 0 }}
                 >
                   <span style={{ position: 'relative', width: 'clamp(74px,9.5vw,94px)', height: 'clamp(74px,9.5vw,94px)', borderRadius: '50%', background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 8px 18px ${alpha(color, 0.34)}`, border: '5px solid #FFFCF5' }}>

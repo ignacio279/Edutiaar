@@ -15,6 +15,7 @@ import { saludo, cierre, praise, encourage } from '@/lib/practica-copy';
 import { toast } from '@/lib/toast';
 import { elegirEjercicios, resumen, type Ejercicio, type RespuestaReg, type HistorialEjercicio } from '@/lib/practica';
 import { calcularEstado, resolverEstado, type EstadoNodo } from '@/lib/dominio';
+import { MODO_PROTOTIPO } from '@/lib/prototipo';
 
 const BALOO = "var(--font-baloo), cursive";
 const NUNITO = 'var(--font-nunito), sans-serif';
@@ -72,6 +73,7 @@ function PracticarInner() {
   const tema = temaMateria(materia);
 
   useEffect(() => {
+    if (MODO_PROTOTIPO) return; // modo prototipo: SOL todavía no practica
     if (!nodoId) return;
     (async () => {
       const { data: nodo } = await supabase.from('nodo').select('nombre').eq('id', nodoId).single();
@@ -238,6 +240,18 @@ function PracticarInner() {
   }
 
   // ----- guards -----
+  if (MODO_PROTOTIPO) {
+    return (
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 22px', textAlign: 'center', animation: 'edFade .3s ease' }}>
+        <div style={{ width: 110, height: 110, background: `${sol('happy')} center/contain no-repeat` }} />
+        <h1 style={{ fontFamily: BALOO, fontWeight: 800, fontSize: 'clamp(24px,5vw,34px)', color: '#3A332A', margin: '14px 0 0' }}>SOL está en camino 🌞</h1>
+        <p style={{ color: '#7A6F5F', fontWeight: 600, fontSize: 16, margin: '8px 0 0', maxWidth: 420 }}>
+          Muy pronto vas a poder practicar con SOL. Por ahora podés mirar tu mapa.
+        </p>
+        <button onClick={() => router.push(`/alumno/${programaId}/mapa`)} className="ed-primary" style={btnPrimary}>Volver al mapa</button>
+      </div>
+    );
+  }
   if (!nodoId) {
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 22px', textAlign: 'center' }}>
