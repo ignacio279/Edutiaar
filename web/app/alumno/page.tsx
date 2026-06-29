@@ -137,7 +137,7 @@ export default function Materias() {
         ) : materias.length === 0 ? (
           <p style={{ color: '#7A6F5F', fontWeight: 600, textAlign: 'center', marginTop: 30 }}>Tu seño todavía no publicó materias. ¡Pronto!</p>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(230px,1fr))', gap: 20, marginTop: 38 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,232px)', justifyContent: 'center', gap: 20, marginTop: 38 }}>
             {materias.map((m) => {
               const tema = temaMateria(m.nombre);
               const total = m.nodos.length;
