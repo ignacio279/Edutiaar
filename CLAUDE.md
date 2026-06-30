@@ -13,6 +13,8 @@ El núcleo: cada alumno tiene un **programa** por materia → SOL lo divide en *
 
 **Etapas 0 y 1 cerradas.** Tablas + RLS en Supabase, datos semilla, login docente y alumno (endurecido: aula+PIN+lockout vía Edge Function), front en Next.js (`web/`) deployado en Vercel.
 
+**Dominio en producción (2026-06-30).** Migrado a **`www.edutia.ar`** (comprado en NIC.ar → nameservers delegados a Vercel; `edutia.ar` redirige a `www`; `edutiaar.vercel.app` sigue activo). Supabase Auth actualizado: Site URL `https://www.edutia.ar` + Redirect URLs (`www.edutia.ar/**`, `edutia.ar/**`, `edutiaar.vercel.app/**`).
+
 **Etapa 3 cerrada (2026-06-28).** Fase 2 SOL — slices SP-1 a SP-4e completos, deployados y commiteados. El loop entero anda de punta a punta **en modo mock** (sin gastar API):
 - **SP-1** Edge Function SOL base (Messages API + tool use; `supabase/functions/sol`, `_shared/loop.ts`).
 - **SP-2** Autoría docente: la seño sube contenido → `dividir-nodos` genera `sol_materia` + nodos → revisa/publica (`/docente/autoria`).
@@ -28,7 +30,7 @@ El núcleo: cada alumno tiene un **programa** por materia → SOL lo divide en *
 
 ## Stack
 
-- **Frontend:** **Next.js** (App Router, TypeScript, React) en `web/`, deployado en **Vercel** → <https://edutiaar.vercel.app/> (dominio final previsto `edutia.ar`). (Migrado desde el front estático original; ver `docs/NEXT_MIGRATION.md`.)
+- **Frontend:** **Next.js** (App Router, TypeScript, React) en `web/`, deployado en **Vercel**. Dominio de producción **`www.edutia.ar`** (comprado en NIC.ar, nameservers delegados a Vercel; `edutia.ar` redirige a `www`); `https://edutiaar.vercel.app/` sigue activo. (Migrado desde el front estático original; ver `docs/NEXT_MIGRATION.md`.)
 - **Backend / base / auth:** **Supabase** (Postgres + Auth + Edge Functions). Plan Free para desarrollo; Pro ($25/mes) en producción.
 - **IA (SOL):** **API de Claude** (Anthropic), llamada desde una **Edge Function de Supabase**.
 

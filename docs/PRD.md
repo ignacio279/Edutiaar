@@ -33,6 +33,6 @@ En muchas escuelas rurales de Argentina, una sola docente atiende a todos los gr
 
 ## Alcance
 
-**Incluye (MVP):** SOL vía Claude API · una materia (Lengua) y un grado · ejercicios de opción múltiple con ejemplos locales · evaluación automática y dificultad adaptativa · nodos permanentes con histórico mes a mes · registro de respuestas · roles docente y alumno · panel de la docente · app web bajo edutia.ar.
+**Incluye (MVP):** SOL vía Claude API · una materia (Lengua) y un grado · ejercicios de opción múltiple con ejemplos locales · evaluación automática y dificultad adaptativa · nodos permanentes con histórico mes a mes · registro de respuestas · roles docente y alumno · panel de la docente · app web bajo www.edutia.ar.
 
 **NO incluye (Fase 2):** autoría de materias/programas por la docente · varias materias/grados · roles director y familia · LUNA y TERRA · offline · satelital · multilingüe · ejercicios de texto libre evaluados por IA.
