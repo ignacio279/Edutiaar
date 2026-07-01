@@ -1,7 +1,4 @@
-# Etapa 1 de EDUTIA, explicada fácil
-
-> Un resumen en palabras sencillas de qué se hizo en la **Etapa 1** del proyecto,
-> para que se entienda sin saber nada de tecnología.
+# Etapa 1 de EDUTIA
 
 ## ¿De qué se trató esta etapa?
 
@@ -11,9 +8,6 @@ La Etapa 1 fue **abrir la puerta de entrada**: lograr que las personas puedan
 Todavía no hay ejercicios ni actividades acá (eso llega después). Lo importante
 de esta etapa es que **la maestra y los chicos puedan iniciar sesión** y que cada
 uno vea lo suyo.
-
-Pensalo como una casa: en esta etapa **pusimos la puerta y las llaves**. Los
-muebles y las actividades adentro vienen en las etapas siguientes.
 
 ## Lo que quedó funcionando
 
@@ -27,8 +21,6 @@ muebles y las actividades adentro vienen en las etapas siguientes.
 ### 2. Cada uno ve su propia pantalla
 - Cuando la maestra entra, ve **su** panel.
 - Cuando un chico entra, ve **su** pantalla.
-- Aunque por ahora estén casi vacías, **lo clave es que cada rol entra y llega a
-  su lugar**.
 
 ### 3. Datos de prueba para poder mostrarlo
 Cargamos información de ejemplo para que se pueda ver funcionando: una escuela
