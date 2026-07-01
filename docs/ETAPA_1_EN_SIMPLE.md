@@ -43,6 +43,15 @@ Como se trabaja con **datos de chicos**, se cuidó especialmente que:
   alguien intenta adivinar el código muchas veces seguidas (para que nadie entre
   por prueba y error).
 
+### 5. Un prototipo del resto de la app (para probar el diseño)
+Además de la puerta de entrada, se armó un **prototipo del resto de la app**: una
+especie de **maqueta o boceto navegable** de las demás pantallas (las que todavía
+no están terminadas). No hace todo de verdad, pero sirve para **ver cómo se vería
+y probar el diseño**: cómo se mueve uno entre pantallas, cómo se ve la
+información, qué colores y qué formas usar. Es como **la maqueta de una casa antes
+de construirla**: permite decidir el diseño y mostrarlo, sin tener que esperar a
+que todo funcione.
+
 ## En una frase
 
 > En la Etapa 1 dejamos que **la maestra y los alumnos entren a EDUTIA, cada uno
