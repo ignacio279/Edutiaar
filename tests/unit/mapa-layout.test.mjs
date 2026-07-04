@@ -1,7 +1,25 @@
 // Tests unitarios del layout puro del mapa (web/lib/mapa-layout.ts). `npm test`.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { serpentine, estadoColor, LEGEND, saludoMateria, coordsCamino, coordsColinas, coordsVariante } from '../../web/lib/mapa-layout.ts';
+import { mezclarColor, colorNodo, COLORES, serpentine, estadoColor, LEGEND, saludoMateria, coordsCamino, coordsColinas, coordsVariante } from '../../web/lib/mapa-layout.ts';
+
+test('mezclarColor: extremos y punto medio', () => {
+  assert.equal(mezclarColor('#000000', '#ffffff', 0), '#000000');
+  assert.equal(mezclarColor('#000000', '#ffffff', 1), '#ffffff');
+  assert.equal(mezclarColor('#000000', '#ffffff', 0.5), '#808080');
+});
+
+test('colorNodo: en_construccion se acerca al color de dominado según el puntaje', () => {
+  assert.equal(colorNodo('en_construccion', 0), mezclarColor(COLORES.en_construccion, COLORES.dominado, 0));
+  assert.equal(colorNodo('en_construccion', 100), mezclarColor(COLORES.en_construccion, COLORES.dominado, 1));
+});
+
+test('colorNodo: dominado, a_reforzar y no_empezado conservan su color pleno', () => {
+  assert.equal(colorNodo('dominado', 40), COLORES.dominado);
+  assert.equal(colorNodo('a_reforzar', 80), COLORES.a_reforzar);
+  assert.equal(colorNodo('no_empezado', 0), COLORES.no_empezado);
+  assert.equal(colorNodo(undefined, undefined), COLORES.no_empezado);
+});
 
 test('serpentine: 0 → [], 1 → centro', () => {
   assert.deepEqual(serpentine(0), []);

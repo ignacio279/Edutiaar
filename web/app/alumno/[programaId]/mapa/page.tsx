@@ -8,12 +8,12 @@ import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useMe } from '@/lib/me-context';
 import { alpha, catmull, nodeIcon, starBadge, lockBadge, uiIcon } from '@/lib/art';
-import { estadoColor, LEGEND, coordsVariante } from '@/lib/mapa-layout';
+import { colorNodo, LEGEND, coordsVariante } from '@/lib/mapa-layout';
 import { temaMateria, iconoNodo } from '@/lib/materia-tema';
 
 const BALOO = 'var(--font-baloo), cursive';
 
-type NodoVista = { id: string; nombre: string; orden: number; estado: string };
+type NodoVista = { id: string; nombre: string; orden: number; estado: string; puntaje: number };
 
 export default function MapaMateria() {
   const supabase = createClient();
@@ -38,13 +38,13 @@ export default function MapaMateria() {
         .order('orden');
       const { data: an } = await supabase
         .from('alumno_nodo')
-        .select('nodo_id,estado')
+        .select('nodo_id,estado,puntaje')
         .eq('alumno_id', me.id);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const estadoPorNodo = new Map(((an as any[]) || []).map((r) => [r.nodo_id, r.estado] as [string, string]));
+      const estadoPorNodo = new Map(((an as any[]) || []).map((r) => [r.nodo_id, { estado: r.estado, puntaje: Number(r.puntaje) || 0 }] as [string, { estado: string; puntaje: number }]));
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const vista: NodoVista[] = ((ns as any[]) || []).map((n) => ({
-        id: n.id, nombre: n.nombre, orden: n.orden, estado: estadoPorNodo.get(n.id) || 'no_empezado',
+        id: n.id, nombre: n.nombre, orden: n.orden, estado: estadoPorNodo.get(n.id)?.estado ?? 'no_empezado', puntaje: estadoPorNodo.get(n.id)?.puntaje ?? 0,
       }));
       setNodos(vista);
     })();
@@ -99,7 +99,7 @@ export default function MapaMateria() {
               <path d={catmull(coords)} fill="none" stroke="#E2C9A0" strokeWidth="5" strokeLinecap="round" strokeDasharray="0.5 9" vectorEffect="non-scaling-stroke" />
             </svg>
             {nodos.map((n, i) => {
-              const color = estadoColor(n.estado);
+              const color = colorNodo(n.estado, n.puntaje);
               const [x, y] = coords[i];
               const badge = n.estado === 'dominado' ? starBadge() : n.estado === 'no_empezado' ? lockBadge() : null;
               return (
