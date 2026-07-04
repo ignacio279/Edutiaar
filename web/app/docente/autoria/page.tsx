@@ -135,9 +135,9 @@ export default function Autoria() {
           body: JSON.stringify({ programa_id: programaId, mock: true }),
         });
         const j = await r.json().catch(() => ({}));
-        toast(r.ok ? `¡Listo! SOL preparó ${j.generados ?? 0} ejercicios.` : 'La materia quedó publicada, pero los ejercicios no salieron. Probá publicar de nuevo.');
+        toast(r.ok ? `¡Listo! SOL preparó ${j.generados ?? 0} ejercicios.` : 'La materia quedó publicada, pero los ejercicios no salieron. SOL los va a preparar cuando un alumno entre a practicar.');
       } catch {
-        toast('La materia quedó publicada, pero los ejercicios no salieron. Probá publicar de nuevo.');
+        toast('La materia quedó publicada, pero los ejercicios no salieron. SOL los va a preparar cuando un alumno entre a practicar.');
       }
     } finally {
       setBusy(false);
