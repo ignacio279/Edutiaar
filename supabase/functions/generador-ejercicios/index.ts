@@ -32,10 +32,10 @@ Deno.serve(async (req) => {
     const { programa_id, nodo_id, mock } = await req.json();
     if (!programa_id && !nodo_id) return json({ error: 'datos_faltantes' }, 400);
 
-    // Tope diario (Regla 4).
+    // Tope diario (Regla 4): contamos lo generado hoy (UTC) UNA vez acá, y cada
+    // modo chequea POR LOTE antes de generar, para que ningún lote cruce el tope.
     const hoy = new Date(); hoy.setUTCHours(0, 0, 0, 0);
     const { count: generadosHoy } = await sb.from('ejercicio').select('id', { count: 'exact', head: true }).gte('created_at', hoy.toISOString());
-    if ((generadosHoy ?? 0) >= TOPE_EJERCICIOS_DIA) return json({ error: 'tope_diario' }, 429);
 
     const key = Deno.env.get('ANTHROPIC_API_KEY');
     const usarMock = mock || !key;
@@ -69,9 +69,14 @@ Deno.serve(async (req) => {
       if (!sm || sm.docente_id !== user.id) return json({ error: 'solo_docente_duena' }, 403);
       const { materia, grado } = await datosPrograma(programa_id);
       const { data: nodos } = await sb.from('nodo').select('id, nombre, descripcion').eq('programa_id', programa_id).order('orden');
+      const lotePorNodo = celdasIniciales().reduce((s, c) => s + c.n, 0); // 36: lote esperado por nodo
       for (const nodo of nodos ?? []) {
         const { count } = await sb.from('ejercicio').select('id', { count: 'exact', head: true }).eq('nodo_id', nodo.id);
         if ((count ?? 0) > 0) continue; // idempotente: no duplicar pools
+        // Tope diario POR LOTE: si el próximo lote cruzaría el tope, cortamos acá.
+        // El pool queda parcial y devolvemos igual { generados } con lo que entró;
+        // reintentar mañana (o al liberar cupo) completa los nodos que faltaron.
+        if ((generadosHoy ?? 0) + generados + lotePorNodo > TOPE_EJERCICIOS_DIA) break;
         const lote = await generarLote(nodo, materia, grado, celdasIniciales(), 0);
         const { error } = await sb.from('ejercicio').insert(lote);
         if (error) throw error;
@@ -85,6 +90,9 @@ Deno.serve(async (req) => {
       const esDuena = sm?.docente_id === user.id;
       const esAlumnoDeLaEscuela = perfil.rol === 'alumno' && sm?.estado === 'publicado' && sm?.escuela_id === perfil.escuela_id;
       if (!esDuena && !esAlumnoDeLaEscuela) return json({ error: 'sin_permiso' }, 403);
+
+      // Tope diario POR LOTE: un lote de reposición nunca cruza el tope (Regla 4).
+      if ((generadosHoy ?? 0) + LOTE_REPOSICION > TOPE_EJERCICIOS_DIA) return json({ error: 'tope_diario' }, 429);
 
       const { materia, grado } = await datosPrograma(nodo.programa_id);
       // Sin-ver por celda PARA ESTE USUARIO: pool del nodo menos lo que ya respondió.
