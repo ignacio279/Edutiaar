@@ -21,3 +21,8 @@ verify_jwt = true
 # Evaluador por sesión (Fase 2 / SP-4c): lo llama el alumno logueado para SU sesión.
 [functions.evaluar-sesion]
 verify_jwt = true
+
+# Generador de ejercicios (Fase 2 / T6): pool inicial (docente) y reposición
+# (docente o alumno); en ambos casos tomamos la identidad del JWT.
+[functions.generador-ejercicios]
+verify_jwt = true
