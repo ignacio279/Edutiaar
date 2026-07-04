@@ -12,6 +12,11 @@ import type { Celda, EjercicioGen } from './generar.ts';
 const MODELO = 'claude-sonnet-4-6';
 const MAX_TOKENS = 8192;
 const TOPE_EJERCICIOS_DIA = 240; // Regla 4: 20 lotes de 12 por día, global
+// Espejo server-side de UMBRAL_REPOSICION (web/lib/practica.ts) — mantené en sync.
+// Hace la reposición idempotente y cierra el vector de abuso: sin este gate, un
+// alumno con pool lleno podría invocar la function a mano una y otra vez y quemar
+// el tope diario global (Regla 4) sin necesitarlo de verdad.
+const UMBRAL_REPOSICION_SERVER = 16;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
@@ -109,6 +114,15 @@ Deno.serve(async (req) => {
         const k = claveCelda(e as Celda);
         sinVer.set(k, (sinVer.get(k) ?? 0) + 1);
       }
+
+      // Gate de necesidad SOLO para el alumno (la docente dueña puede pedir un
+      // top-up manual aunque el pool esté lleno): si todavía le queda margen de
+      // sin-ver, no generamos nada — espejo de necesitaReposicion en el front.
+      if (perfil.rol === 'alumno') {
+        const totalSinVer = [...sinVer.values()].reduce((s, n) => s + n, 0);
+        if (totalSinVer >= UMBRAL_REPOSICION_SERVER) return json({ generados: 0 });
+      }
+
       const lote = await generarLote(nodo, materia, grado, celdasParaLote(sinVer, LOTE_REPOSICION), (pool ?? []).length);
       const { error } = await sb.from('ejercicio').insert(lote);
       if (error) throw error;

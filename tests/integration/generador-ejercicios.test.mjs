@@ -140,10 +140,29 @@ test('reposición como alumno: publicada de su escuela sí; borrador u otra escu
     const pub = await publicarPrograma(programaId);
     assert.ok(pub.ok, 'publicó la sol_materia');
 
-    // (a) alumno de la MISMA escuela con materia PUBLICADA → 200, lote de 12
+    // (a) alumno de la MISMA escuela con materia PUBLICADA → 200, pero el pool está
+    // lleno (36 sin ver >= UMBRAL_REPOSICION_SERVER): gate server-side, no genera.
     const rOk = await callFnAuth('generador-ejercicios', { nodo_id: nodos[0].id, mock: true }, alumno.access_token);
     assert.equal(rOk.status, 200);
-    assert.equal((await rOk.json()).generados, 12);
+    assert.equal((await rOk.json()).generados, 0);
+
+    // (a2) el gate se levanta cuando el sin-ver cae debajo del umbral: el alumno
+    // "respondió" 21 de los 36 (service role, simulando sesión+respuesta reales) →
+    // quedan 15 sin ver (< 16) → ahora sí repone un lote de 12.
+    const poolIds = (await (await fetch(`${URL}/rest/v1/ejercicio?nodo_id=eq.${nodos[0].id}&select=id`, { headers: srHeaders() })).json()).map((e) => e.id);
+    const sesRes = await fetch(`${URL}/rest/v1/sesion`, {
+      method: 'POST', headers: { ...srHeaders(), Prefer: 'return=representation' },
+      body: JSON.stringify([{ alumno_id: alumno.id, nodo_id: nodos[0].id, aciertos: 21, total: 21 }]),
+    });
+    const [sesionAlumno] = await sesRes.json();
+    const respRes = await fetch(`${URL}/rest/v1/respuesta`, {
+      method: 'POST', headers: { ...srHeaders(), Prefer: 'return=minimal' },
+      body: JSON.stringify(poolIds.slice(0, 21).map((id) => ({ sesion_id: sesionAlumno.id, ejercicio_id: id, dada: 'x', correcta: true, reintentos: 0 }))),
+    });
+    assert.ok(respRes.ok, `insert de respuestas ok (status ${respRes.status})`);
+    const rOk2 = await callFnAuth('generador-ejercicios', { nodo_id: nodos[0].id, mock: true }, alumno.access_token);
+    assert.equal(rOk2.status, 200);
+    assert.equal((await rOk2.json()).generados, 12);
 
     // (c) alumno de OTRA escuela → 403 aunque esté publicada
     const esc = await (await fetch(`${URL}/rest/v1/escuela`, {
