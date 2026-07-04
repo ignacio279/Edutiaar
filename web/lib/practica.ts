@@ -80,3 +80,18 @@ export function resumen(respuestas: RespuestaReg[]): { aciertos: number; total: 
     primerIntento: respuestas.filter((r) => r.correcta && r.reintentos === 0).length,
   };
 }
+
+// ── Nunca repetir (DP5) + gatillo de reposición (DP6) ─────────────────────────
+// Un chico nunca vuelve a ver un ejercicio que ya respondió. El reintento
+// inmediato dentro del ejercicio NO es repetición (es el mismo intento).
+
+export const UMBRAL_REPOSICION = 16; // ~2 sesiones de margen sin ver
+
+export function filtrarNoVistos(pool: Ejercicio[], vistosIds: Iterable<string>): Ejercicio[] {
+  const vistos = new Set(vistosIds);
+  return pool.filter((e) => !vistos.has(e.id));
+}
+
+export function necesitaReposicion(noVistos: number): boolean {
+  return noVistos < UMBRAL_REPOSICION;
+}

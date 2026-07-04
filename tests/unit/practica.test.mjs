@@ -1,7 +1,7 @@
 // Tests unitarios de la lógica pura de práctica (web/lib/practica.ts). `npm test`.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { elegirEjercicios, resumen, nivelAdaptativo, tiposPendientes } from '../../web/lib/practica.ts';
+import { elegirEjercicios, resumen, nivelAdaptativo, tiposPendientes, filtrarNoVistos, necesitaReposicion, UMBRAL_REPOSICION } from '../../web/lib/practica.ts';
 
 const ej = (id, tipo, dif) => ({ id, enunciado: '', opciones: [], correcta: '', dificultad: dif, tipo });
 
@@ -85,4 +85,19 @@ test('tiposPendientes: un acierto al 1er intento saca ese tipo de pendientes', (
 test('tiposPendientes: acertar con reintento NO cuenta como cubierto', () => {
   const conReintento = { correcta: true, reintentos: 1, tipo: 'reconocer', dificultad: 1 };
   assert.deepEqual(tiposPendientes([conReintento]), ['reconocer', 'completar', 'ordenar', 'producir']);
+});
+
+// helper local: ejercicio mínimo con id
+const ejId = (id) => ({ id, enunciado: 'x', opciones: ['a', 'b'], correcta: 'a', dificultad: 1, tipo: 'reconocer' });
+
+test('filtrarNoVistos: excluye lo ya respondido, conserva el resto y el orden', () => {
+  const pool = [ejId('a'), ejId('b'), ejId('c')];
+  assert.deepEqual(filtrarNoVistos(pool, ['b']).map((e) => e.id), ['a', 'c']);
+  assert.deepEqual(filtrarNoVistos(pool, []).map((e) => e.id), ['a', 'b', 'c']);
+  assert.deepEqual(filtrarNoVistos(pool, ['a', 'b', 'c']), []);
+});
+
+test('necesitaReposicion: dispara bajo el umbral', () => {
+  assert.equal(necesitaReposicion(UMBRAL_REPOSICION), false);
+  assert.equal(necesitaReposicion(UMBRAL_REPOSICION - 1), true);
 });
