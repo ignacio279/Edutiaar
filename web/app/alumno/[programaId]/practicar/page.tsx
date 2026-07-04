@@ -14,7 +14,7 @@ import { sol, item, alpha } from '@/lib/art';
 import { temaMateria } from '@/lib/materia-tema';
 import { saludo, cierre, praise, encourage } from '@/lib/practica-copy';
 import { toast } from '@/lib/toast';
-import { elegirEjercicios, filtrarNoVistos, resumen, type Ejercicio, type RespuestaReg, type HistorialEjercicio } from '@/lib/practica';
+import { elegirEjercicios, filtrarNoVistos, necesitaReposicion, resumen, type Ejercicio, type RespuestaReg, type HistorialEjercicio } from '@/lib/practica';
 import { puntajeSesion, calcularEstadoProgresivo, coberturaHistorica, dosUltimasMal, resolverEstado, type EstadoNodo } from '@/lib/dominio';
 
 const BALOO = "var(--font-baloo), cursive";
@@ -102,6 +102,9 @@ function PracticarInner() {
       }
       const pool = (data as Ejercicio[]) || [];
       const noVistos = filtrarNoVistos(pool, vistos);
+      if (me && necesitaReposicion(noVistos.length)) {
+        supabase.functions.invoke('generador-ejercicios', { body: { nodo_id: nodoId, mock: true } }).catch(() => {});
+      }
       setPoolAgotado(pool.length > 0 && noVistos.length === 0);
       setEjercicios(elegirEjercicios(noVistos, historial));
     })();
