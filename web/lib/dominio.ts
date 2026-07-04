@@ -94,7 +94,9 @@ export function calcularEstadoProgresivo(args: {
 }): EstadoNodo {
   const { puntaje, totalRespondidos, cobertura, estadoActual = 'no_empezado' } = args;
   if (estadoActual === 'dominado') return 'dominado'; // pegajoso
-  if (totalRespondidos === 0) return 'no_empezado';
+  // Sin datos no se mueve el estado (guardia ante fallas de red; un nodo nuevo
+  // sigue arrancando en no_empezado porque `estadoActual` ya default-ea a eso).
+  if (totalRespondidos === 0) return estadoActual;
   const domina =
     puntaje >= UMBRAL_DOMINIO &&
     totalRespondidos >= MIN_EJERCICIOS_DOMINIO &&

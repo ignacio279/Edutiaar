@@ -108,6 +108,10 @@ test('estado: sin respuestas queda no_empezado', () => {
   assert.equal(calcularEstadoProgresivo({ ...base, totalRespondidos: 0, estadoActual: 'no_empezado' }), 'no_empezado');
 });
 
+test('estado: sin datos no se resetea (guardia ante fallas)', () => {
+  assert.equal(calcularEstadoProgresivo({ ...base, totalRespondidos: 0, estadoActual: 'en_construccion' }), 'en_construccion');
+});
+
 test('coberturaHistorica: cuenta solo aciertos al primer intento', () => {
   const todas = [ft('producir', 3), ft('producir', 1), fail('producir', 3), ft('reconocer', 3)];
   assert.deepEqual(coberturaHistorica(todas), { producir: 2, dificil: 2 });

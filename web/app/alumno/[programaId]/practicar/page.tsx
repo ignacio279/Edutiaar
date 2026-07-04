@@ -174,35 +174,38 @@ function PracticarInner() {
         regs.map((x) => ({ sesion_id: sesId, ejercicio_id: x.ejercicio_id, dada: x.dada, correcta: x.correcta, reintentos: x.reintentos, tiempo_seg: x.tiempo_seg })),
       );
 
-      const { data: todasRaw } = await supabase
+      const { data: todasRaw, error: histErr } = await supabase
         .from('respuesta')
         .select('correcta, reintentos, ejercicio:ejercicio_id!inner(tipo,dificultad), sesion:sesion_id!inner(alumno_id,nodo_id)')
         .eq('sesion.nodo_id', nodoId)
         .eq('sesion.alumno_id', me.id);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const todas = ((todasRaw as any[]) || []).map((x) => ({ correcta: x.correcta, reintentos: x.reintentos, tipo: x.ejercicio?.tipo, dificultad: x.ejercicio?.dificultad }));
 
-      const { data: an } = await supabase.from('alumno_nodo').select('estado, estado_override, puntaje').eq('alumno_id', me.id).eq('nodo_id', nodoId).maybeSingle();
-      const previo = an as { estado?: EstadoNodo; estado_override?: boolean; puntaje?: number } | null;
+      if (!histErr) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const todas = ((todasRaw as any[]) || []).map((x) => ({ correcta: x.correcta, reintentos: x.reintentos, tipo: x.ejercicio?.tipo, dificultad: x.ejercicio?.dificultad }));
 
-      // Replay de la sesión (en orden cronológico) sobre el puntaje persistido.
-      const cronologicas = regs.map((x, i) => ({ correcta: x.correcta, reintentos: x.reintentos, tipo: ejercicios![i]?.tipo ?? 'reconocer', dificultad: ejercicios![i]?.dificultad ?? 1 }));
-      const nuevoPuntaje = puntajeSesion(Number(previo?.puntaje ?? 0), cronologicas);
-      const tasa = r.total ? r.aciertos / r.total : 0;
-      const estadoCalc = calcularEstadoProgresivo({
-        puntaje: nuevoPuntaje,
-        totalRespondidos: todas.length,
-        cobertura: coberturaHistorica(todas),
-        dosUltimasMal: dosUltimasMal(cronologicas),
-        tasaSesion: tasa,
-        estadoActual: previo?.estado || 'no_empezado',
-      });
-      const res = resolverEstado({ estado: estadoCalc, puntaje: nuevoPuntaje }, previo?.estado_override ?? false, previo?.estado || 'no_empezado');
-      await supabase.from('alumno_nodo').upsert(
-        { alumno_id: me.id, nodo_id: nodoId, estado: res.estado, puntaje: res.puntaje, actualizado_at: new Date().toISOString() },
-        { onConflict: 'alumno_id,nodo_id' },
-      );
-      setNuevoEstado(res.estado);
+        const { data: an } = await supabase.from('alumno_nodo').select('estado, estado_override, puntaje').eq('alumno_id', me.id).eq('nodo_id', nodoId).maybeSingle();
+        const previo = an as { estado?: EstadoNodo; estado_override?: boolean; puntaje?: number } | null;
+
+        // Replay de la sesión (en orden cronológico) sobre el puntaje persistido.
+        const cronologicas = regs.map((x, i) => ({ correcta: x.correcta, reintentos: x.reintentos, tipo: ejercicios![i]?.tipo ?? 'reconocer', dificultad: ejercicios![i]?.dificultad ?? 1 }));
+        const nuevoPuntaje = puntajeSesion(Number(previo?.puntaje ?? 0), cronologicas);
+        const tasa = r.total ? r.aciertos / r.total : 0;
+        const estadoCalc = calcularEstadoProgresivo({
+          puntaje: nuevoPuntaje,
+          totalRespondidos: todas.length,
+          cobertura: coberturaHistorica(todas),
+          dosUltimasMal: dosUltimasMal(cronologicas),
+          tasaSesion: tasa,
+          estadoActual: previo?.estado || 'no_empezado',
+        });
+        const res = resolverEstado({ estado: estadoCalc, puntaje: nuevoPuntaje }, previo?.estado_override ?? false, previo?.estado || 'no_empezado');
+        await supabase.from('alumno_nodo').upsert(
+          { alumno_id: me.id, nodo_id: nodoId, estado: res.estado, puntaje: res.puntaje, actualizado_at: new Date().toISOString() },
+          { onConflict: 'alumno_id,nodo_id' },
+        );
+        setNuevoEstado(res.estado);
+      } // histErr: mejor no mover nada que mover con datos truncados; la próxima sesión lo recalcula
       supabase.functions.invoke('evaluar-sesion', { body: { sesion_id: sesId, mock: true } }).catch(() => {});
     }
     setGuardando(false);
