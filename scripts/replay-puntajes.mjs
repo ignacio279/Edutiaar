@@ -1,6 +1,9 @@
 // Replay ÚNICO de compatibilidad (spec 2026-07-03): recalcula alumno_nodo.puntaje
 // con el motor ELO-lite sobre el histórico completo del chico en el nodo. Los
 // estados NO se tocan (dominado es pegajoso hacia atrás). Idempotente.
+// Las filas de una misma sesión comparten created_at (insert en lote), orden
+// interno no reconstruible; desempate por id hace el replay determinístico e
+// idempotente, margen de error acotado (script one-off de compatibilidad).
 //   SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... node scripts/replay-puntajes.mjs
 import { puntajeSesion } from '../web/lib/dominio.ts';
 
@@ -12,7 +15,7 @@ const H = { apikey: KEY, Authorization: `Bearer ${KEY}`, 'Content-Type': 'applic
 const filas = await (await fetch(`${URL}/rest/v1/alumno_nodo?select=id,alumno_id,nodo_id`, { headers: H })).json();
 for (const an of filas) {
   const resp = await (await fetch(
-    `${URL}/rest/v1/respuesta?select=correcta,reintentos,created_at,ejercicio:ejercicio_id(tipo,dificultad),sesion:sesion_id!inner(alumno_id,nodo_id)&sesion.alumno_id=eq.${an.alumno_id}&sesion.nodo_id=eq.${an.nodo_id}&order=created_at.asc`,
+    `${URL}/rest/v1/respuesta?select=correcta,reintentos,created_at,ejercicio:ejercicio_id(tipo,dificultad),sesion:sesion_id!inner(alumno_id,nodo_id)&sesion.alumno_id=eq.${an.alumno_id}&sesion.nodo_id=eq.${an.nodo_id}&order=created_at.asc,id.asc`,
     { headers: H },
   )).json();
   const cronologicas = resp.map((x) => ({ correcta: x.correcta, reintentos: x.reintentos, tipo: x.ejercicio?.tipo ?? 'reconocer', dificultad: x.ejercicio?.dificultad ?? 1 }));
