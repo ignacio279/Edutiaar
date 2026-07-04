@@ -99,3 +99,48 @@ export function resolverEstado(
 ): { estado: EstadoNodo; puntaje: number } {
   return override ? { estado: estadoManual, puntaje: calculo.puntaje } : calculo;
 }
+
+// ── Estados derivados del puntaje (DP2) ───────────────────────────────────────
+export const UMBRAL_DOMINIO = 70; // puntaje mínimo para dominar
+export const MIN_EJERCICIOS_DOMINIO = 50; // constancia: ejercicios respondidos (DP4)
+
+// Cobertura HISTÓRICA (todas las respuestas del chico en el nodo, no ventana):
+// cuántos `producir` y cuántos difíciles acertó al primer intento.
+export function coberturaHistorica(todas: RespuestaEval[]): { producir: number; dificil: number } {
+  const limpios = todas.filter(esPrimerIntento);
+  return {
+    producir: limpios.filter((r) => r.tipo === 'producir').length,
+    dificil: limpios.filter((r) => r.dificultad >= DIF_DIFICIL).length,
+  };
+}
+
+// Señal "se está trabando AHORA": las 2 últimas respuestas de la sesión fallaron
+// al primer intento. Recibe la sesión en orden cronológico.
+export function dosUltimasMal(cronologicas: RespuestaEval[]): boolean {
+  const n = cronologicas.length;
+  if (n < 2) return false;
+  return !esPrimerIntento(cronologicas[n - 1]) && !esPrimerIntento(cronologicas[n - 2]);
+}
+
+// Estado derivado del puntaje + señales. `dominado` es hito pegajoso (DP2):
+// una vez alcanzado, solo lo tocan el override docente y el decaimiento (spec aparte).
+export function calcularEstadoProgresivo(args: {
+  puntaje: number;
+  totalRespondidos: number;
+  cobertura: { producir: number; dificil: number };
+  dosUltimasMal: boolean;
+  tasaSesion: number;
+  estadoActual?: EstadoNodo;
+}): EstadoNodo {
+  const { puntaje, totalRespondidos, cobertura, estadoActual = 'no_empezado' } = args;
+  if (estadoActual === 'dominado') return 'dominado'; // pegajoso
+  if (totalRespondidos === 0) return 'no_empezado';
+  const domina =
+    puntaje >= UMBRAL_DOMINIO &&
+    totalRespondidos >= MIN_EJERCICIOS_DOMINIO &&
+    cobertura.producir >= MIN_PRODUCIR &&
+    cobertura.dificil >= 1;
+  if (domina) return 'dominado';
+  if (args.dosUltimasMal || args.tasaSesion < PISO_REFORZAR) return 'a_reforzar';
+  return 'en_construccion';
+}

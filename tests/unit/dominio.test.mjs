@@ -1,7 +1,7 @@
 // Tests unitarios de la regla de dominio (web/lib/dominio.ts). `npm test`.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { calcularEstado, puntajeNodo, resolverEstado } from '../../web/lib/dominio.ts';
+import { calcularEstado, puntajeNodo, resolverEstado, coberturaHistorica, dosUltimasMal, calcularEstadoProgresivo, UMBRAL_DOMINIO, MIN_EJERCICIOS_DOMINIO } from '../../web/lib/dominio.ts';
 
 // helper: respuesta (correcta, reintentos, tipo, dificultad)
 const r = (correcta, reintentos, tipo, dificultad) => ({ correcta, reintentos, tipo, dificultad });
@@ -114,6 +114,50 @@ test('puntajeSesion: replay determinístico en orden cronológico, redondeo a 2 
   const paso3 = aplicarRespuesta(paso2, rs[2]);
   assert.equal(puntajeSesion(0, rs), Math.round(paso3 * 100) / 100);
   assert.equal(puntajeSesion(0, []), 0); // sin respuestas, no se mueve
+});
+
+const base = { puntaje: 75, totalRespondidos: 55, cobertura: { producir: 3, dificil: 2 }, dosUltimasMal: false, tasaSesion: 0.9, estadoActual: 'en_construccion' };
+
+test('estado: dominado con puntaje, cobertura y 50+ ejercicios', () => {
+  assert.equal(calcularEstadoProgresivo(base), 'dominado');
+});
+
+test('estado: sin 50 ejercicios NO domina aunque sobre puntaje', () => {
+  assert.equal(calcularEstadoProgresivo({ ...base, totalRespondidos: 49 }), 'en_construccion');
+  assert.equal(calcularEstadoProgresivo({ ...base, totalRespondidos: MIN_EJERCICIOS_DOMINIO }), 'dominado');
+});
+
+test('estado: sin cobertura NO domina (2 producir y 1 difícil al primer intento)', () => {
+  assert.equal(calcularEstadoProgresivo({ ...base, cobertura: { producir: 1, dificil: 2 } }), 'en_construccion');
+  assert.equal(calcularEstadoProgresivo({ ...base, cobertura: { producir: 2, dificil: 0 } }), 'en_construccion');
+});
+
+test('estado: bajo el umbral de puntaje NO domina', () => {
+  assert.equal(calcularEstadoProgresivo({ ...base, puntaje: UMBRAL_DOMINIO - 1 }), 'en_construccion');
+});
+
+test('estado: dominado es pegajoso — no baja aunque el puntaje caiga', () => {
+  assert.equal(calcularEstadoProgresivo({ ...base, puntaje: 20, estadoActual: 'dominado', dosUltimasMal: true, tasaSesion: 0.1 }), 'dominado');
+});
+
+test('estado: a_reforzar por 2 fallos seguidos o sesión floja (si no domina)', () => {
+  assert.equal(calcularEstadoProgresivo({ ...base, puntaje: 40, dosUltimasMal: true }), 'a_reforzar');
+  assert.equal(calcularEstadoProgresivo({ ...base, puntaje: 40, tasaSesion: 0.4 }), 'a_reforzar');
+});
+
+test('estado: sin respuestas queda no_empezado', () => {
+  assert.equal(calcularEstadoProgresivo({ ...base, totalRespondidos: 0, estadoActual: 'no_empezado' }), 'no_empezado');
+});
+
+test('coberturaHistorica: cuenta solo aciertos al primer intento', () => {
+  const todas = [ft('producir', 3), ft('producir', 1), fail('producir', 3), ft('reconocer', 3)];
+  assert.deepEqual(coberturaHistorica(todas), { producir: 2, dificil: 2 });
+});
+
+test('dosUltimasMal: mira las 2 últimas cronológicas', () => {
+  assert.equal(dosUltimasMal([ft('reconocer', 1), fail('reconocer', 1), fail('reconocer', 1)]), true);
+  assert.equal(dosUltimasMal([fail('reconocer', 1), fail('reconocer', 1), ft('reconocer', 1)]), false);
+  assert.equal(dosUltimasMal([fail('reconocer', 1)]), false);
 });
 
 test('pesoTipo: producir 2, ordenar 1.5, resto 1', () => {
