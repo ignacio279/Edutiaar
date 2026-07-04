@@ -14,6 +14,43 @@ export const DIF_DIFICIL = 3; // dificultad considerada "difícil"
 export const PISO_REFORZAR = 0.5; // sesión por debajo de esto => a_reforzar
 
 const esPrimerIntento = (r: RespuestaEval) => r.correcta && r.reintentos === 0;
+
+// ── Motor ELO-lite (spec 2026-07-03-puntaje-progresivo) ───────────────────────
+// El puntaje del nodo (0..100) se mueve con cada PRIMER intento: acertar algo
+// más difícil que tu nivel suma mucho; acertar lo fácil casi nada; bajar resta
+// la mitad (asimetría pro-motivación, DP3). Determinístico, sin IA (DP1).
+
+export const K_ELO = 8; // paso base
+export const ESCALA_ELO = 40; // sensibilidad de lo "esperado"
+export const DIVISOR_BAJA = 2; // bajar cuesta la mitad que subir
+
+// Peso por tipo (producir y ordenar valen más). La dificultad NO entra acá:
+// ya entra vía `esperado` (si no, contaría doble).
+export function pesoTipo(tipo: string): number {
+  return tipo === 'producir' ? 2 : tipo === 'ordenar' ? 1.5 : 1;
+}
+
+// Probabilidad esperada de acertar al primer intento, según puntaje vs dificultad.
+export function esperado(puntaje: number, dificultad: number): number {
+  const nivel = dificultad * 25; // 1→25, 2→50, 3→75
+  return 1 / (1 + Math.pow(10, (nivel - puntaje) / ESCALA_ELO));
+}
+
+// Un paso del motor. Solo el primer intento cuenta: acierto limpio = 1, el resto = 0
+// (si acertó con reintentos, el primer intento igual falló).
+export function aplicarRespuesta(puntaje: number, r: RespuestaEval): number {
+  const resultado = esPrimerIntento(r) ? 1 : 0;
+  let delta = K_ELO * pesoTipo(r.tipo) * (resultado - esperado(puntaje, r.dificultad));
+  if (delta < 0) delta = delta / DIVISOR_BAJA;
+  return Math.min(100, Math.max(0, puntaje + delta));
+}
+
+// Replay de una sesión completa (en orden cronológico) sobre el puntaje persistido.
+export function puntajeSesion(inicial: number, cronologicas: RespuestaEval[]): number {
+  const fin = cronologicas.reduce((p, r) => aplicarRespuesta(p, r), inicial);
+  return Math.round(fin * 100) / 100;
+}
+
 // Peso para el puntaje: producir y difícil valen más (matan el adivinar).
 const peso = (r: RespuestaEval) => r.dificultad * (r.tipo === 'producir' ? 2 : r.tipo === 'ordenar' ? 1.5 : 1);
 
