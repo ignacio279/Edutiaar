@@ -122,19 +122,26 @@ export default function Autoria() {
   async function publicar() {
     if (busy || !solMateriaId) return;
     setBusy(true);
-    const { error } = await supabase.from('sol_materia').update({ estado: 'publicado' }).eq('id', solMateriaId);
-    if (error) { setBusy(false); toast('No se pudo publicar'); return; }
-    setEstado('publicado');
-    toast('¡Publicado! SOL está preparando los ejercicios… 🌱');
-    const { data: { session } } = await supabase.auth.getSession();
-    const r = await fetch(`${URL}/functions/v1/generador-ejercicios`, {
-      method: 'POST',
-      headers: { apikey: ANON, Authorization: `Bearer ${session?.access_token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ programa_id: programaId, mock: true }),
-    });
-    const j = await r.json().catch(() => ({}));
-    setBusy(false);
-    toast(r.ok ? `¡Listo! SOL preparó ${j.generados ?? 0} ejercicios.` : 'La materia quedó publicada, pero los ejercicios no salieron. Probá publicar de nuevo.');
+    try {
+      const { error } = await supabase.from('sol_materia').update({ estado: 'publicado' }).eq('id', solMateriaId);
+      if (error) { toast('No se pudo publicar'); return; }
+      setEstado('publicado');
+      toast('¡Publicado! SOL está preparando los ejercicios… 🌱');
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const r = await fetch(`${URL}/functions/v1/generador-ejercicios`, {
+          method: 'POST',
+          headers: { apikey: ANON, Authorization: `Bearer ${session?.access_token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ programa_id: programaId, mock: true }),
+        });
+        const j = await r.json().catch(() => ({}));
+        toast(r.ok ? `¡Listo! SOL preparó ${j.generados ?? 0} ejercicios.` : 'La materia quedó publicada, pero los ejercicios no salieron. Probá publicar de nuevo.');
+      } catch {
+        toast('La materia quedó publicada, pero los ejercicios no salieron. Probá publicar de nuevo.');
+      }
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function signOut() {
