@@ -41,15 +41,20 @@
 Tablas server-only (`aula_secreto`, `alumno_cred`, `intento_login`) con RLS y **sin policies** + RPCs con `EXECUTE` revocado a `anon`/`authenticated` (solo `service_role`). La docente sigue con email+contraseña directo.
 **Consecuencias:** fuerza bruta inviable (gateada por secreto de aula + lockout); no se puede saltear la Edge Function ni pegarle directo a Auth con un email adivinable. Introduce el concepto `aula` (estructurado para multi-escuela en Fase 2) y la primera Edge Function (que se reutiliza para SOL en Etapa 2). El secreto de aula vive en `localStorage` del device (secreto compartido de aula, no por chico). Hardening futuro: throttle por-aula al adivinar el secreto.
 
+## ADR-008 — Puntaje progresivo (ELO-lite) reemplaza la regla de ventana
+**Contexto:** la regla de dominio de la Etapa 3 (`calcularEstado`/`puntajeNodo`, ventana de las últimas respuestas) resolvía OPEN-1, pero saltaba de estado según una foto reciente y no dejaba margen para "cuánto le costó" ni para nunca repetir ejercicios a medida que el pool crece. Spec completa: `docs/superpowers/specs/2026-07-03-puntaje-progresivo-y-generacion-por-banda.md`.
+**Decisión:** cada `alumno_nodo` acumula un **puntaje 0→100** con un motor ELO-lite determinístico (`web/lib/dominio.ts`), sin IA. Los estados se derivan del puntaje + señales de conducta; `dominado` es un **hito pegajoso**. Locks de la spec (DP1-DP7): **DP1** puntaje determinístico en la app, sin IA; **DP2** estados derivados, `dominado` pegajoso (solo lo tocan el override docente y el decaimiento); **DP3** asimetría pro-motivación (bajar cuesta la mitad que subir); **DP4** dominar exige ≥ 50 ejercicios respondidos, además de puntaje y cobertura; **DP5** un chico nunca repite un ejercicio ya respondido (el pool sigue compartido entre chicos); **DP6** pool compartido con reposición automática batcheada y tope de uso diario; **DP7** generación por banda de grado (1°-2° / 3°-4° / 5°-7°), no por edad — evita datos personales nuevos del menor.
+**Consecuencias:** la regla de ventana anterior (`calcularEstado`, `puntajeNodo`, `VENTANA`, `MIN_DOMINIO`) queda **retirada**; `resolverEstado` (override docente) y la spec de decaimiento temporal siguen intactas y operan igual sobre el puntaje/estado nuevo. El mapa del alumno gana un gradiente por puntaje. Resuelve **OPEN-1** y **OPEN-3** (la reposición fija cuándo se regenera el pool); cierra el ítem correspondiente de Fase 2.
+
 ---
 
 ## Preguntas abiertas (a decidir)
 
-### OPEN-1 — Regla de "dominio" de un nodo
-¿Qué hace que un nodo pase de `en_construccion` a `dominado`? ¿Cantidad de aciertos seguidos, un puntaje, un umbral por dificultad? Define toda la lógica de la Etapa 3. **A definir con el cliente / la docente antes de la Etapa 3.**
+### OPEN-1 (resuelta) — Regla de "dominio" de un nodo
+¿Qué hace que un nodo pase de `en_construccion` a `dominado`? Definida primero como regla de ventana (`2026-06-28-evaluacion-y-dominio-de-nodos.md`) y evolucionada a puntaje progresivo → **ADR-008**. Las constantes exactas (umbral 70, mínimo 50 ejercicios, K=8) siguen a validar con la docente, pero la decisión de diseño está cerrada.
 
 ### OPEN-2 — Cómo se "carga" el programa en el MVP
 En el MVP el programa de Lengua lo carga el equipo (datos semilla), no la docente. Falta definir el formato exacto del texto que se le pasa a Claude para que lo divida bien en nodos.
 
-### OPEN-3 — Frecuencia de regeneración del pool
-Cada cuánto se generan ejercicios nuevos por nodo (para que no se repitan siempre los mismos) sin disparar el costo.
+### OPEN-3 (resuelta) — Frecuencia de regeneración del pool
+Cada cuánto se generan ejercicios nuevos por nodo (para que no se repitan siempre los mismos) sin disparar el costo. → **ADR-008**: pool inicial estratificado al publicar + reposición automática batcheada cuando a un chico le queda poco sin ver, con tope diario.
