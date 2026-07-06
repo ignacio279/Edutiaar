@@ -86,6 +86,19 @@ function Autoria() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         setNodos(((ns as any[]) || []).map((n) => ({ id: n.id, nombre: n.nombre, orden: n.orden, descripcion: n.descripcion ?? '' })));
         setModo('editar');
+      } else {
+        // Sin ?sol=: arranque limpio para crear. Necesario porque al navegar de
+        // ?sol=X a /docente/autoria el componente NO se remonta (misma ruta,
+        // cambia solo la query) y el estado del modo editar quedaría vivo.
+        setModo('crear');
+        setSolMateriaId(null);
+        setProgramaId(null);
+        setNodos([]);
+        setEstado('borrador');
+        setMateria('Lengua');
+        setGrado(3);
+        setContenido('');
+        setPdf(null);
       }
       setLoaded(true);
     })();
