@@ -121,7 +121,7 @@ function PracticarInner() {
     const tk = ++celTok.current;
     setTimeout(() => { if (celTok.current === tk) setCelebrate(false); }, 1500);
   }
-  // Chat libre con SOL (efímero, vía Edge Function sol-chat; mock por ahora).
+  // Chat libre con SOL (efímero, vía Edge Function sol-chat; Claude real con ANTHROPIC_API_KEY seteada).
   async function enviarChat() {
     const t = chatInput.trim();
     if (!t || chatCargando || fin) return;
@@ -139,7 +139,7 @@ function PracticarInner() {
       .filter((m) => m.content);
     const ejAct = ejercicios?.[idx];
     const contexto = { materia, nodoNombre, ejercicio: ejAct ? { enunciado: ejAct.enunciado, opciones: ejAct.opciones, correcta: ejAct.correcta } : undefined };
-    const { data, error } = await supabase.functions.invoke('sol-chat', { body: { mensajes, contexto, esAyuda: false, mock: true } });
+    const { data, error } = await supabase.functions.invoke('sol-chat', { body: { mensajes, contexto, esAyuda: false } });
     setChatCargando(false);
     if (error || !data?.texto) {
       toast('SOL no pudo responder ahora 🙈 Probá de nuevo.');
@@ -182,7 +182,7 @@ function PracticarInner() {
         { onConflict: 'alumno_id,nodo_id' },
       );
       setNuevoEstado(res.estado);
-      supabase.functions.invoke('evaluar-sesion', { body: { sesion_id: sesId, mock: true } }).catch(() => {});
+      supabase.functions.invoke('evaluar-sesion', { body: { sesion_id: sesId } }).catch(() => {});
     }
     setGuardando(false);
   }

@@ -1,6 +1,6 @@
 'use client';
 // Autoría docente (Fase 2 / SP-2): la seño sube/pega el contenido de una materia,
-// SOL lo divide en nodos (modo mock por ahora), ella los revisa/edita y publica.
+// SOL lo divide en nodos (Claude real con ANTHROPIC_API_KEY seteada), ella los revisa/edita y publica.
 // Llama a la Edge Function dividir-nodos con el JWT del docente (no la anon key).
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -66,7 +66,7 @@ export default function Autoria() {
     const r = await fetch(`${URL}/functions/v1/dividir-nodos`, {
       method: 'POST',
       headers: { apikey: ANON, Authorization: `Bearer ${session?.access_token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ materia_nombre: materia.trim(), grado: Number(grado), contenido, mock: true }),
+      body: JSON.stringify({ materia_nombre: materia.trim(), grado: Number(grado), contenido }),
     });
     const j = await r.json().catch(() => ({}));
     setBusy(false);
