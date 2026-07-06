@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="EDUTIA — Educación sin fronteras ni señal. La primera plataforma que lleva educación primaria completa a escuelas rurales de LATAM, desde Ushuaia hasta México.">
+<meta name="author" content="Jorge Alberto Juárez">
+<meta property="og:title" content="EDUTIA — Educación sin fronteras ni señal">
+<meta property="og:description" content="La primera plataforma educativa satelital para escuelas rurales de LATAM. Con LUNA, SOL y TERRA como copilotos IA.">
+<meta property="og:url" content="https://edutia.ar">
+<title>EDUTIA — Educación sin fronteras ni señal</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--verde:#00C896;--azul:#0057FF;--naranja:#FF6B1A;--amarillo:#FFD60A;--rosa:#FF4560;--noche:#060C1A;--card:#111D35;--cardlight:#162240;--text:#E8EEF8;--muted:#6B80A8;--border:rgba(255,255,255,0.07)}
+body{background:var(--noche);color:var(--text);font-family:'DM Sans',sans-serif;overflow-x:hidden;cursor:none}
+#stars-canvas{position:fixed;inset:0;z-index:0;pointer-events:none}
+.cursor-dot{width:8px;height:8px;border-radius:50%;background:var(--verde);position:fixed;top:0;left:0;z-index:9999;pointer-events:none;box-shadow:0 0 12px rgba(0,200,150,0.8)}
+.cursor-ring{width:32px;height:32px;border-radius:50%;border:1px solid rgba(0,200,150,0.4);position:fixed;top:0;left:0;z-index:9998;pointer-events:none;transition:width 0.2s,height 0.2s,border-color 0.2s}
+.sat{position:fixed;font-size:20px;z-index:5;pointer-events:none;animation:satFly 28s linear infinite;filter:drop-shadow(0 0 8px rgba(0,87,255,0.7))}
+@keyframes satFly{0%{top:8%;left:-5%;opacity:0}5%{opacity:1}95%{opacity:1}100%{top:55%;left:105%;opacity:0}}
+.sat2{animation:satFly2 36s linear infinite 12s}
+@keyframes satFly2{0%{top:20%;left:-5%;opacity:0}5%{opacity:1}95%{opacity:1}100%{top:70%;left:105%;opacity:0}}
+.signal-particle{position:fixed;border-radius:50%;pointer-events:none;z-index:4;animation:signalFloat linear infinite}
+@keyframes signalFloat{0%{transform:translateY(100vh) scale(0);opacity:0}10%{opacity:0.5}90%{opacity:0.15}100%{transform:translateY(-100px) scale(1.5);opacity:0}}
+nav{position:fixed;top:0;left:0;right:0;z-index:200;background:rgba(6,12,26,0.85);backdrop-filter:blur(16px);border-bottom:1px solid var(--border);padding:0 28px;height:56px;display:flex;align-items:center;justify-content:space-between}
+.nav-logo{font-family:'Syne',sans-serif;font-weight:800;font-size:20px;letter-spacing:-0.03em;cursor:pointer;display:flex;align-items:baseline;gap:1px}
+.nav-logo .edu{color:#fff}.nav-logo .tia{color:var(--verde);text-shadow:0 0 20px rgba(0,200,150,0.4)}
+.ndot{width:6px;height:6px;border-radius:50%;background:var(--naranja);margin-left:2px;margin-bottom:3px;display:inline-block;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.4;transform:scale(1.5)}}
+.nav-links{display:flex;gap:24px;list-style:none}
+.nav-links a{font-size:12px;color:var(--muted);text-decoration:none;transition:color 0.2s;cursor:pointer}
+.nav-links a:hover{color:var(--text)}
+.nav-cta{background:var(--verde);color:var(--noche);padding:7px 18px;border-radius:100px;font-size:12px;font-weight:600;border:none;cursor:pointer;transition:transform 0.2s,box-shadow 0.2s}
+.nav-cta:hover{transform:translateY(-2px);box-shadow:0 6px 24px rgba(0,200,150,0.4)}
+.page{display:none;min-height:100vh;position:relative;z-index:10}
+.page.active{display:block}
+.hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:80px 24px 60px;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(0,87,255,0.14) 0%,transparent 70%),radial-gradient(ellipse 50% 40% at 15% 85%,rgba(0,200,150,0.1) 0%,transparent 60%),radial-gradient(ellipse 40% 30% at 85% 70%,rgba(255,107,26,0.09) 0%,transparent 60%);pointer-events:none}
+.badge{display:inline-flex;align-items:center;gap:8px;background:rgba(0,200,150,0.1);border:1px solid rgba(0,200,150,0.25);border-radius:100px;padding:6px 16px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:var(--verde);margin-bottom:28px;opacity:0;animation:fadeUp 0.7s 0.2s ease forwards}
+.bdot{width:5px;height:5px;border-radius:50%;background:var(--verde);animation:pulse 2s infinite}
+.hero-brand{font-family:'Syne',sans-serif;font-size:clamp(64px,14vw,140px);font-weight:800;line-height:1;letter-spacing:-0.04em;margin-bottom:4px;opacity:0;animation:brandIn 1s 0.3s cubic-bezier(0.22,1,0.36,1) forwards}
+.hero-brand .edu{color:#fff}.hero-brand .tia{color:var(--verde);text-shadow:0 0 80px rgba(0,200,150,0.5)}
+.hero-main-tag{font-family:'Syne',sans-serif;font-size:clamp(20px,3.8vw,38px);font-weight:700;line-height:1.15;letter-spacing:-0.02em;margin-bottom:16px}
+.tag-sat{display:block;color:#FFFFFF;opacity:0;animation:slideR 0.9s 0.65s cubic-bezier(0.22,1,0.36,1) forwards}
+.tag-sem{display:block;color:var(--verde);text-shadow:0 0 60px rgba(0,200,150,0.45);opacity:0;animation:slideR 0.9s 0.85s cubic-bezier(0.22,1,0.36,1) forwards}
+.hdivider{width:48px;height:2px;background:linear-gradient(90deg,var(--verde),transparent);border-radius:2px;margin:0 auto 18px;opacity:0;animation:fadeUp 0.7s 1s ease forwards}
+@keyframes brandIn{from{opacity:0;transform:scale(0.85)}to{opacity:1;transform:scale(1)}}
+.hero-sub{font-family:'Syne',sans-serif;font-size:clamp(16px,3vw,28px);font-weight:600;line-height:1.1;letter-spacing:-0.02em;margin-bottom:6px}
+.lp{display:block;color:#fff;opacity:0;animation:slideR 0.8s 1.1s cubic-bezier(0.22,1,0.36,1) forwards}
+.lv{display:block;color:var(--verde);text-shadow:0 0 60px rgba(0,200,150,0.4);opacity:0;animation:slideR 0.8s 1.25s cubic-bezier(0.22,1,0.36,1) forwards}
+.ln{display:block;color:var(--naranja);text-shadow:0 0 60px rgba(255,107,26,0.4);opacity:0;animation:slideR 0.8s 1.4s cubic-bezier(0.22,1,0.36,1) forwards}
+@keyframes slideR{from{opacity:0;transform:translateX(-40px)}to{opacity:1;transform:translateX(0)}}
+.tagline{font-size:clamp(13px,1.6vw,17px);color:var(--muted);font-weight:300;max-width:500px;line-height:1.65;margin:18px auto 36px;opacity:0;animation:fadeUp 0.7s 1.1s ease forwards}
+.hero-ctas{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-bottom:56px;opacity:0;animation:fadeUp 0.7s 1.2s ease forwards}
+.btn-p{background:var(--verde);color:var(--noche);padding:13px 28px;border-radius:100px;font-weight:600;font-size:14px;border:none;cursor:pointer;transition:transform 0.2s,box-shadow 0.2s;position:relative;overflow:hidden}
+.btn-p:hover{transform:translateY(-3px);box-shadow:0 10px 36px rgba(0,200,150,0.4)}
+.btn-o{background:transparent;border:1px solid rgba(255,255,255,0.18);color:var(--text);padding:13px 28px;border-radius:100px;font-size:14px;cursor:pointer;transition:all 0.2s}
+.btn-o:hover{background:rgba(255,255,255,0.05);border-color:rgba(255,255,255,0.4);transform:translateY(-2px)}
+.stat-bar{display:flex;flex-wrap:wrap;border:1px solid var(--border);border-radius:16px;overflow:hidden;max-width:700px;width:100%;opacity:0;animation:fadeUp 0.7s 1.4s ease forwards;background:rgba(255,255,255,0.015)}
+.stat{flex:1;min-width:130px;padding:20px 16px;text-align:center;border-right:1px solid var(--border);transition:background 0.3s}
+.stat:hover{background:rgba(255,255,255,0.04)}.stat:last-child{border-right:none}
+.stat .num{font-family:'Syne',sans-serif;font-size:26px;font-weight:700;color:var(--verde);display:block;margin-bottom:4px}
+.stat .lbl{font-size:10px;color:var(--muted);letter-spacing:0.05em;text-transform:uppercase;line-height:1.4}
+.sec{padding:72px 24px;max-width:900px;margin:0 auto;position:relative;z-index:10}
+.sec-label{font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:var(--verde);margin-bottom:12px}
+.sec-title{font-family:'Syne',sans-serif;font-size:clamp(26px,4vw,42px);font-weight:700;line-height:1.05;letter-spacing:-0.02em;margin-bottom:14px}
+.sec-sub{color:var(--muted);font-size:15px;line-height:1.65;max-width:540px;margin-bottom:40px}
+.reveal{opacity:0;transform:translateY(28px);transition:opacity 0.7s ease,transform 0.7s ease}
+.reveal.visible{opacity:1;transform:translateY(0)}
+.av-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+.av-card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:26px 22px;transition:transform 0.3s cubic-bezier(0.22,1,0.36,1),border-color 0.3s,box-shadow 0.3s;cursor:pointer;position:relative;overflow:hidden}
+.av-card::after{content:'';position:absolute;inset:0;border-radius:20px;opacity:0;transition:opacity 0.4s}
+.av-card.luna::after{background:radial-gradient(circle at 50% 0%,rgba(168,85,247,0.1),transparent 70%)}
+.av-card.sol::after{background:radial-gradient(circle at 50% 0%,rgba(255,214,10,0.08),transparent 70%)}
+.av-card.terra::after{background:radial-gradient(circle at 50% 0%,rgba(0,200,150,0.08),transparent 70%)}
+.av-card:hover{transform:translateY(-5px) scale(1.01)}.av-card:hover::after{opacity:1}
+.luna:hover{border-color:rgba(168,85,247,0.45);box-shadow:0 16px 48px rgba(168,85,247,0.15)}
+.sol:hover{border-color:rgba(255,214,10,0.35);box-shadow:0 16px 48px rgba(255,214,10,0.12)}
+.terra:hover{border-color:rgba(0,200,150,0.35);box-shadow:0 16px 48px rgba(0,200,150,0.12)}
+.av-icon{width:52px;height:52px;border-radius:15px;display:flex;align-items:center;justify-content:center;font-size:24px;margin-bottom:15px;transition:transform 0.3s}
+.av-card:hover .av-icon{transform:scale(1.15) rotate(-5deg)}
+.luna .av-icon{background:rgba(168,85,247,0.1)}.sol .av-icon{background:rgba(255,214,10,0.08)}.terra .av-icon{background:rgba(0,200,150,0.08)}
+.av-name{font-family:'Syne',sans-serif;font-size:22px;font-weight:700;margin-bottom:3px}
+.luna .av-name{color:#A855F7}.sol .av-name{color:var(--amarillo)}.terra .av-name{color:var(--verde)}
+.av-role{font-size:10px;text-transform:uppercase;letter-spacing:0.09em;color:var(--muted);margin-bottom:12px}
+.av-desc{font-size:13px;color:#8FA0C0;line-height:1.65}
+.av-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:13px}
+.tag{font-size:10px;padding:3px 9px;border-radius:100px;background:rgba(255,255,255,0.04);color:var(--muted);border:1px solid rgba(255,255,255,0.07)}
+.mod-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
+.mod{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:22px 18px;transition:all 0.3s cubic-bezier(0.22,1,0.36,1);position:relative;overflow:hidden}
+.mod::before{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--verde),var(--azul));transform:scaleX(0);transition:transform 0.3s;transform-origin:left}
+.mod:hover{transform:translateY(-4px);border-color:rgba(255,255,255,0.12);background:var(--cardlight)}.mod:hover::before{transform:scaleX(1)}
+.mod-icon{font-size:22px;margin-bottom:12px;display:block;transition:transform 0.3s}.mod:hover .mod-icon{transform:scale(1.2) rotate(5deg)}
+.mod-title{font-family:'Syne',sans-serif;font-size:14px;font-weight:600;margin-bottom:6px}
+.mod-desc{font-size:12px;color:var(--muted);line-height:1.55}
+.sat-box{background:linear-gradient(135deg,rgba(0,87,255,0.09),rgba(0,200,150,0.05));border:1px solid rgba(0,87,255,0.22);border-radius:20px;padding:32px;display:flex;align-items:flex-start;gap:18px;margin-top:28px}
+.sat-icon{font-size:36px;flex-shrink:0;margin-top:2px;animation:satbob 4s ease-in-out infinite}
+@keyframes satbob{0%,100%{transform:translateY(0) rotate(-5deg)}50%{transform:translateY(-7px) rotate(5deg)}}
+.sat-title{font-family:'Syne',sans-serif;font-size:17px;font-weight:700;margin-bottom:7px}
+.sat-desc{font-size:13px;color:var(--muted);line-height:1.65}
+.imp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:12px;margin-bottom:36px}
+.imp-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px 18px;text-align:center;transition:transform 0.3s,box-shadow 0.3s}
+.imp-card:hover{transform:translateY(-4px);box-shadow:0 14px 40px rgba(0,200,150,0.08)}
+.imp-num{font-family:'Syne',sans-serif;font-size:34px;font-weight:800;background:linear-gradient(135deg,var(--verde),var(--azul));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:6px;display:block}
+.imp-label{font-size:12px;color:var(--muted);line-height:1.45}
+.roadmap{display:flex;flex-direction:column}
+.fase{display:flex;gap:20px;padding:22px 14px;border-bottom:1px solid rgba(255,255,255,0.05);transition:background 0.2s;border-radius:10px}
+.fase:hover{background:rgba(255,255,255,0.02)}.fase:last-child{border-bottom:none}
+.fase-num{font-family:'Syne',sans-serif;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;min-width:52px;padding-top:3px}
+.fase-title{font-family:'Syne',sans-serif;font-size:16px;font-weight:600;margin-bottom:5px}
+.fase-desc{font-size:13px;color:var(--muted);line-height:1.55}
+.fase-geo{display:inline-block;margin-top:8px;font-size:11px;padding:3px 11px;border-radius:100px;background:rgba(255,255,255,0.04);color:var(--muted);border:1px solid rgba(255,255,255,0.07)}
+.sp-section{background:linear-gradient(135deg,rgba(255,107,26,0.06),rgba(0,200,150,0.04));border:1px solid rgba(255,107,26,0.16);border-radius:24px;padding:48px 36px;text-align:center}
+.sp-section h2{font-family:'Syne',sans-serif;font-size:clamp(22px,3.5vw,34px);font-weight:800;letter-spacing:-0.02em;margin-bottom:12px}
+.sp-section p{color:var(--muted);font-size:15px;max-width:500px;margin:0 auto 28px;line-height:1.65}
+.sp-logos{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:28px 0}
+.sp-pill{padding:9px 18px;border-radius:100px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);font-size:13px;font-weight:500;color:var(--muted);transition:all 0.25s;cursor:default}
+.sp-pill:hover{background:rgba(255,255,255,0.08);color:var(--text);transform:translateY(-2px)}
+.sp-pill.hl{background:rgba(0,200,150,0.09);border-color:rgba(0,200,150,0.3);color:var(--verde)}
+.contact-box{margin-top:32px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:16px;padding:24px 28px;display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:center}
+.c-item{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--muted)}
+.c-icon{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:15px;background:rgba(0,200,150,0.09);flex-shrink:0}
+.c-item a{color:var(--verde);text-decoration:none;font-weight:500}
+.c-sub{font-size:10px;color:var(--muted);opacity:0.6;display:block;margin-top:1px}
+.c-div{width:1px;height:32px;background:var(--border)}
+.eco-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(0,87,255,0.07);border:1px solid rgba(0,87,255,0.18);border-radius:100px;padding:7px 16px;font-size:11px;color:#6B9FFF;margin-bottom:18px;letter-spacing:0.05em}
+.tier-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:24px 0}
+.tier-card{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:22px 18px;transition:transform 0.3s}
+.tier-card:hover{transform:translateY(-4px)}
+.tier-card.featured{border:2px solid rgba(0,87,255,0.45);box-shadow:0 0 32px rgba(0,87,255,0.1)}
+.t-badge{display:inline-block;font-size:10px;padding:3px 10px;border-radius:100px;margin-bottom:10px;font-weight:500}
+.t-badge.gold{background:rgba(255,214,10,0.12);color:#C8960A}
+.t-badge.plat{background:rgba(0,87,255,0.12);color:#4A8FE0}
+.t-badge.found{background:rgba(0,200,150,0.12);color:var(--verde)}
+.t-name{font-family:'Syne',sans-serif;font-size:15px;font-weight:600;margin-bottom:4px}
+.t-price{font-size:20px;font-weight:700;color:var(--verde);margin-bottom:12px}
+.t-price span{font-size:11px;color:var(--muted);font-weight:400}
+.t-feat{font-size:12px;color:var(--muted);margin-bottom:4px;display:flex;align-items:flex-start;gap:6px;line-height:1.5}
+.t-feat::before{content:'✓';color:var(--verde);font-size:11px;flex-shrink:0;margin-top:1px}
+.doc-page{padding:80px 24px 60px;max-width:800px;margin:0 auto}
+.doc-header{background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:16px;padding:24px 28px;margin-bottom:28px}
+.doc-title{font-family:'Syne',sans-serif;font-size:26px;font-weight:700;margin-bottom:6px}
+.doc-meta{font-size:12px;color:var(--muted);display:flex;flex-wrap:wrap;gap:16px}
+.doc-sec{margin-bottom:24px}
+.doc-sec h3{font-size:14px;font-weight:500;margin-bottom:8px;color:var(--text);border-bottom:0.5px solid var(--border);padding-bottom:6px}
+.doc-sec p,.doc-sec li{font-size:13px;color:var(--muted);line-height:1.75;margin-bottom:5px}
+.doc-sec ul{padding-left:1.2rem}
+.doc-highlight{background:rgba(0,87,255,0.07);border:1px solid rgba(0,87,255,0.18);border-radius:12px;padding:16px;margin:16px 0}
+.doc-highlight p{font-size:13px;color:#6B9FFF;margin:0;line-height:1.6}
+.doc-contact{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);margin-bottom:5px}
+.doc-contact strong{color:var(--text);min-width:110px}
+.p-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:24px}
+.p-stat{background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center}
+.p-num{font-family:'Syne',sans-serif;font-size:22px;font-weight:700;color:var(--verde);display:block;margin-bottom:3px}
+.p-lbl{font-size:10px;color:var(--muted);line-height:1.4}
+.p-cta{background:rgba(0,200,150,0.08);border:1px solid rgba(0,200,150,0.25);border-radius:16px;padding:20px 24px;text-align:center;margin-top:24px}
+.p-cta p{font-size:13px;color:var(--verde);margin-bottom:10px}
+.p-cta a{display:inline-block;padding:9px 20px;border-radius:100px;font-size:13px;cursor:pointer;font-weight:500;background:var(--verde);color:var(--noche);text-decoration:none;transition:transform 0.2s,box-shadow 0.2s}
+.p-cta a:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,200,150,0.35)}
+footer{border-top:1px solid var(--border);padding:40px 24px;position:relative;z-index:10;background:rgba(6,12,26,0.5)}
+.footer-inner{max-width:900px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr 1fr;gap:32px}
+@media(max-width:600px){.footer-inner{grid-template-columns:1fr}.nav-links{display:none}}
+.f-brand{font-family:'Syne',sans-serif;font-weight:800;font-size:22px;letter-spacing:-0.03em;margin-bottom:8px}
+.f-brand .edu{color:#fff}.f-brand .tia{color:var(--verde)}
+.f-desc{font-size:12px;color:var(--muted);line-height:1.65}
+.f-col h4{font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:12px;font-weight:500}
+.f-link{display:block;font-size:13px;color:var(--muted);text-decoration:none;margin-bottom:7px;transition:color 0.2s;cursor:pointer}
+.f-link:hover{color:var(--verde)}
+.f-bottom{max-width:900px;margin:24px auto 0;padding-top:20px;border-top:1px solid var(--border);display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;font-size:11px;color:var(--muted)}
+.f-legal{display:flex;gap:16px;flex-wrap:wrap}
+.f-legal a{color:var(--muted);text-decoration:none;cursor:pointer;transition:color 0.2s}
+.f-legal a:hover{color:var(--verde)}
+@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+@keyframes ripple{0%{transform:scale(0);opacity:0.5}100%{transform:scale(4);opacity:0}}
+.ripple-el{position:absolute;border-radius:50%;background:rgba(0,200,150,0.2);animation:ripple 0.7s linear;pointer-events:none}
+</style>
+</head>
+<body>
+<canvas id="stars-canvas"></canvas>
+<div class="cursor-dot" id="cursorDot"></div>
+<div class="cursor-ring" id="cursorRing"></div>
+<div class="sat">🛰️</div><div class="sat sat2">🛰️</div>
+
+<nav>
+  <div class="nav-logo" onclick="showPage('home')"><span class="edu">EDU</span><span class="tia">TIA</span><span class="ndot"></span></div>
+  <ul class="nav-links">
+    <li><a onclick="showPage('home');setTimeout(()=>goTo('avatares'),100)">Copilotos</a></li>
+    <li><a onclick="showPage('home');setTimeout(()=>goTo('modulos'),100)">Plataforma</a></li>
+    <li><a onclick="showPage('home');setTimeout(()=>goTo('demo'),100)">Demo en vivo</a></li>
+        <li><a onclick="showPage('home');setTimeout(()=>goTo('impacto'),100)">Impacto</a></li>
+    <li><a onclick="showPage('pitch')">Sponsors</a></li>
+  </ul>
+  <button class="nav-cta" onclick="showPage('pitch')">Ser sponsor →</button>
+</nav>
+
+<!-- HOME -->
+<div class="page active" id="page-home">
+  <div class="hero">
+    <div class="badge"><span class="bdot"></span>Plataforma educativa satelital · LATAM</div>
+    <div class="hero-brand"><span class="edu">EDU</span><span class="tia">TIA</span></div>
+    <div class="hero-main-tag">
+      <span class="tag-sat">Lanzamos satélites.</span>
+      <span class="tag-sem">Sembramos escuelas.</span>
+    </div>
+    <div class="hdivider"></div>
+    <div class="hero-sub">
+      <span class="lp">Educación sin</span>
+      <span class="lv">fronteras</span>
+      <span class="ln">ni señal</span>
+    </div>
+    <p class="tagline">La primera plataforma que lleva educación primaria completa a escuelas rurales de LATAM — con LUNA, SOL y TERRA como copilotos IA — desde Ushuaia hasta México.</p>
+    <div class="hero-ctas">
+      <button class="btn-p" onclick="goTo('modulos')">Ver la plataforma →</button>
+      <button class="btn-o" onclick="showPage('pitch')">Ser sponsor</button>
+    </div>
+    <div class="stat-bar">
+      <div class="stat"><span class="num">8.4M</span><span class="lbl">niños rurales en LATAM</span></div>
+      <div class="stat"><span class="num">1°–7°</span><span class="lbl">todos los grados</span></div>
+      <div class="stat"><span class="num">7</span><span class="lbl">idiomas incluidos</span></div>
+      <div class="stat"><span class="num">100%</span><span class="lbl">offline first</span></div>
+    </div>
+  </div>
+
+  <section class="sec reveal" id="avatares">
+    <div class="eco-badge">🌐 Ecosistema EDUTIA · powered by Netia</div>
+    <p class="sec-label">Copilotos IA</p>
+    <h2 class="sec-title">Tres guías. Una misión.</h2>
+    <p class="sec-sub">Cada actor de la comunidad educativa tiene su propio copiloto de inteligencia artificial.</p>
+    <div class="av-grid">
+      <div class="av-card luna reveal"><div class="av-icon">🌙</div><div class="av-name">LUNA</div><div class="av-role">Copiloto del docente</div><div class="av-desc">Planificación áulica, alertas de rendimiento, boletines automáticos y soporte pedagógico 24/7. Para aulas plurigrado y unidocentes.</div><div class="av-tags"><span class="tag">Planificación</span><span class="tag">Boletines</span><span class="tag">Alertas</span><span class="tag">Plurigrado</span></div></div>
+      <div class="av-card sol reveal" style="transition-delay:0.1s"><div class="av-icon">☀️</div><div class="av-name">SOL</div><div class="av-role">Copiloto del alumno</div><div class="av-desc">Compañero energético y motivador para niños de 6 a 13 años. Gamificación, retos, rachas y celebración constante del esfuerzo.</div><div class="av-tags"><span class="tag">Juegos</span><span class="tag">Rachas</span><span class="tag">Misiones</span><span class="tag">Medallas</span></div></div>
+      <div class="av-card terra reveal" style="transition-delay:0.2s"><div class="av-icon">🌿</div><div class="av-name">TERRA</div><div class="av-role">Copiloto de la familia</div><div class="av-desc">Reporte semanal de evolución del hijo, acceso al boletín digital y tips para acompañar el aprendizaje desde el hogar rural.</div><div class="av-tags"><span class="tag">Reportes</span><span class="tag">WhatsApp</span><span class="tag">Evolución</span><span class="tag">Familias</span></div></div>
+    </div>
+  </section>
+
+  <section class="sec" id="modulos">
+    <p class="sec-label reveal">Plataforma completa</p>
+    <h2 class="sec-title reveal">Todo lo que una escuela necesita.</h2>
+    <p class="sec-sub reveal">Ocho módulos integrados, con o sin señal de internet.</p>
+    <div class="mod-grid">
+      <div class="mod reveal"><span class="mod-icon">📚</span><div class="mod-title">Currícula oficial</div><div class="mod-desc">Enlace dinámico con Ministerios de Educación. Contenidos actualizados automáticamente.</div></div>
+      <div class="mod reveal" style="transition-delay:0.05s"><span class="mod-icon">🎮</span><div class="mod-title">Aula interactiva</div><div class="mod-desc">Clases en video corto, actividades y experimentos con materiales del campo.</div></div>
+      <div class="mod reveal" style="transition-delay:0.1s"><span class="mod-icon">📋</span><div class="mod-title">Gestión escolar</div><div class="mod-desc">Asistencia digital, boletines automáticos, calendario y legajos de alumnos.</div></div>
+      <div class="mod reveal" style="transition-delay:0.15s"><span class="mod-icon">🏆</span><div class="mod-title">Gamificación</div><div class="mod-desc">XP, rachas, medallas, misiones semanales y torneos inter-escuelas rurales.</div></div>
+      <div class="mod reveal" style="transition-delay:0.2s"><span class="mod-icon">📡</span><div class="mod-title">Modo sin señal</div><div class="mod-desc">100% offline. Sincroniza automáticamente cuando regresa la conexión.</div></div>
+      <div class="mod reveal" style="transition-delay:0.25s"><span class="mod-icon">👨‍🏫</span><div class="mod-title">Panel del docente</div><div class="mod-desc">Semáforo de rendimiento, planificación con IA y biblioteca de recursos.</div></div>
+      <div class="mod reveal" style="transition-delay:0.3s"><span class="mod-icon">👨‍👩‍👧</span><div class="mod-title">Familia conectada</div><div class="mod-desc">App liviana para gama baja. Reportes, mensajes y talleres para padres.</div></div>
+      <div class="mod reveal" style="transition-delay:0.35s"><span class="mod-icon">🌍</span><div class="mod-title">Multilingüe</div><div class="mod-desc">Español, guaraní, quechua, mapuche, portugués. Intercultural desde el origen.</div></div>
+    </div>
+    <div class="sat-box reveal">
+      <div class="sat-icon">🛰️</div>
+      <div><div class="sat-title">La señal es la sangre que lleva oxígeno educativo</div><div class="sat-desc">EDUTIA opera sobre Starlink, 4G/LTE, Wi-Fi mesh o servidor local Raspberry Pi. Donde no llega ninguna red, funciona offline. <strong style="color:var(--text)">Ningún niño queda fuera.</strong></div></div>
+    </div>
+  </section>
+
+  <!-- DEMO EN VIVO -->
+  <section class="sec" id="demo">
+    <p class="sec-label reveal">Demo en vivo</p>
+    <h2 class="sec-title reveal">Así aprende un alumno real.<br>Escuela N°47 · Neuquén.</h2>
+    <p class="sec-sub reveal">Este es el mapa neuronal de aprendizaje de un alumno piloto de la Patagonia. Cada nodo es un concepto de Lengua. Tocá cualquier nodo para ver el análisis de SOL.</p>
+
+    <div class="reveal" style="background:var(--card);border:1px solid rgba(255,255,255,0.07);border-radius:20px;padding:20px;margin-bottom:14px">
+      <!-- ALUMNO INFO -->
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid rgba(255,255,255,0.07)">
+        <div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--verde),var(--azul));display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">📚</div>
+        <div style="flex:1">
+          <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px">Alumno piloto · 3er Grado</div>
+          <div style="font-size:11px;color:var(--muted)">Escuela N°47 · Neuquén · Patagonia</div>
+          <div style="margin-top:5px">
+            <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-bottom:3px"><span>Progreso en Lengua</span><span style="color:var(--verde)">62%</span></div>
+            <div style="height:4px;background:rgba(255,255,255,0.07);border-radius:100px;overflow:hidden"><div style="height:100%;width:62%;background:linear-gradient(90deg,var(--verde),var(--azul));border-radius:100px"></div></div>
+          </div>
+        </div>
+        <div style="text-align:right;font-size:11px;color:var(--muted)">
+          <div style="color:var(--verde);font-family:'Syne',sans-serif;font-size:18px;font-weight:700">8</div>
+          <div>conceptos<br>activos</div>
+        </div>
+      </div>
+
+      <!-- TABS -->
+      <div style="display:flex;gap:3px;background:rgba(255,255,255,0.03);border-radius:8px;padding:3px;width:fit-content;margin-bottom:14px">
+        <button onclick="showDemoTab('grafo',this)" style="padding:6px 14px;border-radius:6px;font-size:11px;cursor:pointer;color:var(--text);border:none;background:var(--cardlight);font-family:'DM Sans',sans-serif;font-weight:500" id="demoTab1">🕸️ Mapa neuronal</button>
+        <button onclick="showDemoTab('tablero',this)" style="padding:6px 14px;border-radius:6px;font-size:11px;cursor:pointer;color:var(--muted);border:none;background:transparent;font-family:'DM Sans',sans-serif" id="demoTab2">📊 Progreso</button>
+        <button onclick="showDemoTab('ejercicio',this)" style="padding:6px 14px;border-radius:6px;font-size:11px;cursor:pointer;color:var(--muted);border:none;background:transparent;font-family:'DM Sans',sans-serif" id="demoTab3">☀️ SOL</button>
+      </div>
+
+      <!-- GRAFO -->
+      <div id="demo-grafo">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Tocá cada nodo para ver el análisis de SOL. Los nodos verdes están dominados, los naranja en construcción, los rojos necesitan trabajo.</div>
+        <canvas id="demo-canvas" style="width:100%;height:300px;border-radius:10px;background:rgba(0,0,0,0.2);display:block;cursor:pointer;touch-action:none"></canvas>
+        <div style="background:linear-gradient(135deg,rgba(255,214,10,0.08),rgba(255,107,26,0.05));border:1px solid rgba(255,214,10,0.2);border-radius:12px;padding:12px;margin-top:12px;display:flex;gap:9px">
+          <div style="font-size:18px;flex-shrink:0">☀️</div>
+          <div>
+            <div style="font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:#FFD60A;margin-bottom:3px">SOL dice:</div>
+            <div style="font-size:12px;color:var(--muted);line-height:1.6" id="solDemoMsg">¡Hola! Hoy trabajamos Comprensión Lectora. ¿Arrancamos con un texto cortito sobre la Patagonia? 🌿</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TABLERO -->
+      <div id="demo-tablero" style="display:none">
+        <div id="demo-tablero-grid" style="display:flex;flex-direction:column;gap:8px"></div>
+      </div>
+
+      <!-- EJERCICIO -->
+      <div id="demo-ejercicio" style="display:none">
+        <div style="background:rgba(0,0,0,0.3);border-radius:12px;padding:14px;font-size:14px;color:var(--text);line-height:1.7;margin-bottom:12px;border-left:3px solid #FFD60A">
+          <strong style="color:#FFD60A">SOL te pregunta:</strong><br><br>
+          Leé este texto:<br><br>
+          <em style="color:var(--muted)">"En la Patagonia el viento sopla muy fuerte. Los animales buscan refugio entre las rocas. La oveja tiene lana gruesa para protegerse del frío."</em><br><br>
+          ¿Para qué le sirve la lana a la oveja?
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px" id="demoOpciones">
+          <div onclick="demoResponder(this,false)" style="background:var(--cardlight);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:12px;font-size:13px;cursor:pointer;text-align:center;transition:all 0.2s">Para comer pasto</div>
+          <div onclick="demoResponder(this,true)" style="background:var(--cardlight);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:12px;font-size:13px;cursor:pointer;text-align:center;transition:all 0.2s">Para protegerse del frío</div>
+          <div onclick="demoResponder(this,false)" style="background:var(--cardlight);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:12px;font-size:13px;cursor:pointer;text-align:center;transition:all 0.2s">Para correr más rápido</div>
+          <div onclick="demoResponder(this,false)" style="background:var(--cardlight);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:12px;font-size:13px;cursor:pointer;text-align:center;transition:all 0.2s">Para nadar en el río</div>
+        </div>
+        <div id="demoFeedback" style="display:none;border-radius:10px;padding:12px;font-size:12px;line-height:1.6"></div>
+      </div>
+    </div>
+
+    <!-- LEYENDA -->
+    <div class="reveal" style="background:var(--card);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div style="display:flex;align-items:center;gap:7px;font-size:11px;color:var(--muted)"><div style="width:8px;height:8px;border-radius:50%;background:var(--verde);flex-shrink:0"></div>Concepto dominado</div>
+      <div style="display:flex;align-items:center;gap:7px;font-size:11px;color:var(--muted)"><div style="width:8px;height:8px;border-radius:50%;background:var(--naranja);flex-shrink:0"></div>En construcción</div>
+      <div style="display:flex;align-items:center;gap:7px;font-size:11px;color:var(--muted)"><div style="width:8px;height:8px;border-radius:50%;background:var(--rosa,#FF4560);flex-shrink:0"></div>Necesita trabajo</div>
+      <div style="display:flex;align-items:center;gap:7px;font-size:11px;color:var(--muted)"><div style="width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.15);flex-shrink:0"></div>Por explorar</div>
+    </div>
+  </section>
+
+  <section class="sec" id="impacto">
+    <p class="sec-label reveal">El problema que resolvemos</p>
+    <h2 class="sec-title reveal">Millones de niños esperan esto.</h2>
+    <p class="sec-sub reveal">La brecha educativa entre ciudad y campo es uno de los mayores desafíos del siglo.</p>
+    <div class="imp-grid">
+      <div class="imp-card reveal"><span class="imp-num">8.4M</span><span class="imp-label">niños rurales sin acceso digital en LATAM</span></div>
+      <div class="imp-card reveal" style="transition-delay:0.1s"><span class="imp-num">45%</span><span class="imp-label">escuelas rurales unidocentes o plurigrado</span></div>
+      <div class="imp-card reveal" style="transition-delay:0.2s"><span class="imp-num">3x</span><span class="imp-label">brecha de aprendizaje ciudad vs campo</span></div>
+      <div class="imp-card reveal" style="transition-delay:0.3s"><span class="imp-num">$0</span><span class="imp-label">costo para alumnos, docentes y familias</span></div>
+    </div>
+    <div class="roadmap reveal">
+      <div class="fase"><div class="fase-num" style="color:var(--verde)">Fase 1</div><div><div class="fase-title">Patagonia y NOA · Argentina</div><div class="fase-desc">Piloto con 50 escuelas rurales. Kit EDUTIA: Starlink + tablet + servidor local + capacitación docente.</div><span class="fase-geo">Neuquén · Jujuy · Salta · Santa Cruz</span></div></div>
+      <div class="fase"><div class="fase-num" style="color:var(--azul)">Fase 2</div><div><div class="fase-title">Argentina nacional + Cono Sur</div><div class="fase-desc">Acuerdo con Ministerio de Educación. Expansión a Chile, Uruguay y Paraguay.</div><span class="fase-geo">Argentina · Chile · Uruguay · Paraguay</span></div></div>
+      <div class="fase"><div class="fase-num" style="color:var(--naranja)">Fase 3</div><div><div class="fase-title">LATAM + organismos multilaterales</div><div class="fase-desc">BID, UNICEF, OEI. Bolivia, Perú, Colombia, Brasil, Ecuador, México. 1 millón de alumnos.</div><span class="fase-geo">LATAM completo · 1M+ alumnos</span></div></div>
+    </div>
+  </section>
+
+  <section class="sec" id="sponsors-home">
+    <div class="sp-section reveal">
+      <h2>¿Querés ser parte de la revolución educativa?</h2>
+      <p>EDUTIA busca sponsors fundadores que crean que ningún niño debería quedarse sin educación de calidad por vivir lejos de una ciudad.</p>
+      <div class="sp-logos">
+        <span class="sp-pill hl">🛰️ Starlink / SpaceX</span>
+        <span class="sp-pill">Samsung</span><span class="sp-pill">Microsoft</span>
+        <span class="sp-pill">Google.org</span><span class="sp-pill">BID</span>
+        <span class="sp-pill">UNICEF</span><span class="sp-pill">Mercado Libre</span><span class="sp-pill">Techint</span>
+      </div>
+      <button class="btn-p" style="font-size:15px;padding:14px 36px;margin-bottom:16px" onclick="showPage('pitch')">Ver dossier de sponsors →</button>
+      <div class="contact-box">
+        <div class="c-item"><div class="c-icon">✉️</div><div><a href="/cdn-cgi/l/email-protection#14727b617a70716654717061607d753a7566"><span class="__cf_email__" data-cfemail="c6a0a9b3a8a2a3b486a3a2b3b2afa7e8a7b4">[email&#160;protected]</span></a><span class="c-sub">Consultas y sponsors</span></div></div>
+        <div class="c-div"></div>
+        <div class="c-item"><div class="c-icon">🌐</div><div><a href="https://edutia.ar">edutia.ar</a><span class="c-sub">Sitio oficial</span></div></div>
+        <div class="c-div"></div>
+        <div class="c-item"><div class="c-icon">👤</div><div><span style="color:var(--text);font-weight:500">Jorge Juárez</span><span class="c-sub">Founder · Netia</span></div></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="footer-inner">
+      <div><div class="f-brand"><span class="edu">EDU</span><span class="tia">TIA</span></div><p class="f-desc">Educación sin fronteras ni señal. Ecosistema Netia. Desde Ushuaia hasta toda América Latina.</p></div>
+      <div class="f-col"><h4>Plataforma</h4><a class="f-link" onclick="goTo('avatares')">Copilotos IA</a><a class="f-link" onclick="goTo('modulos')">Módulos</a><a class="f-link" onclick="goTo('impacto')">Impacto</a><a class="f-link" onclick="showPage('pitch')">Sponsors</a></div>
+      <div class="f-col"><h4>Legal</h4><a class="f-link" onclick="showPage('terminos')">Términos y condiciones</a><a class="f-link" onclick="showPage('privacidad')">Política de privacidad</a><a class="f-link" onclick="showPage('inversores')">Dossier inversores</a><a class="f-link" href="/cdn-cgi/l/email-protection#264049534842435466434253524f47084754"><span class="__cf_email__" data-cfemail="89efe6fce7edecfbc9ecedfcfde0e8a7e8fb">[email&#160;protected]</span></a></div>
+    </div>
+    <div class="f-bottom"><span>© 2025 EDUTIA · Jorge Alberto Juárez · DNI 16.204.682 · Ecosistema Netia</span><div class="f-legal"><a onclick="showPage('terminos')">Términos</a><a onclick="showPage('privacidad')">Privacidad</a><a onclick="showPage('pitch')">Sponsors</a><a onclick="showPage('inversores')">Inversores</a></div></div>
+  </footer>
+</div>
+
+<!-- PITCH -->
+<div class="page" id="page-pitch">
+  <div class="doc-page">
+    <div class="doc-header" style="text-align:center">
+      <div style="font-family:'Syne',sans-serif;font-size:48px;font-weight:800;letter-spacing:-0.04em;margin-bottom:6px"><span style="color:#fff">EDU</span><span style="color:var(--verde)">TIA</span></div>
+      <div style="font-size:13px;color:var(--muted)">Dossier de sponsors · Ecosistema Netia · 2025</div>
+    </div>
+    <div class="p-stats">
+      <div class="p-stat"><span class="p-num">8.4M</span><span class="p-lbl">niños rurales sin acceso digital</span></div>
+      <div class="p-stat"><span class="p-num">45%</span><span class="p-lbl">escuelas rurales unidocentes</span></div>
+      <div class="p-stat"><span class="p-num">3x</span><span class="p-lbl">brecha educativa ciudad vs campo</span></div>
+      <div class="p-stat"><span class="p-num">$0</span><span class="p-lbl">costo para alumnos y familias</span></div>
+    </div>
+    <div class="doc-sec"><h3>El problema que resolvemos</h3><p>Millones de niños latinoamericanos crecen en zonas rurales donde el Estado no llega con educación de calidad. Un solo maestro enseña 7 grados al mismo tiempo, sin internet, sin recursos, sin apoyo. EDUTIA rompe ese ciclo con tecnología satelital e inteligencia artificial al servicio de la educación rural.</p></div>
+    <div class="doc-sec">
+      <h3>Tiers de sponsorship</h3>
+      <div class="tier-grid">
+        <div class="tier-card"><div class="t-badge gold">Gold sponsor</div><div class="t-name">Aliado educativo</div><div class="t-price">USD 5.000 <span>/ año</span></div><div class="t-feat">Logo en landing page y app</div><div class="t-feat">Mención en comunicaciones</div><div class="t-feat">Reporte de impacto semestral</div><div class="t-feat">Acceso a métricas de uso</div></div>
+        <div class="tier-card featured"><div class="t-badge plat">Platinum sponsor</div><div class="t-name">Sponsor estratégico</div><div class="t-price">USD 20.000 <span>/ año</span></div><div class="t-feat">Todo lo de Gold</div><div class="t-feat">Co-branding en avatares IA</div><div class="t-feat">Presencia en kit escolar físico</div><div class="t-feat">Eventos y lanzamientos</div></div>
+        <div class="tier-card"><div class="t-badge found">Sponsor fundador</div><div class="t-name">Socio fundador</div><div class="t-price">USD 50.000 <span>/ año</span></div><div class="t-feat">Todo lo de Platinum</div><div class="t-feat">Naming en módulo propio</div><div class="t-feat">Asiento en comité asesor</div><div class="t-feat">Primera expansión regional</div></div>
+      </div>
+    </div>
+    <div class="doc-sec"><h3>Sponsors objetivo</h3><div class="sp-logos" style="justify-content:flex-start;margin:12px 0"><span class="sp-pill hl">🛰️ Starlink / SpaceX</span><span class="sp-pill hl">Google.org</span><span class="sp-pill">Microsoft LATAM</span><span class="sp-pill">Samsung Argentina</span><span class="sp-pill">BID / BID Lab</span><span class="sp-pill">UNICEF Argentina</span><span class="sp-pill">Mercado Libre</span><span class="sp-pill">Techint Group</span></div></div>
+    <div class="doc-highlight"><p>EDUTIA es un proyecto de impacto social con modelo de negocio sostenible. El 100% del financiamiento se destina al desarrollo tecnológico, dotación de kits escolares y capacitación docente.</p></div>
+    <div class="doc-sec"><h3>Contacto</h3><div class="doc-contact"><strong>Email:</strong><a href="/cdn-cgi/l/email-protection#b4d2dbc1dad0d1c6f4d1d0c1c0ddd59ad5c6" style="color:var(--verde)"><span class="__cf_email__" data-cfemail="4b2d243e252f2e390b2e2f3e3f222a652a39">[email&#160;protected]</span></a></div><div class="doc-contact"><strong>Founder:</strong>Jorge Alberto Juárez</div><div class="doc-contact"><strong>Condición fiscal:</strong>Responsable Inscripto · AFIP · Argentina</div></div>
+    <div class="p-cta"><p>¿Tu organización quiere ser parte de la revolución educativa?</p><a href="/cdn-cgi/l/email-protection#0e68617b606a6b7c4e6b6a7b7a676f206f7c317d7b6c646b6d7a335d7e61607d617c7d66677e2e4b4a5b5a474f">Contactar ahora →</a></div>
+  </div>
+  <footer><div class="f-bottom" style="max-width:800px;margin:0 auto"><span>© 2025 EDUTIA · Jorge Alberto Juárez</span><div class="f-legal"><a onclick="showPage('home')">Inicio</a><a onclick="showPage('terminos')">Términos</a><a onclick="showPage('privacidad')">Privacidad</a><a onclick="showPage('inversores')">Inversores</a></div></div></footer>
+</div>
+
+<!-- TÉRMINOS -->
+<div class="page" id="page-terminos">
+  <div class="doc-page">
+    <div class="doc-header"><div class="doc-title">Términos y condiciones de uso</div><div class="doc-meta"><span>EDUTIA · edutia.ar</span><span>Versión 1.0 · Mayo 2025</span><span>Responsable: Jorge Alberto Juárez</span></div></div>
+    <div class="doc-sec"><h3>1. Aceptación de los términos</h3><p>Al acceder y utilizar la plataforma EDUTIA, el usuario acepta quedar vinculado por los presentes Términos y Condiciones. El uso de EDUTIA por parte de menores de edad requiere supervisión y consentimiento expreso de sus padres o tutores legales.</p></div>
+    <div class="doc-sec"><h3>2. Descripción del servicio</h3><p>EDUTIA es una plataforma educativa digital destinada a alumnos de 1.° a 7.° grado de escuelas primarias rurales, docentes y familias de América Latina. Incluye contenidos educativos, herramientas de gestión escolar, copilotos de inteligencia artificial y comunicación entre actores de la comunidad educativa.</p></div>
+    <div class="doc-sec"><h3>3. Gratuidad del servicio</h3><p>El acceso a EDUTIA es completamente gratuito para alumnos, docentes y familias. En ningún caso se cobrarán cargos a usuarios individuales por el acceso a los contenidos educativos básicos.</p></div>
+    <div class="doc-sec"><h3>4. Uso aceptable</h3><ul><li>La plataforma está destinada exclusivamente a fines educativos.</li><li>Está prohibido el uso para fines comerciales no autorizados.</li><li>Los usuarios no podrán compartir contenidos inapropiados u ofensivos.</li><li>Queda prohibida la reproducción o modificación de contenidos sin autorización.</li><li>Los docentes son responsables del uso adecuado dentro de su institución.</li></ul></div>
+    <div class="doc-sec"><h3>5. Propiedad intelectual</h3><p>Todos los contenidos, marcas, logotipos, software, diseños y avatares de EDUTIA son propiedad de Jorge Alberto Juárez y del ecosistema Netia, protegidos por las leyes de propiedad intelectual de la República Argentina y tratados internacionales aplicables.</p></div>
+    <div class="doc-sec"><h3>6. Protección de menores</h3><p>EDUTIA implementa medidas especiales de protección para usuarios menores de edad. No se recopila información personal de menores sin consentimiento verificable de sus padres o tutores, en cumplimiento de la normativa argentina e internacional vigente.</p></div>
+    <div class="doc-sec"><h3>7. Limitación de responsabilidad</h3><p>EDUTIA no garantiza la disponibilidad continua del servicio en zonas con conectividad limitada. Los contenidos están alineados con los diseños curriculares ministeriales pero no reemplazan la responsabilidad pedagógica del docente.</p></div>
+    <div class="doc-sec"><h3>8. Contacto</h3><div class="doc-contact"><strong>Email:</strong><a href="/cdn-cgi/l/email-protection#65030a100b01001725000110110c044b0417" style="color:var(--verde)"><span class="__cf_email__" data-cfemail="adcbc2d8c3c9c8dfedc8c9d8d9c4cc83ccdf">[email&#160;protected]</span></a></div><div class="doc-contact"><strong>Responsable:</strong>Jorge Alberto Juárez · DNI 16.204.682</div><div class="doc-contact"><strong>Sitio web:</strong>edutia.ar</div></div>
+  </div>
+  <footer><div class="f-bottom" style="max-width:800px;margin:0 auto"><span>© 2025 EDUTIA · Jorge Alberto Juárez</span><div class="f-legal"><a onclick="showPage('home')">Inicio</a><a onclick="showPage('privacidad')">Privacidad</a><a onclick="showPage('pitch')">Sponsors</a><a onclick="showPage('inversores')">Inversores</a></div></div></footer>
+</div>
+
+<!-- PRIVACIDAD -->
+<div class="page" id="page-privacidad">
+  <div class="doc-page">
+    <div class="doc-header"><div class="doc-title">Política de privacidad</div><div class="doc-meta"><span>EDUTIA · edutia.ar</span><span>Versión 1.0 · Mayo 2025</span><span>Ley 25.326 · GDPR compatible</span></div></div>
+    <div class="doc-sec"><h3>1. Responsable del tratamiento</h3><p>El responsable del tratamiento de los datos personales es Jorge Alberto Juárez, DNI 16.204.682, contactable en <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="d4b2bba1bab0b1a694b1b0a1a0bdb5fab5a6">[email&#160;protected]</a>.</p></div>
+    <div class="doc-sec"><h3>2. Datos que recopilamos</h3><ul><li>Nombre del alumno, grado escolar e institución educativa.</li><li>Nombre y correo del docente responsable.</li><li>Nombre y contacto del padre, madre o tutor.</li><li>Datos de uso: actividades completadas, asistencia y rendimiento académico.</li><li>Preferencias de idioma y configuración de la plataforma.</li></ul></div>
+    <div class="doc-sec"><h3>3. Datos que NO recopilamos</h3><ul><li>Datos biométricos, fotografías ni videos de los alumnos.</li><li>Datos financieros ni de medios de pago.</li><li>Geolocalización precisa de los usuarios.</li><li>Información sensible según la Ley 25.326 de Argentina.</li></ul></div>
+    <div class="doc-sec"><h3>4. Protección especial de menores</h3><ul><li>Requiere consentimiento expreso del padre, madre o tutor legal.</li><li>Los datos de menores nunca se comparten con terceros con fines comerciales.</li><li>Los menores no reciben publicidad personalizada de ningún tipo.</li><li>Los datos se eliminan de forma segura ante solicitud del tutor.</li></ul></div>
+    <div class="doc-sec"><h3>5. Compartición de datos</h3><p>EDUTIA no vende ni cede datos personales a terceros. Solo se comparten con Ministerios de Educación bajo acuerdos formales, proveedores tecnológicos bajo confidencialidad, y autoridades cuando lo exija la ley.</p></div>
+    <div class="doc-sec"><h3>6. Derechos del usuario (ARCO)</h3><p>Todo usuario tiene derecho a acceder, rectificar, actualizar y suprimir sus datos. Escribir a <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="70161f051e141502301514050419115e1102">[email&#160;protected]</a> con el asunto "Derechos ARCO". Respuesta en máximo 10 días hábiles.</p></div>
+    <div class="doc-sec"><h3>7. Seguridad</h3><p>EDUTIA implementa medidas técnicas para proteger los datos contra acceso no autorizado. Los datos se almacenan con cifrado en tránsito y en reposo.</p></div>
+    <div class="doc-sec"><h3>8. Contacto</h3><div class="doc-contact"><strong>Email:</strong><a href="/cdn-cgi/l/email-protection#c2a4adb7aca6a7b082a7a6b7b6aba3eca3b0" style="color:var(--verde)"><span class="__cf_email__" data-cfemail="6e08011b000a0b1c2e0b0a1b1a070f400f1c">[email&#160;protected]</span></a></div><div class="doc-contact"><strong>Marco legal:</strong>Ley 25.326 Argentina · GDPR compatible</div></div>
+  </div>
+  <footer><div class="f-bottom" style="max-width:800px;margin:0 auto"><span>© 2025 EDUTIA · Jorge Alberto Juárez</span><div class="f-legal"><a onclick="showPage('home')">Inicio</a><a onclick="showPage('terminos')">Términos</a><a onclick="showPage('pitch')">Sponsors</a><a onclick="showPage('inversores')">Inversores</a></div></div></footer>
+</div>
+
+<!-- INVERSORES -->
+<div class="page" id="page-inversores">
+  <div class="doc-page">
+    <div class="doc-header"><div class="doc-title">Dossier para inversores y organismos</div><div class="doc-meta"><span>EDUTIA · Ronda seed · 2025</span><span>Confidencial</span></div></div>
+    <div class="doc-sec"><h3>El problema — escala y urgencia</h3><p>América Latina tiene 8.4 millones de niños en escuelas rurales sin acceso a educación digital de calidad. El 45% son unidocentes o plurigrado. La brecha de aprendizaje es tres veces mayor que el promedio OCDE para la región. Esta situación perpetúa ciclos de pobreza que ninguna política pública ha podido revertir de forma sistémica.</p></div>
+    <div class="doc-sec"><h3>La solución — EDUTIA</h3><p>Primera plataforma educativa diseñada para la realidad rural de LATAM. Opera sobre cualquier nivel de conectividad y funciona 100% offline. Tres copilotos de IA acompañan a docentes, alumnos y familias. Contenido alineado con currículas oficiales ministeriales de cada país.</p></div>
+    <div class="doc-sec"><h3>Modelo de negocio</h3><ul><li>Gratuito para alumnos, docentes y familias — siempre.</li><li>Licencias SaaS para gobiernos provinciales y nacionales.</li><li>Patrocinios corporativos con visibilidad de marca.</li><li>Financiamiento de organismos multilaterales (BID, UNICEF, OEI, Banco Mundial).</li><li>Venta de kits tecnológicos escolares (antena + tablet + servidor local).</li></ul></div>
+    <div class="doc-sec"><h3>Proyección — 3 años</h3>
+      <div class="p-stats">
+        <div class="p-stat"><span class="p-num">50</span><span class="p-lbl">escuelas piloto año 1</span></div>
+        <div class="p-stat"><span class="p-num">500</span><span class="p-lbl">escuelas año 2</span></div>
+        <div class="p-stat"><span class="p-num">5.000</span><span class="p-lbl">escuelas año 3</span></div>
+        <div class="p-stat"><span class="p-num">1M+</span><span class="p-lbl">alumnos LATAM año 3</span></div>
+      </div>
+    </div>
+    <div class="doc-sec"><h3>Equipo fundador</h3><div class="doc-contact"><strong>Founder:</strong>Jorge Alberto Juárez — educador, emprendedor, creador del ecosistema Netia</div><div class="doc-contact"><strong>Ecosistema:</strong>Netia — plataforma tecnológica deportiva y educativa con avatares IA</div><div class="doc-contact"><strong>Condición fiscal:</strong>Responsable Inscripto · AFIP · Argentina</div></div>
+    <div class="doc-sec"><h3>¿Qué buscamos?</h3><ul><li>Inversión seed para desarrollo tecnológico y piloto en 50 escuelas rurales.</li><li>Alianzas con proveedores de conectividad (Starlink, telecomunicaciones).</li><li>Acuerdos con ministerios de educación para validación curricular.</li><li>Sponsors fundadores que crean en el impacto de la educación rural.</li></ul></div>
+    <div class="doc-highlight"><p>EDUTIA no es solo una plataforma educativa. Es infraestructura social. El mismo satélite que conecta negocios puede conectar escuelas. El mismo modelo que funciona en una ciudad puede funcionar en la Patagonia, el Altiplano o el Amazonas.</p></div>
+    <div class="doc-sec"><h3>Contacto</h3><div class="doc-contact"><strong>Email:</strong><a href="/cdn-cgi/l/email-protection#2b4d445e454f4e596b4e4f5e5f424a054a59" style="color:var(--verde)"><span class="__cf_email__" data-cfemail="b9dfd6ccd7dddccbf9dcddcccdd0d897d8cb">[email&#160;protected]</span></a></div><div class="doc-contact"><strong>Responsable:</strong>Jorge Alberto Juárez</div><div class="doc-contact"><strong>Sitio:</strong>edutia.ar</div></div>
+    <div class="p-cta"><p>Para reuniones, inversión o alianzas estratégicas</p><a href="/cdn-cgi/l/email-protection#afc9c0dac1cbcaddefcacbdadbc6ce81cedd90dcdacdc5caccdb92e6c1d9cadddcc66c1cc18feaebfafbe6ee">Contactar ahora →</a></div>
+  </div>
+  <footer><div class="f-bottom" style="max-width:800px;margin:0 auto"><span>© 2025 EDUTIA · Jorge Alberto Juárez</span><div class="f-legal"><a onclick="showPage('home')">Inicio</a><a onclick="showPage('terminos')">Términos</a><a onclick="showPage('privacidad')">Privacidad</a><a onclick="showPage('pitch')">Sponsors</a></div></div></footer>
+</div>
+
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+const dot=document.getElementById('cursorDot'),ring=document.getElementById('cursorRing');
+let mx=0,my=0,rx=0,ry=0;
+document.addEventListener('mousemove',e=>{mx=e.clientX;my=e.clientY;dot.style.transform=`translate(${mx-4}px,${my-4}px)`});
+(function ar(){rx+=(mx-rx)*0.12;ry+=(my-ry)*0.12;ring.style.transform=`translate(${rx-16}px,${ry-16}px)`;requestAnimationFrame(ar)})();
+document.querySelectorAll('button,a,.av-card,.mod,.sp-pill,.stat,.tier-card').forEach(el=>{
+  el.addEventListener('mouseenter',()=>{ring.style.width='44px';ring.style.height='44px';ring.style.borderColor='rgba(0,200,150,0.7)'});
+  el.addEventListener('mouseleave',()=>{ring.style.width='32px';ring.style.height='32px';ring.style.borderColor='rgba(0,200,150,0.4)'});
+});
+const canvas=document.getElementById('stars-canvas'),ctx=canvas.getContext('2d');let stars=[];
+function resize(){canvas.width=window.innerWidth;canvas.height=window.innerHeight;stars=[];const n=Math.floor((canvas.width*canvas.height)/4500);for(let i=0;i<n;i++)stars.push({x:Math.random()*canvas.width,y:Math.random()*canvas.height,r:Math.random()*1.4+0.2,a:Math.random(),tw:Math.random()*Math.PI*2})}
+function ds(){ctx.clearRect(0,0,canvas.width,canvas.height);stars.forEach(s=>{s.tw+=0.014;ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,Math.PI*2);ctx.fillStyle=`rgba(255,255,255,${s.a*(0.5+0.5*Math.sin(s.tw))})`;ctx.fill()});requestAnimationFrame(ds)}
+window.addEventListener('resize',resize);resize();ds();
+function sp(){const p=document.createElement('div');p.className='signal-particle';const sz=Math.random()*4+2;const c=['rgba(0,200,150,','rgba(0,87,255,','rgba(255,107,26,'][Math.floor(Math.random()*3)];p.style.cssText=`width:${sz}px;height:${sz}px;left:${Math.random()*100}%;background:${c}0.6)`;const d=Math.random()*8+6;p.style.animationDuration=d+'s';p.style.animationDelay=Math.random()*4+'s';document.body.appendChild(p);setTimeout(()=>p.remove(),(d+4)*1000)}
+for(let i=0;i<18;i++)sp();setInterval(sp,1400);
+const obs=new IntersectionObserver(e=>{e.forEach(x=>{if(x.isIntersecting){x.target.classList.add('visible');obs.unobserve(x.target)}})},{threshold:0.1});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+function showPage(id){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+id).classList.add('active');window.scrollTo({top:0,behavior:'smooth'})}
+function goTo(id){document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'})}
+window.addEventListener('scroll',()=>{const y=window.scrollY;const brand=document.querySelector('.hero-brand');const tag=document.querySelector('.tagline');if(brand)brand.style.transform=`translateY(${y*0.14}px)`;if(tag){tag.style.transform=`translateY(${y*0.09}px)`;tag.style.opacity=Math.max(0,1-y/380)}});
+
+// ══ DEMO MAPA NEURONAL LENGUA ══
+const demoNodos=[
+  {id:0,nombre:"Lectura",emoji:"📖",x:0.5,y:0.08,pct:78,deps:[]},
+  {id:1,nombre:"Comprensión",emoji:"💡",x:0.22,y:0.3,pct:62,deps:[0]},
+  {id:2,nombre:"Escritura",emoji:"✏️",x:0.78,y:0.3,pct:55,deps:[0]},
+  {id:3,nombre:"Vocabulario",emoji:"📝",x:0.12,y:0.55,pct:70,deps:[1]},
+  {id:4,nombre:"Expresión oral",emoji:"🗣️",x:0.38,y:0.55,pct:45,deps:[1]},
+  {id:5,nombre:"Ortografía",emoji:"🔤",x:0.62,y:0.55,pct:38,deps:[2]},
+  {id:6,nombre:"Producción",emoji:"📄",x:0.88,y:0.55,pct:25,deps:[2,3]},
+  {id:7,nombre:"Texto literario",emoji:"📚",x:0.3,y:0.82,pct:15,deps:[4,3]},
+  {id:8,nombre:"Redacción",emoji:"🖊️",x:0.7,y:0.82,pct:12,deps:[5,6]},
+];
+const demoMsgs={
+  0:"📖 Lectura — 78% dominado ✓ Lee con fluidez textos cortos. Próximo paso: textos de dos párrafos.",
+  1:"💡 Comprensión — 62% en construcción. Entiende el tema principal pero le cuesta la inferencia. Trabajamos hoy.",
+  2:"✏️ Escritura — 55% en construcción. Forma bien las letras pero necesita práctica en palabras largas.",
+  3:"📝 Vocabulario — 70% dominado ✓ Excelente base de palabras. Incorporamos vocabulario de ciencias naturales.",
+  4:"🗣️ Expresión oral — 45% en construcción. Se expresa bien en lo cotidiano. Cuesta en situaciones formales.",
+  5:"🔤 Ortografía — 38% necesita trabajo ⚠️ Confunde b/v y ll/y. Trabajo específico esta semana.",
+  6:"📄 Producción escrita — 25% recién iniciado. Puede escribir oraciones simples. Avanzamos de a poco.",
+  7:"📚 Texto literario — 15% bloqueado. Esperando que se consolide comprensión y vocabulario primero.",
+  8:"🖊️ Redacción — 12% bloqueado. Esperando que se consolide ortografía y producción básica.",
+};
+let DW,DH,Dp=0,Dhov=null,Danim=false;
+const DC=document.getElementById('demo-canvas');
+if(DC){
+  const Dx=DC.getContext('2d');
+  function DR(){const r=DC.parentElement.getBoundingClientRect();DW=DC.width=r.width-2;DH=DC.height=300;}
+  function DGP(n){return{x:n.x*DW,y:n.y*DH};}
+  function DGC(p){
+    if(p>=65)return{f:"#00C896",g:"rgba(0,200,150,0.4)"};
+    if(p>=40)return{f:"#FF6B1A",g:"rgba(255,107,26,0.4)"};
+    if(p>=20)return{f:"#FF4560",g:"rgba(255,69,96,0.4)"};
+    return{f:"rgba(255,255,255,0.2)",g:"transparent"};
+  }
+  function DD(){
+    Dx.clearRect(0,0,DW,DH);Dp+=0.035;
+    demoNodos.forEach(n=>{
+      n.deps.forEach(d=>{
+        const f=DGP(demoNodos[d]),t=DGP(n);
+        Dx.beginPath();Dx.moveTo(f.x,f.y);Dx.lineTo(t.x,t.y);
+        Dx.strokeStyle='rgba(255,255,255,0.15)';Dx.lineWidth=1;Dx.stroke();
+      });
+    });
+    demoNodos.forEach((n,i)=>{
+      const{x,y}=DGP(n);const c=DGC(n.pct);
+      const r=Dhov===i?22:17;const pulse=n.pct<65?Math.sin(Dp+i)*1.5:0;
+      if(n.pct>=20){
+        const g=Dx.createRadialGradient(x,y,0,x,y,r+12+pulse);
+        g.addColorStop(0,c.g);g.addColorStop(1,'transparent');
+        Dx.beginPath();Dx.arc(x,y,r+12+pulse,0,Math.PI*2);Dx.fillStyle=g;Dx.fill();
+      }
+      Dx.beginPath();Dx.arc(x,y,r+pulse,0,Math.PI*2);
+      Dx.fillStyle=n.pct>=20?c.f+'22':'rgba(255,255,255,0.03)';Dx.fill();
+      Dx.strokeStyle=c.f;Dx.lineWidth=2;Dx.stroke();
+      if(n.pct>=20){
+        Dx.beginPath();Dx.arc(x,y,r+pulse,-Math.PI/2,-Math.PI/2+(Math.PI*2*(n.pct/100)));
+        Dx.strokeStyle=c.f;Dx.lineWidth=3;Dx.stroke();
+      }
+      Dx.textAlign='center';Dx.textBaseline='middle';
+      Dx.font=Dhov===i?'14px Arial':'12px Arial';Dx.fillText(n.emoji,x,y-4);
+      Dx.fillStyle=c.f;Dx.font=`bold ${Dhov===i?10:8}px sans-serif`;Dx.fillText(n.nombre,x,y+8);
+      if(Dhov===i){
+        const lbl=`${n.emoji} ${n.nombre} · ${n.pct}%`;
+        const tw=lbl.length*6+16;
+        const tx=Math.min(Math.max(x-tw/2,4),DW-tw-4);const ty=Math.max(y-r-32,4);
+        Dx.fillStyle='rgba(17,29,53,0.96)';Dx.beginPath();Dx.roundRect(tx,ty,tw,24,4);Dx.fill();
+        Dx.strokeStyle=c.f+'55';Dx.lineWidth=1;Dx.stroke();
+        Dx.fillStyle=c.f;Dx.font='9px sans-serif';Dx.fillText(lbl,tx+tw/2,ty+12);
+      }
+    });
+    requestAnimationFrame(DD);
+  }
+  function DHC(mx,my){
+    Dhov=null;
+    demoNodos.forEach((n,i)=>{const{x,y}=DGP(n);if(Math.hypot(mx-x,my-y)<22)Dhov=i;});
+    if(Dhov!==null){const m=document.getElementById('solDemoMsg');if(m)m.textContent=demoMsgs[Dhov];}
+  }
+  DC.addEventListener('click',e=>{const r=DC.getBoundingClientRect();DHC((e.clientX-r.left)*(DW/r.width),(e.clientY-r.top)*(DH/r.height));});
+  DC.addEventListener('touchstart',e=>{const r=DC.getBoundingClientRect();const t=e.touches[0];DHC((t.clientX-r.left)*(DW/r.width),(t.clientY-r.top)*(DH/r.height));e.preventDefault();},{passive:false});
+  DC.addEventListener('mousemove',e=>{const r=DC.getBoundingClientRect();const mx=(e.clientX-r.left)*(DW/r.width),my=(e.clientY-r.top)*(DH/r.height);Dhov=null;demoNodos.forEach((n,i)=>{const{x,y}=DGP(n);if(Math.hypot(mx-x,my-y)<20)Dhov=i;});DC.style.cursor=Dhov!==null?'pointer':'default';});
+  function initDemoMapa(){if(!Danim){Danim=true;DR();DD();}
+    const obs=new IntersectionObserver(e=>{e.forEach(x=>{if(x.isIntersecting){DR();obs.unobserve(x.target);}});},{threshold:0.1});
+    obs.observe(DC);
+  }
+  window.addEventListener('resize',()=>{if(DW)DR();});
+  setTimeout(initDemoMapa,600);
+}
+
+function buildDemoTablero(){
+  const grid=document.getElementById('demo-tablero-grid');
+  if(!grid||grid.children.length>0)return;
+  [{n:"Lectura fluida",p:78},{n:"Comprensión lectora",p:62},{n:"Escritura",p:55},{n:"Vocabulario",p:70},{n:"Expresión oral",p:45},{n:"Ortografía",p:38},{n:"Producción escrita",p:25},{n:"Redacción",p:12}].forEach(c=>{
+    const col=c.p>=65?'var(--verde)':c.p>=40?'var(--naranja)':'#FF4560';
+    const est=c.p>=65?'✓ Dominado':c.p>=40?'→ En progreso':'⚠️ Trabajando';
+    const div=document.createElement('div');
+    div.style.cssText='background:var(--cardlight);border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:11px 13px;margin-bottom:0';
+    div.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px"><span style="font-size:13px;font-weight:500;color:var(--text)">${c.n}</span><span style="font-family:Syne,sans-serif;font-size:14px;font-weight:700;color:${col}">${c.p}%</span></div><div style="height:4px;background:rgba(255,255,255,0.07);border-radius:100px;overflow:hidden;margin-bottom:4px"><div style="height:100%;width:${c.p}%;background:${col};border-radius:100px"></div></div><div style="font-size:10px;color:var(--muted)">${est}</div>`;
+    grid.appendChild(div);
+  });
+}
+
+function showDemoTab(id,btn){
+  ['demo-grafo','demo-tablero','demo-ejercicio'].forEach(v=>{const el=document.getElementById(v);if(el)el.style.display='none';});
+  const el=document.getElementById('demo-'+id);if(el)el.style.display='block';
+  ['demoTab1','demoTab2','demoTab3'].forEach(t=>{const tb=document.getElementById(t);if(tb){tb.style.background='transparent';tb.style.color='var(--muted)';tb.style.fontWeight='normal';}});
+  btn.style.background='var(--cardlight)';btn.style.color='var(--text)';btn.style.fontWeight='500';
+  if(id==='tablero')buildDemoTablero();
+}
+
+function demoResponder(el,ok){
+  document.querySelectorAll('#demoOpciones div').forEach(o=>o.onclick=null);
+  const fb=document.getElementById('demoFeedback');
+  if(ok){
+    el.style.background='rgba(0,200,150,0.12)';el.style.borderColor='rgba(0,200,150,0.4)';el.style.color='var(--verde)';
+    fb.style.cssText='display:block;background:rgba(0,200,150,0.1);border:1px solid rgba(0,200,150,0.25);color:var(--verde);border-radius:10px;padding:12px;font-size:12px;line-height:1.6;margin-top:8px';
+    fb.textContent='🎉 ¡Muy bien! La lana protege a la oveja del frío. Leíste el texto y encontraste la respuesta. ¡SOL está orgulloso de vos!';
+    const m=document.getElementById('solDemoMsg');if(m)m.textContent='¡EXCELENTE! Encontraste la respuesta en el texto. Comprensión lectora +3 puntos. ¿Seguimos? 🌟';
+  } else {
+    el.style.background='rgba(255,69,96,0.1)';el.style.borderColor='rgba(255,69,96,0.3)';el.style.color='#FF4560';
+    const opts=document.querySelectorAll('#demoOpciones div');if(opts[1]){opts[1].style.background='rgba(0,200,150,0.12)';opts[1].style.borderColor='rgba(0,200,150,0.4)';opts[1].style.color='var(--verde)';}
+    fb.style.cssText='display:block;background:rgba(255,69,96,0.08);border:1px solid rgba(255,69,96,0.25);color:#FF4560;border-radius:10px;padding:12px;font-size:12px;line-height:1.6;margin-top:8px';
+    fb.textContent='Casi... Volvé a leer el texto. Fijate qué dice sobre la lana. ¡Podés encontrarlo! 💪';
+    const m=document.getElementById('solDemoMsg');if(m)m.textContent='No pasa nada, los errores nos enseñan. Buscá la palabra "lana" en el texto. ¡Vos podés! 💪';
+  }
+}
+</script>
+</body>
+</html>
