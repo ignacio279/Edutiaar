@@ -71,6 +71,14 @@ test('layoutCamino: 0 → [], hasta 6 = coords del diseño con aspecto fijo', ()
   assert.equal(layoutCamino(6).altoPx, null);
 });
 
+// Helpers de la geometría serpentina (espejo de serpentinaAlta en mapa-layout.ts).
+function geometria(escala, perRow = 3) {
+  const { pitch, margen } = ESCALAS_MAPA[escala];
+  const bajada = pitch / 5;
+  const rowStep = pitch + (perRow - 1) * bajada;
+  return { pitch, margen, bajada, rowStep };
+}
+
 test('layout N>6: N coords en rango, altura que crece con las filas y paso fijo en px', () => {
   const perRow = 3;
   const n = 16;
@@ -80,18 +88,32 @@ test('layout N>6: N coords en rango, altura que crece con las filas y paso fijo 
     assert.ok(x >= 0 && x <= 100, `x en rango: ${x}`);
     assert.ok(y >= 0 && y <= 100, `y en rango: ${y}`);
   }
-  const { pitch, margen } = ESCALAS_MAPA.alumno;
+  const { margen, rowStep, bajada } = geometria('alumno', perRow);
   const filas = Math.ceil(n / perRow);
-  assert.equal(altoPx, margen * 2 + (filas - 1) * pitch, 'la altura acompaña a las filas');
-  // Paso vertical real entre filas consecutivas = pitch px (los círculos no se pisan).
+  const lastCol = (n - 1) % perRow;
+  assert.equal(altoPx, margen * 2 + (filas - 1) * rowStep + lastCol * bajada, 'la altura acompaña a las filas');
+  // Misma columna, filas consecutivas → rowStep px (los círculos no se pisan).
   const gapPx = ((coords[perRow][1] - coords[0][1]) / 100) * altoPx;
-  assert.ok(Math.abs(gapPx - pitch) < 0.001, `paso ${gapPx} ≈ ${pitch}`);
+  assert.ok(Math.abs(gapPx - rowStep) < 0.001, `paso ${gapPx} ≈ ${rowStep}`);
+});
+
+test('layout N>6: el camino baja de a poco dentro de la fila y la vuelta conserva pitch', () => {
+  const perRow = 3;
+  const { coords, altoPx } = layoutCamino(9);
+  const { pitch, bajada } = geometria('alumno', perRow);
+  const px = (i) => (coords[i][1] / 100) * altoPx;
+  // Dentro de la fila 0, cada parada baja exactamente `bajada` px.
+  assert.ok(Math.abs(px(1) - px(0) - bajada) < 0.001, 'parada 0→1 baja');
+  assert.ok(Math.abs(px(2) - px(1) - bajada) < 0.001, 'parada 1→2 baja');
+  // La vuelta de fila (última de fila 0 → primera de fila 1, misma x) deja `pitch` libre.
+  assert.equal(coords[2][0], coords[3][0], 'la vuelta es en la misma columna');
+  assert.ok(Math.abs(px(3) - px(2) - pitch) < 0.001, `vuelta ${px(3) - px(2)} ≈ ${pitch}`);
 });
 
 test('layout N>6: la escala docente usa paso más chico que la del alumno', () => {
   const alumno = layoutCamino(12, 'alumno');
   const docente = layoutCamino(12, 'docente');
   assert.ok(docente.altoPx < alumno.altoPx);
-  const { pitch, margen } = ESCALAS_MAPA.docente;
-  assert.equal(docente.altoPx, margen * 2 + 11 * (pitch / 3));
+  const d = geometria('docente');
+  assert.equal(docente.altoPx, d.margen * 2 + 3 * d.rowStep + 2 * d.bajada);
 });
