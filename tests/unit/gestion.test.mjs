@@ -8,6 +8,7 @@ import {
   AVATARES,
   avatarValido,
   codigoNormalizado,
+  nombreDeGrado,
   validarCrearAula,
   validarCrearAlumno,
 } from '../../supabase/functions/gestion-alumnos/validar.ts';
@@ -38,17 +39,20 @@ test('codigoNormalizado: trim + mayúsculas', () => {
   assert.equal(codigoNormalizado('Sol-3'), 'SOL-3');
 });
 
+test('nombreDeGrado: deriva el nombre del aula del grado', () => {
+  assert.equal(nombreDeGrado(4), '4° grado');
+  assert.equal(nombreDeGrado(1), '1° grado');
+});
+
 test('validarCrearAula: acepta input válido', () => {
-  assert.deepEqual(validarCrearAula({ nombre: 'Sala roja', codigo: 'ROJA', secreto: 'luna', grado: 3 }), { ok: true });
-  // grado opcional
-  assert.deepEqual(validarCrearAula({ nombre: 'Sala roja', codigo: 'ROJA', secreto: 'luna' }), { ok: true });
+  assert.deepEqual(validarCrearAula({ secreto: 'luna', grado: 3 }), { ok: true });
 });
 
 test('validarCrearAula: rechaza faltantes', () => {
-  assert.equal(validarCrearAula({ nombre: '', codigo: 'X', secreto: 'y' }).ok, false);
-  assert.equal(validarCrearAula({ nombre: 'A', codigo: '  ', secreto: 'y' }).ok, false);
-  assert.equal(validarCrearAula({ nombre: 'A', codigo: 'X', secreto: '' }).ok, false);
-  assert.equal(validarCrearAula({ nombre: 'A', codigo: 'X', secreto: 'y', grado: 9 }).ok, false);
+  assert.equal(validarCrearAula({ secreto: 'y' }).ok, false); // sin grado
+  assert.equal(validarCrearAula({ secreto: '', grado: 3 }).ok, false); // sin secreto
+  assert.equal(validarCrearAula({ secreto: 'y', grado: 9 }).ok, false); // grado fuera de rango
+  assert.equal(validarCrearAula({ secreto: 'y', grado: 0 }).ok, false);
 });
 
 test('validarCrearAlumno: acepta input válido', () => {

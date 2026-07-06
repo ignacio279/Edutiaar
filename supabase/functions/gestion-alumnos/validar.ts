@@ -20,7 +20,7 @@ export function codigoNormalizado(c: unknown): string {
   return String(c ?? '').trim().toUpperCase();
 }
 
-function gradoValido(g: unknown): boolean {
+export function gradoValido(g: unknown): boolean {
   return typeof g === 'number' && Number.isInteger(g) && g >= 1 && g <= 7;
 }
 
@@ -28,11 +28,14 @@ function noVacio(s: unknown): boolean {
   return typeof s === 'string' && s.trim().length > 0;
 }
 
-export function validarCrearAula(d: { nombre?: unknown; codigo?: unknown; secreto?: unknown; grado?: unknown }): Resultado {
-  if (!noVacio(d.nombre)) return { ok: false, error: 'Poné un nombre para el aula.' };
-  if (!noVacio(codigoNormalizado(d.codigo))) return { ok: false, error: 'Poné un código para el aula.' };
+// El aula se identifica solo por grado: nombre y código se derivan, no se tipean.
+export function nombreDeGrado(grado: number): string {
+  return `${grado}° grado`;
+}
+
+export function validarCrearAula(d: { secreto?: unknown; grado?: unknown }): Resultado {
+  if (!gradoValido(d.grado)) return { ok: false, error: 'El grado tiene que ser de 1 a 7.' };
   if (!noVacio(d.secreto)) return { ok: false, error: 'Poné un secreto para el aula.' };
-  if (d.grado !== undefined && d.grado !== null && !gradoValido(d.grado)) return { ok: false, error: 'El grado tiene que ser de 1 a 7.' };
   return { ok: true };
 }
 

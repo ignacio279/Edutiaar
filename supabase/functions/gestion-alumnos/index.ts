@@ -4,12 +4,11 @@
 // front no es fuente de verdad. verify_jwt=true; el caller tiene que ser rol 'docente'.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { cors, json } from '../_shared/cors.ts';
-import { codigoNormalizado, pinValido, avatarValido, validarCrearAula, validarCrearAlumno } from './validar.ts';
+import { codigoNormalizado, pinValido, avatarValido, validarCrearAula, validarCrearAlumno, nombreDeGrado, gradoValido } from './validar.ts';
 
 const randHex = (n: number) => Array.from(crypto.getRandomValues(new Uint8Array(n))).map((b) => b.toString(16).padStart(2, '0')).join('');
 const randPass = () => randHex(24); // 48 chars opacos, nunca expuestos
 const noVacio = (s: unknown) => typeof s === 'string' && s.trim().length > 0;
-const gradoOk = (g: unknown) => typeof g === 'number' && Number.isInteger(g) && g >= 1 && g <= 7;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
@@ -46,13 +45,14 @@ Deno.serve(async (req) => {
 
     switch (accion) {
       case 'crear_aula': {
-        const { nombre, grado, codigo, secreto } = body;
-        const v = validarCrearAula({ nombre, codigo, secreto, grado });
+        const { grado, secreto } = body;
+        const v = validarCrearAula({ grado, secreto });
         if (!v.ok) return json({ error: v.error }, 400);
         if (!noVacio(caller.escuela_id)) return json({ error: 'sin_escuela' }, 400);
+        const nombre = nombreDeGrado(grado);
         const { data: aula, error } = await sb
           .from('aula')
-          .insert({ escuela_id: caller.escuela_id, docente_id: user.id, nombre: String(nombre).trim(), grado: grado ?? null, codigo: codigoNormalizado(codigo) })
+          .insert({ escuela_id: caller.escuela_id, docente_id: user.id, nombre, grado, codigo: codigoNormalizado(nombre) })
           .select('id, nombre, grado, codigo')
           .single();
         if (error) {
@@ -64,12 +64,16 @@ Deno.serve(async (req) => {
       }
 
       case 'editar_aula': {
-        const { aula_id, nombre, grado } = body;
+        const { aula_id, grado } = body;
         if (!(await aulaMia(aula_id))) return json({ error: 'no_es_tuyo' }, 403);
-        const patch: Record<string, unknown> = {};
-        if (nombre !== undefined) { if (!noVacio(nombre)) return json({ error: 'Poné un nombre.' }, 400); patch.nombre = String(nombre).trim(); }
-        if (grado !== undefined) { if (grado !== null && !gradoOk(grado)) return json({ error: 'Grado 1 a 7.' }, 400); patch.grado = grado; }
-        if (Object.keys(patch).length) await sb.from('aula').update(patch).eq('id', aula_id);
+        if (grado === undefined) return json({ ok: true });
+        if (!gradoValido(grado)) return json({ error: 'Grado 1 a 7.' }, 400);
+        const nombre = nombreDeGrado(grado);
+        const { error } = await sb.from('aula').update({ nombre, grado, codigo: codigoNormalizado(nombre) }).eq('id', aula_id);
+        if (error) {
+          if ((error as { code?: string }).code === '23505') return json({ error: 'codigo_duplicado' }, 409);
+          throw error;
+        }
         return json({ ok: true });
       }
 
@@ -115,7 +119,7 @@ Deno.serve(async (req) => {
         if (!(await alumnoMio(alumno_id))) return json({ error: 'no_es_tuyo' }, 403);
         const patch: Record<string, unknown> = {};
         if (nombre !== undefined) { if (!noVacio(nombre)) return json({ error: 'Poné un nombre.' }, 400); patch.nombre = String(nombre).trim(); }
-        if (grado !== undefined) { if (!gradoOk(grado)) return json({ error: 'Grado 1 a 7.' }, 400); patch.grado = grado; }
+        if (grado !== undefined) { if (!gradoValido(grado)) return json({ error: 'Grado 1 a 7.' }, 400); patch.grado = grado; }
         if (avatar !== undefined) { if (!avatarValido(avatar)) return json({ error: 'Avatar inválido.' }, 400); patch.avatar = avatar; }
         if (aula_id !== undefined) { if (!(await aulaMia(aula_id))) return json({ error: 'no_es_tuyo' }, 403); patch.aula_id = aula_id; }
         if (Object.keys(patch).length) await sb.from('perfil').update(patch).eq('id', alumno_id);

@@ -23,7 +23,7 @@ type Aula = { id: string; nombre: string; grado: number | null; codigo: string }
 type Alumno = { id: string; nombre: string; avatar: string; grado: number; aula_id: string | null };
 
 const ERRS: Record<string, string> = {
-  codigo_duplicado: 'Ese código de aula ya existe. Probá otro.',
+  codigo_duplicado: 'Ya existe un aula con ese nombre. Probá otro.',
   aula_con_alumnos: 'El aula tiene alumnos. Movelos o borralos primero.',
   no_es_tuyo: 'Eso no es tuyo.',
   no_docente: 'Necesitás entrar como docente.',
@@ -109,21 +109,19 @@ export default function MiClase() {
 // ---------- Crear aula ----------
 function CrearAula({ onDone }: { onDone: () => void }) {
   const [open, setOpen] = useState(false);
-  const [nombre, setNombre] = useState('');
   const [grado, setGrado] = useState('');
-  const [codigo, setCodigo] = useState('');
   const [secreto, setSecreto] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function crear() {
     if (busy) return;
-    if (!nombre.trim() || !codigo.trim() || !secreto.trim()) { toast('Completá nombre, código y secreto.'); return; }
+    if (!grado || !secreto.trim()) { toast('Completá grado y secreto.'); return; }
     setBusy(true);
-    const { ok, j } = await gestion('crear_aula', { nombre, codigo, secreto, grado: grado ? Number(grado) : undefined });
+    const { ok, j } = await gestion('crear_aula', { grado: Number(grado), secreto });
     setBusy(false);
     if (!ok) { toast(msgErr(j)); return; }
     toast('¡Aula creada!');
-    setNombre(''); setGrado(''); setCodigo(''); setSecreto(''); setOpen(false);
+    setGrado(''); setSecreto(''); setOpen(false);
     onDone();
   }
 
@@ -134,14 +132,10 @@ function CrearAula({ onDone }: { onDone: () => void }) {
     <div style={{ ...card, display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 12 }}>
       <b style={{ fontFamily: QUICK, color: '#3A332A' }}>Nueva aula</b>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-        <div style={{ flex: 2, minWidth: 160 }}><label style={labelStyle}>Nombre</label><input value={nombre} onChange={(e) => setNombre(e.target.value)} style={field} placeholder="Sala de Ana" /></div>
-        <div style={{ flex: 1, minWidth: 90 }}><label style={labelStyle}>Grado (opcional)</label><input type="number" min={1} max={7} value={grado} onChange={(e) => setGrado(e.target.value)} style={field} /></div>
+        <div style={{ flex: 1, minWidth: 90 }}><label style={labelStyle}>Grado</label><input type="number" min={1} max={7} value={grado} onChange={(e) => setGrado(e.target.value)} style={field} placeholder="4" /></div>
+        <div style={{ flex: 2, minWidth: 160 }}><label style={labelStyle}>Secreto del aula</label><input value={secreto} onChange={(e) => setSecreto(e.target.value)} style={field} placeholder="una palabra fácil" /></div>
       </div>
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: 140 }}><label style={labelStyle}>Código (lo ven los chicos)</label><input value={codigo} onChange={(e) => setCodigo(e.target.value)} style={field} placeholder="SALA1" /></div>
-        <div style={{ flex: 1, minWidth: 140 }}><label style={labelStyle}>Secreto del aula</label><input value={secreto} onChange={(e) => setSecreto(e.target.value)} style={field} placeholder="una palabra fácil" /></div>
-      </div>
-      <p style={{ fontSize: 13, color: '#9A8E78', margin: 0 }}>Anotá el secreto: por seguridad no se vuelve a mostrar.</p>
+      <p style={{ fontSize: 13, color: '#9A8E78', margin: 0 }}>El aula se va a llamar <b>{grado ? `${grado}° grado` : '(elegí un grado)'}</b>. Anotá el secreto: por seguridad no se vuelve a mostrar.</p>
       <div style={{ display: 'flex', gap: 8 }}>
         <button onClick={crear} className="ed-primary" style={btnPrimary} disabled={busy}>{busy ? 'Creando…' : 'Crear aula'}</button>
         <button onClick={() => setOpen(false)} style={btnGhost}>Cancelar</button>
@@ -212,13 +206,13 @@ function CrearAlumno({ aulas, onDone }: { aulas: Aula[]; onDone: () => void }) {
 // ---------- Card de aula + sus alumnos ----------
 function AulaCard({ aula, alumnos, aulas, onDone }: { aula: Aula; alumnos: Alumno[]; aulas: Aula[]; onDone: () => void }) {
   const [editando, setEditando] = useState(false);
-  const [nombre, setNombre] = useState(aula.nombre);
   const [grado, setGrado] = useState(aula.grado ? String(aula.grado) : '');
   const [secreto, setSecreto] = useState('');
   const [confirmDel, setConfirmDel] = useState(false);
 
   async function guardar() {
-    const { ok, j } = await gestion('editar_aula', { aula_id: aula.id, nombre, grado: grado ? Number(grado) : null });
+    if (!grado) { toast('Elegí un grado.'); return; }
+    const { ok, j } = await gestion('editar_aula', { aula_id: aula.id, grado: Number(grado) });
     if (!ok) { toast(msgErr(j)); return; }
     toast('Aula actualizada.'); setEditando(false); onDone();
   }
@@ -239,13 +233,13 @@ function AulaCard({ aula, alumnos, aulas, onDone }: { aula: Aula; alumnos: Alumn
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: 160 }}>
           {editando ? (
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input value={nombre} onChange={(e) => setNombre(e.target.value)} style={{ ...field, flex: 2 }} />
-              <input type="number" min={1} max={7} value={grado} onChange={(e) => setGrado(e.target.value)} style={{ ...field, width: 80 }} placeholder="grado" />
+            <div style={{ width: 90 }}>
+              <label style={labelStyle}>Grado</label>
+              <input type="number" min={1} max={7} value={grado} onChange={(e) => setGrado(e.target.value)} style={field} />
             </div>
           ) : (
             <>
-              <div style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 18, color: '#3A332A' }}>{aula.nombre}{aula.grado ? ` · ${aula.grado}°` : ''}</div>
+              <div style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 18, color: '#3A332A' }}>{aula.nombre}</div>
               <div style={{ fontSize: 14, color: '#7A6F5F', fontWeight: 600 }}>Código: <b>{aula.codigo}</b> · {alumnos.length} {alumnos.length === 1 ? 'alumno' : 'alumnos'}</div>
             </>
           )}
