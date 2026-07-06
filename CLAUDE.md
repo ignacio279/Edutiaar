@@ -17,7 +17,7 @@ El núcleo: cada alumno tiene un **programa** por materia → SOL lo divide en *
 
 **Etapa 3 cerrada (2026-06-28).** Fase 2 SOL — slices SP-1 a SP-4e completos, deployados y commiteados. El loop entero anda de punta a punta **en modo mock** (sin gastar API):
 - **SP-1** Edge Function SOL base (Messages API + tool use; `supabase/functions/sol`, `_shared/loop.ts`).
-- **SP-2** Autoría docente: la seño sube contenido → `dividir-nodos` genera `sol_materia` + nodos → revisa/publica (`/docente/autoria`).
+- **SP-2** Autoría docente: la seño sube contenido → `dividir-nodos` genera `sol_materia` + nodos → revisa/publica (`/docente/autoria`). Desde 2026-07-06 acepta **texto pegado o PDF** (base64 → bloque `document` nativo de Claude; lógica pura en `web/lib/autoria.ts`, tope 10 MB; spec `2026-07-06-carga-pdf-autoria-design.md`).
 - **SP-3** Multi-materia en el front del alumno: picker → mapa real desde la DB.
 - **SP-4** Evaluador: práctica real (pool de ejercicios) → **regla determinística de dominio** mueve `alumno_nodo` → el mapa cambia → **diagnóstico cualitativo de SOL** (`evaluar-sesion`) en el panel docente (`/docente/[alumnoId]`).
 - **SP-4d** Selección adaptiva: `elegirEjercicios` usa la historia del chico (escalera de cobertura por tipo + dificultad adaptativa) en `web/lib/practica.ts`.

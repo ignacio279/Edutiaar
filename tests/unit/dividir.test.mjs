@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  partirContenido, perfilDe, mockDividir, parseDivision,
+  construirPromptDivision, partirContenido, perfilDe, mockDividir, parseDivision,
 } from '../../supabase/functions/dividir-nodos/dividir.ts';
 
 test('partirContenido: separa por comas y limpia el punto final', () => {
@@ -52,4 +52,17 @@ test('parseDivision: sin nodos → lanza', () => {
 
 test('parseDivision: nodo sin nombre → lanza', () => {
   assert.throws(() => parseDivision({ nodos: [{ descripcion: 'x' }] }, 'Mate', 2), /sin_nombre/);
+});
+
+test('construirPromptDivision: con contenido → lo incluye en el mensaje', () => {
+  const { user } = construirPromptDivision('Matemática', 4, 'Fracciones, decimales');
+  assert.match(user, /Fracciones, decimales/);
+});
+
+test('construirPromptDivision: sin contenido (PDF-only) → apunta al documento adjunto', () => {
+  for (const vacio of ['', '   ']) {
+    const { user } = construirPromptDivision('Matemática', 4, vacio);
+    assert.match(user, /PDF adjunto/);
+    assert.doesNotMatch(user, /Contenido del programa/);
+  }
 });

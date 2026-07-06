@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from '@/lib/toast';
 import { sol, uiIcon } from '@/lib/art';
+import { bytesABase64, validarArchivoPdf } from '@/lib/autoria';
 
 const QUICK = 'var(--font-quicksand), sans-serif';
 const NUNITO = 'var(--font-nunito)';
@@ -40,6 +41,7 @@ export default function Autoria() {
   const [materia, setMateria] = useState('Lengua');
   const [grado, setGrado] = useState(3);
   const [contenido, setContenido] = useState('');
+  const [pdf, setPdf] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
 
   const [solMateriaId, setSolMateriaId] = useState<string | null>(null);
@@ -58,15 +60,37 @@ export default function Autoria() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  function elegirPdf(f: File | undefined) {
+    if (!f) return;
+    const err = validarArchivoPdf(f.name, f.type, f.size);
+    if (err) { toast(err); return; }
+    setPdf(f);
+  }
+
   async function generar() {
     if (busy) return;
-    if (!contenido.trim()) { toast('Pegá el contenido del plan primero'); return; }
+    if (!contenido.trim() && !pdf) { toast('Pegá el contenido del plan o adjuntá un PDF'); return; }
     setBusy(true);
+    let pdf_base64: string | undefined;
+    if (pdf) {
+      try {
+        pdf_base64 = bytesABase64(await pdf.arrayBuffer());
+      } catch {
+        setBusy(false);
+        toast('No se pudo leer el PDF. Probá elegirlo de nuevo.');
+        return;
+      }
+    }
     const { data: { session } } = await supabase.auth.getSession();
     const r = await fetch(`${URL}/functions/v1/dividir-nodos`, {
       method: 'POST',
       headers: { apikey: ANON, Authorization: `Bearer ${session?.access_token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ materia_nombre: materia.trim(), grado: Number(grado), contenido }),
+      body: JSON.stringify({
+        materia_nombre: materia.trim(),
+        grado: Number(grado),
+        contenido: contenido.trim() || undefined,
+        pdf_base64,
+      }),
     });
     const j = await r.json().catch(() => ({}));
     setBusy(false);
@@ -180,7 +204,7 @@ export default function Autoria() {
               Subir un plan
             </h1>
             <p style={{ fontSize: 14.5, color: '#7A6F5F', margin: '3px 0 0', fontWeight: 600 }}>
-              Pegá el contenido y SOL lo divide en nodos. Después los revisás.
+              Pegá el contenido o subí un PDF y SOL lo divide en nodos. Después los revisás.
             </p>
           </div>
         </div>
@@ -202,10 +226,44 @@ export default function Autoria() {
             <textarea
               value={contenido}
               onChange={(e) => setContenido(e.target.value)}
-              placeholder="Ej: Vocales, sílabas, palabras, oraciones, lectura, cuento."
+              placeholder={pdf ? 'Opcional: notas extra para SOL además del PDF.' : 'Ej: Vocales, sílabas, palabras, oraciones, lectura, cuento.'}
               rows={5}
               style={{ ...field, resize: 'vertical', fontFamily: NUNITO }}
             />
+          </div>
+          <div>
+            <label style={labelStyle}>…o subí el plan en PDF</label>
+            <input
+              id="pdf-plan"
+              type="file"
+              accept="application/pdf,.pdf"
+              style={{ display: 'none' }}
+              onChange={(e) => { elegirPdf(e.target.files?.[0]); e.target.value = ''; }}
+            />
+            {pdf ? (
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: 10, background: '#FBF4E6',
+                border: '2px solid #EFE3CE', borderRadius: 999, padding: '8px 8px 8px 16px',
+                fontFamily: NUNITO, fontSize: 14.5, fontWeight: 700, color: '#3A332A', maxWidth: '100%',
+              }}>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  📄 {pdf.name} · {(pdf.size / 1024 / 1024).toFixed(1)} MB
+                </span>
+                <button
+                  onClick={() => setPdf(null)}
+                  aria-label="Quitar PDF"
+                  style={{ background: '#EFE3CE', border: 'none', borderRadius: '50%', width: 26, height: 26, color: '#7A6F5F', fontSize: 16, lineHeight: 1, cursor: 'pointer', flexShrink: 0 }}
+                >×</button>
+              </div>
+            ) : (
+              <label htmlFor="pdf-plan" style={{
+                display: 'inline-flex', alignItems: 'center', gap: 8, background: '#FFFCF5',
+                border: '2px solid #EFE3CE', borderRadius: 12, padding: '10px 18px',
+                fontFamily: QUICK, fontWeight: 700, fontSize: 15, color: '#7A6F5F', cursor: 'pointer',
+              }}>
+                📎 Adjuntar PDF
+              </label>
+            )}
           </div>
           <button onClick={generar} className="ed-primary" style={{ ...btnPrimary, alignSelf: 'flex-start' }}>
             {busy ? 'Generando…' : 'Generar nodos'}

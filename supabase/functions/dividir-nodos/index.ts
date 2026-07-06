@@ -36,6 +36,11 @@ Deno.serve(async (req) => {
     if (!materia_nombre || !grado || (!contenido && !pdf_base64)) {
       return json({ error: 'datos_faltantes' }, 400);
     }
+    // El mock no lee PDF: sin key (o con mock pedido) y sin texto no hay nada que dividir.
+    const key = Deno.env.get('ANTHROPIC_API_KEY');
+    if ((mock || !key) && !contenido && pdf_base64) {
+      return json({ error: 'pdf_requiere_api_key' }, 400);
+    }
 
     // 3. find-or-create materia → crear el programa propio del docente.
     let materia = (await sb.from('materia').select('id').ilike('nombre', materia_nombre).maybeSingle()).data;
@@ -50,7 +55,6 @@ Deno.serve(async (req) => {
     if (pErr) throw pErr;
 
     // 4. Generar la división: mock (default / sin key) o real (Claude).
-    const key = Deno.env.get('ANTHROPIC_API_KEY');
     let division;
     if (mock || !key) {
       division = mockDividir(contenido ?? '', materia_nombre, grado);

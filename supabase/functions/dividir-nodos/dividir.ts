@@ -88,7 +88,10 @@ export function construirPromptDivision(materia: string, grado: number, contenid
     'respetando los prerrequisitos. Cada nodo lleva un nombre corto y una descripción de qué cubre.',
     'Tono: español rioplatense, cálido. Devolvé el resultado llamando a la tool guardar_division.',
   ].join(' ');
-  const user = `Contenido del programa a dividir en nodos:\n\n${contenido}`;
+  // Sin texto pegado (la seño subió solo un PDF): el contenido va como bloque document.
+  const user = (contenido ?? '').trim()
+    ? `Contenido del programa a dividir en nodos:\n\n${contenido}`
+    : 'El programa a dividir en nodos está en el documento PDF adjunto.';
   return { system, user };
 }
 
