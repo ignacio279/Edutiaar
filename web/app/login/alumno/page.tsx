@@ -282,8 +282,9 @@ export default function LoginAlumno() {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))',
-            gap: 22,
+            gridTemplateColumns: 'repeat(auto-fill,272px)',
+            justifyContent: 'center',
+            gap: 20,
             marginTop: 38,
           }}
         >
