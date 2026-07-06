@@ -138,7 +138,7 @@ El **especialista de SOL** para un programa: lo crea la autoría docente (la se�
 | version | int | versionar regeneraciones, default 1 |
 | created_at | timestamptz | |
 
-> RLS: solo la docente dueña ve/edita su `sol_materia` y los `nodo` de su programa. El INSERT lo hace la Edge Function `dividir-nodos` con `service_role`.
+> RLS: solo la docente dueña ve/edita su `sol_materia` y los `nodo` de su programa. El INSERT lo hace la Edge Function `dividir-nodos` con `service_role`. Desde la migración `0013` la dueña también puede **borrar su `programa`** (cascade: sol_materia, nodos, ejercicios y progreso de alumnos), pero **solo en `borrador`**: eliminar una publicada exige despublicarla primero (guarda de dos pasos en el servidor).
 
 ## Notas del MVP
 
