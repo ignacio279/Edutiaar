@@ -9,7 +9,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import DocenteSidebar from '@/components/DocenteSidebar';
 import { animal, sol, uiIcon, nodeIcon, starBadge, lockBadge } from '@/lib/art';
-import { estadoColor, LEGEND, coordsCamino } from '@/lib/mapa-layout';
+import { estadoColor, LEGEND, layoutCamino } from '@/lib/mapa-layout';
 import { temaMateria, iconoNodo } from '@/lib/materia-tema';
 import { ESTADO_LABEL, etiquetaEstado, rangoHoy, resumenHoy, ultimaSesion, haceCuanto, agruparPorMes, type EstadoNodo } from '@/lib/panel';
 
@@ -127,7 +127,7 @@ export default function DetalleAlumno() {
   const materias = [...new Set(nodos.map((n) => n.materia))];
   const matActual = materiaSel || materias[0] || '';
   const nodosMat = nodos.filter((n) => n.materia === matActual).sort((a, b) => a.orden - b.orden);
-  const coords = coordsCamino(nodosMat.length);
+  const { coords, altoPx } = layoutCamino(nodosMat.length, 'docente');
   const { estado: estadoPeor, label: tagLabel } = etiquetaEstado(nodos);
   const [tagBg, tagCo] = TAG[estadoPeor] ?? TAG.no_empezado;
   const nodoSel = nodos.find((n) => n.nodo_id === selNode) || null;
@@ -175,7 +175,7 @@ export default function DetalleAlumno() {
               <p style={{ color: '#7A6F5F', fontWeight: 600 }}>{loaded ? 'Todavía no practicó.' : 'Cargando…'}</p>
             ) : (
               <>
-                <div style={{ position: 'relative', width: '100%', aspectRatio: '520/360' }}>
+                <div style={{ position: 'relative', width: '100%', ...(altoPx ? { height: altoPx } : { aspectRatio: '520/360' }) }}>
                   <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', overflow: 'visible' }}>
                     <path d={catmullPath(coords)} fill="none" stroke="#E6DAC2" strokeWidth="3.5" strokeLinecap="round" strokeDasharray="0.5 8" vectorEffect="non-scaling-stroke" />
                   </svg>
@@ -185,12 +185,12 @@ export default function DetalleAlumno() {
                     const badge = n.estado === 'dominado' ? starBadge() : n.estado === 'no_empezado' ? lockBadge() : null;
                     const on = selNode === n.nodo_id;
                     return (
-                      <button key={n.nodo_id} onClick={() => setSelNode(on ? null : n.nodo_id)} style={{ position: 'absolute', left: `${x}%`, top: `${y}%`, transform: 'translate(-50%,-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, background: 'none', border: 'none', cursor: 'pointer', width: 'clamp(64px,11vw,82px)', padding: 0 }}>
+                      <button key={n.nodo_id} onClick={() => setSelNode(on ? null : n.nodo_id)} style={{ position: 'absolute', left: `${x}%`, top: `${y}%`, transform: 'translate(-50%,-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, background: 'none', border: 'none', cursor: 'pointer', width: 'clamp(100px,16vw,132px)', padding: 0 }}>
                         <span style={{ position: 'relative', width: 'clamp(50px,8vw,64px)', height: 'clamp(50px,8vw,64px)', borderRadius: '50%', background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 3px 9px rgba(120,90,40,.16)', border: on ? '3px solid #F4A93B' : '3px solid #FFFCF5' }}>
                           <span style={{ width: '46%', height: '46%', background: `${nodeIcon(iconoNodo(i))} center/contain no-repeat` }} />
                           {badge && <span style={{ position: 'absolute', top: -3, right: -3, width: 17, height: 17, background: `${badge} center/contain no-repeat` }} />}
                         </span>
-                        <span style={{ fontFamily: NUNITO, fontWeight: 700, fontSize: 11.5, color: '#4A3B32', background: '#FFFCF5', border: '1.5px solid #EFE3CE', borderRadius: 999, padding: '2px 9px', whiteSpace: 'nowrap', boxShadow: '0 2px 6px rgba(120,90,40,.08)' }}>{n.nombre}</span>
+                        <span style={{ fontFamily: NUNITO, fontWeight: 700, fontSize: 11.5, color: '#4A3B32', background: '#FFFCF5', border: '1.5px solid #EFE3CE', borderRadius: 12, padding: '2px 9px', maxWidth: '100%', textAlign: 'center', lineHeight: 1.25, boxShadow: '0 2px 6px rgba(120,90,40,.08)' }}>{n.nombre}</span>
                       </button>
                     );
                   })}

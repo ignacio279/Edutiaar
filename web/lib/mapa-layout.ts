@@ -39,33 +39,23 @@ export const LEGEND: { label: string; c: string }[] = [
   { label: 'Sin empezar', c: COLORES.no_empezado },
 ];
 
-// Serpentina: N nodos en zig-zag dentro del viewBox 0..100. Las filas alternan
-// izquierda→derecha / derecha→izquierda → un caminito tipo "juego de tablero".
-// El orden del array sigue el recorrido (para que catmull dibuje el camino bien).
-export function serpentine(n: number, perRow = 3): [number, number][] {
-  if (n <= 0) return [];
-  if (n === 1) return [[50, 50]];
-  const marginX = 16;
-  const marginY = 18;
-  const rows = Math.ceil(n / perRow);
-  const colGap = perRow > 1 ? (100 - marginX * 2) / (perRow - 1) : 0;
-  const rowGap = rows > 1 ? (100 - marginY * 2) / (rows - 1) : 0;
-  const coords: [number, number][] = [];
-  for (let i = 0; i < n; i++) {
-    const row = Math.floor(i / perRow);
-    const col = i % perRow;
-    const slot = row % 2 === 0 ? col : perRow - 1 - col; // zig-zag
-    const x = perRow > 1 ? marginX + slot * colGap : 50;
-    const y = rows > 1 ? marginY + row * rowGap : 50;
-    coords.push([x, y]);
-  }
-  return coords;
-}
+// Layout del mapa. Hasta 6 paradas: coordenadas hand-tuned del diseño dentro del
+// contenedor de aspecto fijo (altoPx = null → el caller usa su aspectRatio).
+// Con más de 6: serpentina en zig-zag con PASO FIJO EN PX por fila — el alto del
+// contenedor crece con las filas (la pantalla scrollea) y los círculos, que tienen
+// tamaño fijo en px, nunca se pisan por más nodos que haya.
+export type MapaLayout = { coords: [number, number][]; altoPx: number | null };
 
-// Coordenadas hand-tuned del diseño para las dos variantes del mapa (hasta 6
-// paradas). Para N>6 caemos a la serpentina (con densidad distinta por variante
-// para que "Camino" y "Colinas" sigan viéndose diferentes). Devuelven [x,y] en
-// el viewBox 0..100, en orden de recorrido (para que catmull dibuje bien).
+// Paso vertical y margen (px) por consumidor: el mapa grande del alumno
+// (círculos ~94px + etiqueta) y el chico del panel docente (~64px).
+export const ESCALAS_MAPA = {
+  alumno: { pitch: 175, margen: 95 },
+  docente: { pitch: 125, margen: 72 },
+} as const;
+export type EscalaMapa = keyof typeof ESCALAS_MAPA;
+
+// Coordenadas hand-tuned del diseño para las dos variantes (hasta 6 paradas),
+// [x,y] en el viewBox 0..100, en orden de recorrido (para que catmull dibuje bien).
 const COORDS_CAMINO: [number, number][] = [
   [14, 22], [36, 40], [58, 25], [81, 44], [60, 68], [33, 80],
 ];
@@ -73,21 +63,41 @@ const COORDS_COLINAS: [number, number][] = [
   [10, 56], [27, 36], [44, 58], [62, 36], [80, 56], [93, 38],
 ];
 
-export function coordsCamino(n: number): [number, number][] {
-  if (n <= 0) return [];
-  if (n <= COORDS_CAMINO.length) return COORDS_CAMINO.slice(0, n);
-  return serpentine(n, 3);
+// Serpentina alta: x en % (zig-zag por fila), y en % de un alto calculado para que
+// entre fila y fila haya exactamente `pitch` px. El orden sigue el recorrido.
+function serpentinaAlta(n: number, perRow: number, escala: EscalaMapa): MapaLayout {
+  const { pitch, margen } = ESCALAS_MAPA[escala];
+  const rows = Math.ceil(n / perRow);
+  const altoPx = margen * 2 + (rows - 1) * pitch;
+  const marginX = 16;
+  const colGap = perRow > 1 ? (100 - marginX * 2) / (perRow - 1) : 0;
+  const coords: [number, number][] = [];
+  for (let i = 0; i < n; i++) {
+    const row = Math.floor(i / perRow);
+    const col = i % perRow;
+    const slot = row % 2 === 0 ? col : perRow - 1 - col; // zig-zag
+    const x = perRow > 1 ? marginX + slot * colGap : 50;
+    const y = ((margen + row * pitch) / altoPx) * 100;
+    coords.push([x, y]);
+  }
+  return { coords, altoPx };
 }
 
-export function coordsColinas(n: number): [number, number][] {
-  if (n <= 0) return [];
-  if (n <= COORDS_COLINAS.length) return COORDS_COLINAS.slice(0, n);
-  return serpentine(n, 4);
+export function layoutCamino(n: number, escala: EscalaMapa = 'alumno'): MapaLayout {
+  if (n <= 0) return { coords: [], altoPx: null };
+  if (n <= COORDS_CAMINO.length) return { coords: COORDS_CAMINO.slice(0, n), altoPx: null };
+  return serpentinaAlta(n, 3, escala);
 }
 
-// Variante del mapa → coordenadas. 'A' = Camino (default), 'B' = Colinas.
-export function coordsVariante(variante: string, n: number): [number, number][] {
-  return variante === 'B' ? coordsColinas(n) : coordsCamino(n);
+export function layoutColinas(n: number, escala: EscalaMapa = 'alumno'): MapaLayout {
+  if (n <= 0) return { coords: [], altoPx: null };
+  if (n <= COORDS_COLINAS.length) return { coords: COORDS_COLINAS.slice(0, n), altoPx: null };
+  return serpentinaAlta(n, 4, escala);
+}
+
+// Variante del mapa → layout. 'A' = Camino (default), 'B' = Colinas.
+export function layoutVariante(variante: string, n: number, escala: EscalaMapa = 'alumno'): MapaLayout {
+  return variante === 'B' ? layoutColinas(n, escala) : layoutCamino(n, escala);
 }
 
 // Saludo cálido de SOL para la pantalla de practicar (tono rioplatense).

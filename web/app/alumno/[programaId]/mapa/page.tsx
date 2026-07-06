@@ -8,7 +8,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useMe } from '@/lib/me-context';
 import { alpha, catmull, nodeIcon, starBadge, lockBadge, uiIcon } from '@/lib/art';
-import { colorNodo, LEGEND, coordsVariante } from '@/lib/mapa-layout';
+import { colorNodo, LEGEND, layoutVariante } from '@/lib/mapa-layout';
 import { temaMateria, iconoNodo } from '@/lib/materia-tema';
 
 const BALOO = 'var(--font-baloo), cursive';
@@ -52,7 +52,7 @@ export default function MapaMateria() {
   }, [me, programaId]);
 
   const tema = temaMateria(materia);
-  const coords = coordsVariante(variant, nodos?.length || 0);
+  const { coords, altoPx } = layoutVariante(variant, nodos?.length || 0);
 
   function practicarSugerido() {
     if (!nodos?.length) return;
@@ -94,7 +94,7 @@ export default function MapaMateria() {
         <p style={{ color: '#7A6F5F', fontWeight: 600, marginTop: 20 }}>Esta materia todavía no tiene nodos.</p>
       ) : (
         <>
-          <div style={{ position: 'relative', width: 'min(920px,100%)', aspectRatio: '920/540', margin: '18px auto 0' }}>
+          <div style={{ position: 'relative', width: 'min(920px,100%)', ...(altoPx ? { height: altoPx } : { aspectRatio: '920/540' }), margin: '18px auto 0' }}>
             <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', overflow: 'visible' }}>
               <path d={catmull(coords)} fill="none" stroke="#E2C9A0" strokeWidth="5" strokeLinecap="round" strokeDasharray="0.5 9" vectorEffect="non-scaling-stroke" />
             </svg>
@@ -106,13 +106,13 @@ export default function MapaMateria() {
                 <button
                   key={n.id}
                   onClick={() => router.push(`/alumno/${programaId}/practicar?nodo=${n.id}`)}
-                  style={{ position: 'absolute', left: `${x}%`, top: `${y}%`, transform: 'translate(-50%,-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, background: 'none', border: 'none', cursor: 'pointer', width: 'clamp(92px,12vw,118px)', padding: 0 }}
+                  style={{ position: 'absolute', left: `${x}%`, top: `${y}%`, transform: 'translate(-50%,-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, background: 'none', border: 'none', cursor: 'pointer', width: 'clamp(140px,19vw,205px)', padding: 0 }}
                 >
                   <span style={{ position: 'relative', width: 'clamp(74px,9.5vw,94px)', height: 'clamp(74px,9.5vw,94px)', borderRadius: '50%', background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 8px 18px ${alpha(color, 0.34)}`, border: '5px solid #FFFCF5' }}>
                     <span style={{ width: '48%', height: '48%', background: `${nodeIcon(iconoNodo(i))} center/contain no-repeat` }} />
                     {badge && <span style={{ position: 'absolute', top: -5, right: -5, width: 24, height: 24, background: `${badge} center/contain no-repeat` }} />}
                   </span>
-                  <span style={{ fontFamily: BALOO, fontWeight: 700, fontSize: 'clamp(12px,1.5vw,15px)', color: '#4A3B32', background: '#FFFCF5', border: '1.5px solid #EFE3CE', borderRadius: 999, padding: '4px 13px', whiteSpace: 'nowrap', boxShadow: '0 2px 6px rgba(120,90,40,.08)' }}>
+                  <span style={{ fontFamily: BALOO, fontWeight: 700, fontSize: 'clamp(12px,1.5vw,15px)', color: '#4A3B32', background: '#FFFCF5', border: '1.5px solid #EFE3CE', borderRadius: 16, padding: '4px 13px', maxWidth: '100%', textAlign: 'center', lineHeight: 1.25, boxShadow: '0 2px 6px rgba(120,90,40,.08)' }}>
                     {n.nombre}
                   </span>
                 </button>
