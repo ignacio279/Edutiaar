@@ -2,8 +2,10 @@
 // Autoría docente (Fase 2 / SP-2): la seño sube/pega el contenido de una materia,
 // SOL lo divide en nodos (Claude real con ANTHROPIC_API_KEY seteada), ella los revisa/edita y publica.
 // Llama a la Edge Function dividir-nodos con el JWT del docente (no la anon key).
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+// Con ?sol=<sol_materia_id> reabre una materia existente (desde Mis materias):
+// carga programa + nodos y permite editar, guardar y (re)publicar.
+import { Suspense, useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import DocenteSidebar from '@/components/DocenteSidebar';
 import { toast } from '@/lib/toast';
@@ -34,9 +36,10 @@ const btnPrimary: React.CSSProperties = {
   padding: '12px 22px', fontFamily: QUICK, fontWeight: 700, fontSize: 16, cursor: 'pointer',
 };
 
-export default function Autoria() {
+function Autoria() {
   const router = useRouter();
   const supabase = createClient();
+  const solParam = useSearchParams().get('sol');
 
   const [loaded, setLoaded] = useState(false);
   const [materia, setMateria] = useState('Lengua');
@@ -44,6 +47,7 @@ export default function Autoria() {
   const [contenido, setContenido] = useState('');
   const [pdf, setPdf] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
+  const [modo, setModo] = useState<'crear' | 'editar'>('crear');
 
   const [solMateriaId, setSolMateriaId] = useState<string | null>(null);
   const [programaId, setProgramaId] = useState<string | null>(null);
@@ -56,10 +60,37 @@ export default function Autoria() {
       if (!user) { router.replace('/'); return; }
       const { data: perfil } = await supabase.from('perfil').select('rol').eq('id', user.id).single();
       if ((perfil as { rol?: string } | null)?.rol !== 'docente') { router.replace('/alumno'); return; }
+
+      if (solParam) {
+        // Reabrir una materia existente. Filtrar por docente_id es obligatorio:
+        // la policy de 0007 también deja ver publicadas ajenas de la escuela.
+        const { data: sm } = await supabase
+          .from('sol_materia')
+          .select('id, programa_id, estado, programa:programa_id(grado, materia:materia_id(nombre))')
+          .eq('id', solParam)
+          .eq('docente_id', user.id)
+          .maybeSingle();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const fila = sm as any;
+        if (!fila) { toast('No encontramos esa materia'); router.replace('/docente/materias'); return; }
+        const { data: ns } = await supabase
+          .from('nodo')
+          .select('id, nombre, orden, descripcion')
+          .eq('programa_id', fila.programa_id)
+          .order('orden');
+        setSolMateriaId(fila.id);
+        setProgramaId(fila.programa_id);
+        setEstado(fila.estado);
+        setMateria(fila.programa?.materia?.nombre ?? '');
+        setGrado(fila.programa?.grado ?? 3);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        setNodos(((ns as any[]) || []).map((n) => ({ id: n.id, nombre: n.nombre, orden: n.orden, descripcion: n.descripcion ?? '' })));
+        setModo('editar');
+      }
       setLoaded(true);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [solParam]);
 
   function elegirPdf(f: File | undefined) {
     if (!f) return;
@@ -120,25 +151,35 @@ export default function Autoria() {
     setNodos((ns) => ns.filter((_, k) => k !== i));
   }
 
+  // Núcleo de guardado (sin manejo de busy): upsertea los nodos por RLS.
+  // Devuelve false si algún insert/update falló.
+  async function guardarNodos(): Promise<boolean> {
+    if (!programaId) return false;
+    let ok = true;
+    for (let i = 0; i < nodos.length; i++) {
+      const n = nodos[i];
+      if (!n.nombre.trim()) continue;
+      if (n.id) {
+        const { error } = await supabase.from('nodo')
+          .update({ nombre: n.nombre.trim(), descripcion: n.descripcion, orden: i, actualizado_at: new Date().toISOString() })
+          .eq('id', n.id);
+        if (error) ok = false;
+      } else {
+        const { data, error } = await supabase.from('nodo')
+          .insert({ programa_id: programaId, nombre: n.nombre.trim(), descripcion: n.descripcion, orden: i })
+          .select('id').single();
+        if (error) ok = false;
+        if (data) setNodos((ns) => ns.map((x, k) => (k === i ? { ...x, id: (data as { id: string }).id } : x)));
+      }
+    }
+    return ok;
+  }
+
   async function guardar() {
     if (busy || !programaId) return;
     setBusy(true);
     try {
-      for (let i = 0; i < nodos.length; i++) {
-        const n = nodos[i];
-        if (!n.nombre.trim()) continue;
-        if (n.id) {
-          await supabase.from('nodo')
-            .update({ nombre: n.nombre.trim(), descripcion: n.descripcion, orden: i, actualizado_at: new Date().toISOString() })
-            .eq('id', n.id);
-        } else {
-          const { data } = await supabase.from('nodo')
-            .insert({ programa_id: programaId, nombre: n.nombre.trim(), descripcion: n.descripcion, orden: i })
-            .select('id').single();
-          if (data) setNodos((ns) => ns.map((x, k) => (k === i ? { ...x, id: (data as { id: string }).id } : x)));
-        }
-      }
-      toast('Cambios guardados');
+      toast((await guardarNodos()) ? 'Cambios guardados' : 'Algunos cambios no se pudieron guardar');
     } finally {
       setBusy(false);
     }
@@ -148,10 +189,15 @@ export default function Autoria() {
     if (busy || !solMateriaId) return;
     setBusy(true);
     try {
-      const { error } = await supabase.from('sol_materia').update({ estado: 'publicado' }).eq('id', solMateriaId);
-      if (error) { toast('No se pudo publicar'); return; }
-      setEstado('publicado');
-      toast('¡Publicado! SOL está preparando los ejercicios… 🌱');
+      // Guardar primero: un nodo nuevo sin id no recibe ejercicios del generador.
+      await guardarNodos();
+      const republicacion = estado === 'publicado';
+      if (!republicacion) {
+        const { data } = await supabase.from('sol_materia').update({ estado: 'publicado' }).eq('id', solMateriaId).select('id');
+        if (!data?.length) { toast('No se pudo publicar'); return; }
+        setEstado('publicado');
+      }
+      toast(republicacion ? 'SOL está preparando los ejercicios de los nodos nuevos…' : '¡Publicado! SOL está preparando los ejercicios… 🌱');
       try {
         const { data: { session } } = await supabase.auth.getSession();
         const r = await fetch(`${URL}/functions/v1/generador-ejercicios`, {
@@ -177,19 +223,23 @@ export default function Autoria() {
       <DocenteSidebar activo="materias" />
 
       <main style={{ flex: 1, minWidth: 0, padding: 'clamp(22px,3.5vw,40px)', maxWidth: 760 }}>
+        <button onClick={() => router.push('/docente/materias')} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: 'none', border: 'none', color: '#7A6F5F', fontWeight: 700, fontSize: 15, cursor: 'pointer', marginBottom: 14 }}>‹ Mis materias</button>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
           <div style={{ width: 48, height: 48, background: `${sol('happy')} center/contain no-repeat` }} />
           <div>
             <h1 style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 'clamp(24px,4.5vw,30px)', color: '#3A332A', margin: 0 }}>
-              Subir un plan
+              {modo === 'editar' ? 'Editar materia' : 'Subir un plan'}
             </h1>
             <p style={{ fontSize: 14.5, color: '#7A6F5F', margin: '3px 0 0', fontWeight: 600 }}>
-              Pegá el contenido o subí un PDF y SOL lo divide en nodos. Después los revisás.
+              {modo === 'editar'
+                ? `${materia} · ${grado}° grado · ${estado === 'publicado' ? 'publicada' : 'borrador'}`
+                : 'Pegá el contenido o subí un PDF y SOL lo divide en nodos. Después los revisás.'}
             </p>
           </div>
         </div>
 
-        {/* Formulario */}
+        {/* Formulario de generación (solo al crear; al editar los nodos ya existen) */}
+        {modo === 'crear' && (
         <div style={{ ...card, display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={{ display: 'flex', gap: 12 }}>
             <div style={{ flex: 2 }}>
@@ -249,9 +299,10 @@ export default function Autoria() {
             {busy ? 'Generando…' : 'Generar nodos'}
           </button>
         </div>
+        )}
 
         {/* Revisión de nodos */}
-        {nodos.length > 0 && (
+        {(nodos.length > 0 || modo === 'editar') && (
           <div style={{ marginTop: 24 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
               <h2 style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 19, color: '#3A332A', margin: 0 }}>
@@ -282,14 +333,23 @@ export default function Autoria() {
               <button onClick={guardar} style={{ ...btnPrimary, background: '#FFFCF5', color: '#7A6F5F', border: '2px solid #EFE3CE' }}>
                 {busy ? 'Guardando…' : 'Guardar cambios'}
               </button>
-              <button onClick={publicar} className="ed-primary" style={{ ...btnPrimary, background: '#7FB069' }} disabled={estado === 'publicado'}>
-                {estado === 'publicado' ? 'Publicado ✓' : 'Publicar'}
+              <button onClick={publicar} className="ed-primary" style={{ ...btnPrimary, background: '#7FB069' }}>
+                {estado === 'publicado' ? 'Publicar cambios' : 'Publicar'}
               </button>
             </div>
           </div>
         )}
       </main>
     </div>
+  );
+}
+
+// useSearchParams exige Suspense en el App Router (mismo patrón que practicar).
+export default function Page() {
+  return (
+    <Suspense fallback={<p style={{ padding: 40, color: '#7A6F5F', fontWeight: 600 }}>Cargando…</p>}>
+      <Autoria />
+    </Suspense>
   );
 }
 
