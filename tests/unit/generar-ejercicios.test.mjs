@@ -2,7 +2,11 @@
 // (supabase/functions/generador-ejercicios/generar.ts). `npm test`.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { construirPromptEjercicios, parseEjercicios, cubreDominio } from '../../supabase/functions/generador-ejercicios/generar.ts';
+import {
+  bandaDeGrado, ESTILO_BANDA, CELDAS, celdasIniciales, celdasParaLote, claveCelda,
+  mockEjercicios, construirPromptEjercicios, parseEjercicios, cubreDominio,
+  POR_CELDA_INICIAL, LOTE_REPOSICION,
+} from '../../supabase/functions/generador-ejercicios/generar.ts';
 
 test('construirPromptEjercicios: incluye materia/grado, producir y el shape JSON', () => {
   const { system, user } = construirPromptEjercicios('Lengua', 3, 'Vocales', 'las vocales', 5);
@@ -49,4 +53,53 @@ test('cubreDominio: exige >=2 producir y >=1 difícil', () => {
   assert.equal(cubreDominio([ej('producir', 3), ej('producir', 1), ej('reconocer', 1)]), true);
   assert.equal(cubreDominio([ej('producir', 1), ej('producir', 1)]), false); // sin difícil
   assert.equal(cubreDominio([ej('producir', 3), ej('reconocer', 1)]), false); // 1 solo producir
+});
+
+test('bandaDeGrado: 1-2 chiquitos, 3-4 medianos, 5-7 grandes', () => {
+  assert.equal(bandaDeGrado(1), 'chiquitos');
+  assert.equal(bandaDeGrado(2), 'chiquitos');
+  assert.equal(bandaDeGrado(3), 'medianos');
+  assert.equal(bandaDeGrado(4), 'medianos');
+  assert.equal(bandaDeGrado(5), 'grandes');
+  assert.equal(bandaDeGrado(7), 'grandes');
+});
+
+test('celdas: 12 combinaciones tipo × dificultad; inicial trae 3 por celda', () => {
+  assert.equal(CELDAS.length, 12);
+  const ini = celdasIniciales();
+  assert.equal(ini.reduce((s, c) => s + c.n, 0), 12 * POR_CELDA_INICIAL);
+  assert.ok(ini.every((c) => c.n === POR_CELDA_INICIAL));
+});
+
+test('celdasParaLote: reparte el lote priorizando las celdas con menos sin-ver', () => {
+  // todas las celdas con 5 sin ver, salvo producir|3 con 0 → producir|3 recibe más
+  const sinVer = new Map(CELDAS.map((c) => [claveCelda(c), 5]));
+  sinVer.set('producir|3', 0);
+  const lote = celdasParaLote(sinVer, LOTE_REPOSICION);
+  assert.equal(lote.reduce((s, c) => s + c.n, 0), LOTE_REPOSICION);
+  const prod3 = lote.find((c) => c.tipo === 'producir' && c.dificultad === 3);
+  assert.ok(prod3 && prod3.n >= 2, 'la celda más escasa recibe más ejercicios');
+});
+
+test('celdasParaLote: determinístico', () => {
+  const sinVer = new Map(CELDAS.map((c) => [claveCelda(c), 2]));
+  assert.deepEqual(celdasParaLote(sinVer, 12), celdasParaLote(sinVer, 12));
+});
+
+test('mockEjercicios: respeta celdas, enunciados únicos y correcta entre las opciones', () => {
+  const celdas = [{ tipo: 'producir', dificultad: 3, n: 2 }, { tipo: 'reconocer', dificultad: 1, n: 1 }];
+  const a = mockEjercicios('nodo-1', 'Vocales', celdas, 0);
+  assert.equal(a.length, 3);
+  assert.ok(a.every((e) => e.opciones.includes(e.correcta)));
+  assert.equal(a.filter((e) => e.tipo === 'producir' && e.dificultad === 3).length, 2);
+  // `desde` distinto → enunciados distintos (nunca repetidos aunque se repongan lotes)
+  const b = mockEjercicios('nodo-1', 'Vocales', celdas, a.length);
+  const enunciados = new Set([...a, ...b].map((e) => e.enunciado));
+  assert.equal(enunciados.size, 6);
+});
+
+test('construirPromptEjercicios: incluye estilo de banda y cantidades por celda', () => {
+  const { system, user } = construirPromptEjercicios('Lengua', 2, 'Vocales', '', 6, [{ tipo: 'producir', dificultad: 3, n: 2 }]);
+  assert.ok(system.includes(ESTILO_BANDA.chiquitos));
+  assert.ok(user.includes('2 de tipo "producir" con dificultad 3'));
 });

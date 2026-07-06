@@ -3,7 +3,7 @@
 
 export type EstadoNodo = 'no_empezado' | 'en_construccion' | 'a_reforzar' | 'dominado';
 
-const COLORES: Record<EstadoNodo, string> = {
+export const COLORES: Record<EstadoNodo, string> = {
   no_empezado: '#C9BCA6',
   en_construccion: '#E89B42',
   a_reforzar: '#D46A5A',
@@ -13,6 +13,23 @@ const COLORES: Record<EstadoNodo, string> = {
 // Color de un nodo según su estado; lo desconocido/ausente cae a 'no_empezado'.
 export function estadoColor(estado: string | null | undefined): string {
   return COLORES[(estado ?? 'no_empezado') as EstadoNodo] ?? COLORES.no_empezado;
+}
+
+// Mezcla lineal de dos colores hex (#rrggbb). t en [0,1].
+export function mezclarColor(a: string, b: string, t: number): string {
+  const ca = a.replace('#', ''), cb = b.replace('#', '');
+  const canal = (i: number) => Math.round(parseInt(ca.slice(i, i + 2), 16) * (1 - t) + parseInt(cb.slice(i, i + 2), 16) * t);
+  return `#${[0, 2, 4].map((i) => canal(i).toString(16).padStart(2, '0')).join('')}`;
+}
+
+// Color del nodo en el mapa: los estados con significado propio (dominado,
+// a_reforzar, no_empezado) mantienen su color; en_construccion es un GRADIENTE
+// que se acerca al verde de dominado a medida que crece el puntaje del motor.
+export function colorNodo(estado: string | null | undefined, puntaje = 0): string {
+  if (estado === 'en_construccion') {
+    return mezclarColor(COLORES.en_construccion, COLORES.dominado, Math.min(100, Math.max(0, puntaje)) / 100);
+  }
+  return estadoColor(estado);
 }
 
 export const LEGEND: { label: string; c: string }[] = [

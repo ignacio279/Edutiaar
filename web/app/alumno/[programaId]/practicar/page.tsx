@@ -2,9 +2,10 @@
 // Practicar (diseño Edutia / SP-4): la práctica ES un chat con SOL. SOL saluda,
 // hace cada pregunta como burbuja, el chico toca una opción (botones grandes en el
 // pie), y SOL festeja o alienta. Confeti al acertar. Por debajo sigue el loop real:
-// ejercicios del pool (elegirEjercicios), corrección local (vs ejercicio.correcta),
-// reintentos + tiempo, y al terminar crea la sesion + respuestas, mueve alumno_nodo
-// con la regla de dominio (calcularEstado/resolverEstado) y dispara evaluar-sesion.
+// ejercicios del pool (elegirEjercicios, sin repetir lo ya visto), corrección local
+// (vs ejercicio.correcta), reintentos + tiempo, y al terminar crea la sesion +
+// respuestas, mueve alumno_nodo con el motor progresivo (puntajeSesion +
+// calcularEstadoProgresivo / resolverEstado) y dispara evaluar-sesion.
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
@@ -13,8 +14,8 @@ import { sol, item, alpha } from '@/lib/art';
 import { temaMateria } from '@/lib/materia-tema';
 import { saludo, cierre, praise, encourage } from '@/lib/practica-copy';
 import { toast } from '@/lib/toast';
-import { elegirEjercicios, resumen, type Ejercicio, type RespuestaReg, type HistorialEjercicio } from '@/lib/practica';
-import { calcularEstado, resolverEstado, type EstadoNodo } from '@/lib/dominio';
+import { elegirEjercicios, filtrarNoVistos, necesitaReposicion, resumen, type Ejercicio, type RespuestaReg, type HistorialEjercicio } from '@/lib/practica';
+import { puntajeSesion, calcularEstadoProgresivo, coberturaHistorica, dosUltimasMal, resolverEstado, type EstadoNodo } from '@/lib/dominio';
 
 const BALOO = "var(--font-baloo), cursive";
 const NUNITO = 'var(--font-nunito), sans-serif';
@@ -48,6 +49,7 @@ function PracticarInner() {
   const [fin, setFin] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [nuevoEstado, setNuevoEstado] = useState<EstadoNodo | null>(null);
+  const [poolAgotado, setPoolAgotado] = useState(false);
   const [celebrate, setCelebrate] = useState(false);
   const [chatInput, setChatInput] = useState('');
   const [chatCargando, setChatCargando] = useState(false);
@@ -85,18 +87,26 @@ function PracticarInner() {
         .eq('nodo_id', nodoId);
 
       let historial: HistorialEjercicio[] = [];
+      let vistos: string[] = [];
       if (me) {
-        const { data: win } = await supabase
+        const { data: todas } = await supabase
           .from('respuesta')
-          .select('correcta, reintentos, created_at, ejercicio:ejercicio_id!inner(tipo,dificultad), sesion:sesion_id!inner(alumno_id,nodo_id)')
+          .select('ejercicio_id, correcta, reintentos, created_at, ejercicio:ejercicio_id!inner(tipo,dificultad), sesion:sesion_id!inner(alumno_id,nodo_id)')
           .eq('sesion.nodo_id', nodoId)
           .eq('sesion.alumno_id', me.id)
-          .order('created_at', { ascending: false })
-          .limit(8);
+          .order('created_at', { ascending: false });
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        historial = ((win as any[]) || []).map((x) => ({ correcta: x.correcta, reintentos: x.reintentos, tipo: x.ejercicio?.tipo, dificultad: x.ejercicio?.dificultad }));
+        const filas = (todas as any[]) || [];
+        vistos = filas.map((x) => x.ejercicio_id);
+        historial = filas.slice(0, 8).map((x) => ({ correcta: x.correcta, reintentos: x.reintentos, tipo: x.ejercicio?.tipo, dificultad: x.ejercicio?.dificultad }));
       }
-      setEjercicios(elegirEjercicios((data as Ejercicio[]) || [], historial));
+      const pool = (data as Ejercicio[]) || [];
+      const noVistos = filtrarNoVistos(pool, vistos);
+      if (me && necesitaReposicion(noVistos.length)) {
+        supabase.functions.invoke('generador-ejercicios', { body: { nodo_id: nodoId } }).catch(() => {});
+      }
+      setPoolAgotado(pool.length > 0 && noVistos.length === 0);
+      setEjercicios(elegirEjercicios(noVistos, historial));
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodoId, me]);
@@ -164,24 +174,38 @@ function PracticarInner() {
         regs.map((x) => ({ sesion_id: sesId, ejercicio_id: x.ejercicio_id, dada: x.dada, correcta: x.correcta, reintentos: x.reintentos, tiempo_seg: x.tiempo_seg })),
       );
 
-      const { data: win } = await supabase
+      const { data: todasRaw, error: histErr } = await supabase
         .from('respuesta')
-        .select('correcta, reintentos, created_at, ejercicio:ejercicio_id!inner(tipo,dificultad), sesion:sesion_id!inner(nodo_id)')
+        .select('correcta, reintentos, ejercicio:ejercicio_id!inner(tipo,dificultad), sesion:sesion_id!inner(alumno_id,nodo_id)')
         .eq('sesion.nodo_id', nodoId)
-        .order('created_at', { ascending: false })
-        .limit(8);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const ventana = ((win as any[]) || []).map((x) => ({ correcta: x.correcta, reintentos: x.reintentos, tipo: x.ejercicio?.tipo, dificultad: x.ejercicio?.dificultad }));
-      const { data: an } = await supabase.from('alumno_nodo').select('estado, estado_override').eq('alumno_id', me.id).eq('nodo_id', nodoId).maybeSingle();
-      const previo = an as { estado?: EstadoNodo; estado_override?: boolean } | null;
-      const tasa = r.total ? r.aciertos / r.total : 0;
-      const calculo = calcularEstado(ventana, tasa, previo?.estado || 'no_empezado');
-      const res = resolverEstado(calculo, previo?.estado_override ?? false, previo?.estado || 'no_empezado');
-      await supabase.from('alumno_nodo').upsert(
-        { alumno_id: me.id, nodo_id: nodoId, estado: res.estado, puntaje: res.puntaje, actualizado_at: new Date().toISOString() },
-        { onConflict: 'alumno_id,nodo_id' },
-      );
-      setNuevoEstado(res.estado);
+        .eq('sesion.alumno_id', me.id);
+
+      if (!histErr) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const todas = ((todasRaw as any[]) || []).map((x) => ({ correcta: x.correcta, reintentos: x.reintentos, tipo: x.ejercicio?.tipo, dificultad: x.ejercicio?.dificultad }));
+
+        const { data: an } = await supabase.from('alumno_nodo').select('estado, estado_override, puntaje').eq('alumno_id', me.id).eq('nodo_id', nodoId).maybeSingle();
+        const previo = an as { estado?: EstadoNodo; estado_override?: boolean; puntaje?: number } | null;
+
+        // Replay de la sesión (en orden cronológico) sobre el puntaje persistido.
+        const cronologicas = regs.map((x, i) => ({ correcta: x.correcta, reintentos: x.reintentos, tipo: ejercicios![i]?.tipo ?? 'reconocer', dificultad: ejercicios![i]?.dificultad ?? 1 }));
+        const nuevoPuntaje = puntajeSesion(Number(previo?.puntaje ?? 0), cronologicas);
+        const tasa = r.total ? r.aciertos / r.total : 0;
+        const estadoCalc = calcularEstadoProgresivo({
+          puntaje: nuevoPuntaje,
+          totalRespondidos: todas.length,
+          cobertura: coberturaHistorica(todas),
+          dosUltimasMal: dosUltimasMal(cronologicas),
+          tasaSesion: tasa,
+          estadoActual: previo?.estado || 'no_empezado',
+        });
+        const res = resolverEstado({ estado: estadoCalc, puntaje: nuevoPuntaje }, previo?.estado_override ?? false, previo?.estado || 'no_empezado');
+        await supabase.from('alumno_nodo').upsert(
+          { alumno_id: me.id, nodo_id: nodoId, estado: res.estado, puntaje: res.puntaje, actualizado_at: new Date().toISOString() },
+          { onConflict: 'alumno_id,nodo_id' },
+        );
+        setNuevoEstado(res.estado);
+      } // histErr: mejor no mover nada que mover con datos truncados; la próxima sesión lo recalcula
       supabase.functions.invoke('evaluar-sesion', { body: { sesion_id: sesId } }).catch(() => {});
     }
     setGuardando(false);
@@ -251,7 +275,11 @@ function PracticarInner() {
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 22px', textAlign: 'center' }}>
         <div style={{ width: 90, height: 90, background: `${sol('soft')} center/contain no-repeat` }} />
-        <p style={{ color: '#7A6F5F', fontWeight: 600, marginTop: 12 }}>{nodoNombre || 'Este nodo'} todavía no tiene ejercicios.</p>
+        <p style={{ color: '#7A6F5F', fontWeight: 600, marginTop: 12 }}>
+          {poolAgotado
+            ? '¡Hiciste todos los ejercicios que había! SOL está preparando nuevos 🌱 Volvé en un ratito.'
+            : `${nodoNombre || 'Este nodo'} todavía no tiene ejercicios.`}
+        </p>
         <button onClick={() => router.push(`/alumno/${programaId}/mapa`)} className="ed-primary" style={btnPrimary}>Volver al mapa</button>
       </div>
     );
