@@ -16,6 +16,7 @@ import { temaMateria } from '@/lib/materia-tema';
 import { saludo, cierre, praise, encourage } from '@/lib/practica-copy';
 import { toast } from '@/lib/toast';
 import { elegirEjercicios, filtrarNoVistos, necesitaReposicion, resumen, type Ejercicio, type RespuestaReg, type HistorialEjercicio } from '@/lib/practica';
+import { guardarProgreso, leerProgreso, borrarProgreso } from '@/lib/practica-storage';
 import { puntajeSesion, calcularEstadoProgresivo, coberturaHistorica, dosUltimasMal, resolverEstado, type EstadoNodo } from '@/lib/dominio';
 
 const BALOO = "var(--font-baloo), cursive";
@@ -54,11 +55,13 @@ function PracticarInner() {
   const [celebrate, setCelebrate] = useState(false);
   const [chatInput, setChatInput] = useState('');
   const [chatCargando, setChatCargando] = useState(false);
+  // Cuenta de mensajes libres al chat (state y no ref: se persiste con la tanda,
+  // así recargar la página no resetea el tope CHAT_CAP).
+  const [chatCount, setChatCount] = useState(0);
 
   const tsRef = useRef<number | null>(null);
   const threadRef = useRef<HTMLDivElement | null>(null);
   const celTok = useRef(0);
-  const chatCountRef = useRef(0);
   const confettiRef = useRef<ConfPiece[] | null>(null);
   if (!confettiRef.current) {
     confettiRef.current = Array.from({ length: 18 }).map((_, i) => {
@@ -92,7 +95,22 @@ function PracticarInner() {
   }, [nodoId, me, programaId]);
 
   useEffect(() => {
-    if (!nodoId) return;
+    if (!nodoId || !me) return;
+    // Tanda a medio hacer en este dispositivo → retomar donde quedó (mismos
+    // ejercicios, respuestas y chat), sin volver a elegir del pool.
+    const previo = leerProgreso(me.id, nodoId);
+    if (previo) {
+      setEjercicios(previo.ejercicios);
+      setIdx(previo.idx);
+      setReintentos(previo.reintentos);
+      setRespuestas(previo.respuestas);
+      setMsgs(previo.msgs as Msg[]);
+      setChatCount(previo.chatCount);
+      setNodoNombre(previo.nodoNombre);
+      setMateria(previo.materia);
+      tsRef.current = null;
+      return;
+    }
     (async () => {
       const { data: nodo } = await supabase.from('nodo').select('nombre').eq('id', nodoId).single();
       setNodoNombre((nodo as { nombre?: string } | null)?.nombre || '');
@@ -144,6 +162,17 @@ function PracticarInner() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [msgs, celebrate]);
 
+  // Persistir la tanda en curso en cada avance; al terminar, limpiar el snapshot
+  // (una tanda cerrada no se retoma). Así salir y volver no regala tanda nueva.
+  useEffect(() => {
+    if (!me || !nodoId || !ejercicios?.length || msgs.length === 0) return;
+    if (fin) {
+      borrarProgreso(me.id, nodoId);
+      return;
+    }
+    guardarProgreso(me.id, nodoId, { ejercicios, idx, reintentos, respuestas, msgs, chatCount, nodoNombre, materia });
+  }, [me, nodoId, ejercicios, msgs, idx, reintentos, respuestas, chatCount, fin, nodoNombre, materia]);
+
   function celebrar() {
     setCelebrate(true);
     const tk = ++celTok.current;
@@ -153,11 +182,11 @@ function PracticarInner() {
   async function enviarChat() {
     const t = chatInput.trim();
     if (!t || chatCargando || fin) return;
-    if (chatCountRef.current >= CHAT_CAP) {
+    if (chatCount >= CHAT_CAP) {
       toast('Por hoy ya charlamos bastante 🌞 ¡Seguí practicando!');
       return;
     }
-    chatCountRef.current += 1;
+    setChatCount((c) => c + 1);
     const conKid: Msg[] = [...msgs, { who: 'kid', kind: 'text', text: t }];
     setMsgs(conKid);
     setChatInput('');
