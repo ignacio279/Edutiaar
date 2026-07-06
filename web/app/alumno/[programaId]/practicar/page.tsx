@@ -173,7 +173,9 @@ function PracticarInner() {
       toast('SOL no pudo responder ahora 🙈 Probá de nuevo.');
       return;
     }
-    setMsgs((prev) => [...prev, { who: 'sol', kind: 'text', text: String(data.texto) }]);
+    // sol-chat separa la respuesta en burbujas (respuesta / "¿Te quedó claro?").
+    const burbujas: string[] = Array.isArray(data.burbujas) && data.burbujas.length ? data.burbujas.map(String) : [String(data.texto)];
+    setMsgs((prev) => [...prev, ...burbujas.map((b): Msg => ({ who: 'sol', kind: 'text', text: b }))]);
   }
 
   async function guardarSesion(regs: RespuestaReg[]) {
@@ -324,7 +326,7 @@ function PracticarInner() {
                   ? { maxWidth: '80%', background: '#FFFCF5', border: '2px solid #EFE3CE', borderRadius: 20, borderBottomLeftRadius: 6, padding: '13px 17px', boxShadow: '0 4px 12px rgba(120,90,40,.08)' }
                   : { maxWidth: '80%', background: tema.color, borderRadius: 20, borderBottomRightRadius: 6, padding: '12px 20px', boxShadow: `0 6px 14px ${alpha(tema.color, 0.3)}` }}>
                   {qimg && <div style={{ width: 'clamp(120px,32vw,148px)', height: 'clamp(120px,32vw,148px)', margin: '2px 0 10px', background: `${item(qimg)} center/contain no-repeat` }} />}
-                  <p style={{ margin: 0, fontFamily: NUNITO, fontWeight: 700, fontSize: 'clamp(16px,2.3vw,18px)', lineHeight: 1.35, color: isSol ? '#3A332A' : '#fff' }}>{text}</p>
+                  <p style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: NUNITO, fontWeight: 700, fontSize: 'clamp(16px,2.3vw,18px)', lineHeight: 1.35, color: isSol ? '#3A332A' : '#fff' }}>{text}</p>
                 </div>
               </div>
             );

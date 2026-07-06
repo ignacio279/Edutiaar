@@ -8,6 +8,7 @@ import {
   recortarHistorial,
   aMensajesClaude,
   construirSystem,
+  aBurbujas,
 } from '../../supabase/functions/sol-chat/chat.ts';
 
 const CTX = {
@@ -58,4 +59,37 @@ test('construirSystem incluye el nodo y la regla de no revelar la respuesta', ()
 test('construirSystem no rompe sin ejercicio', () => {
   const s = construirSystem({ materia: 'Lengua', nodoNombre: 'Las sílabas' });
   assert.ok(s.includes('Las sílabas'));
+});
+
+test('construirSystem pide texto plano y el flujo "¿Te quedó claro?"', () => {
+  const s = construirSystem(CTX);
+  assert.ok(/texto plano/i.test(s), 'debería exigir texto plano (sin markdown)');
+  assert.ok(/asteriscos/i.test(s), 'debería prohibir asteriscos');
+  assert.ok(s.includes('¿Te quedó claro?'), 'debería cerrar las dudas con "¿Te quedó claro?"');
+  assert.ok(/confirme|te diga que sí/i.test(s), 'debería esperar confirmación antes de seguir');
+});
+
+test('aBurbujas limpia asteriscos, títulos y viñetas', () => {
+  const r = aBurbujas('## Ojo\n**Decena** = grupos de 10.\n- __Centena__ = grupos de 100.');
+  assert.equal(r.length, 1);
+  assert.ok(!r[0].includes('*') && !r[0].includes('#') && !r[0].includes('_'), 'sin restos de markdown');
+  assert.ok(r[0].includes('Decena = grupos de 10.'));
+  assert.ok(r[0].includes('Centena = grupos de 100.'));
+});
+
+test('aBurbujas separa la respuesta y el "¿Te quedó claro?" en dos burbujas', () => {
+  const r = aBurbujas('La decena son grupos de 10.\n\n¿Te quedó claro?');
+  assert.deepEqual(r, ['La decena son grupos de 10.', '¿Te quedó claro?']);
+});
+
+test('aBurbujas con más de dos párrafos junta todo menos el último', () => {
+  const r = aBurbujas('Uno.\n\nDos.\n\n¿Te quedó claro?');
+  assert.equal(r.length, 2);
+  assert.ok(r[0].includes('Uno.') && r[0].includes('Dos.'));
+  assert.equal(r[1], '¿Te quedó claro?');
+});
+
+test('aBurbujas: un párrafo solo queda como una burbuja y sin texto no hay burbujas', () => {
+  assert.deepEqual(aBurbujas('¡Muy bien! Dale, probá.'), ['¡Muy bien! Dale, probá.']);
+  assert.deepEqual(aBurbujas('   \n\n  '), []);
 });

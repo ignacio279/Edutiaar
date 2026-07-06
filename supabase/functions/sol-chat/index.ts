@@ -10,7 +10,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { cors, json } from '../_shared/cors.ts';
 import { extraerTexto } from '../_shared/loop.ts';
-import { recortarHistorial, aMensajesClaude, construirSystem, type ChatMsg } from './chat.ts';
+import { recortarHistorial, aMensajesClaude, construirSystem, aBurbujas, type ChatMsg } from './chat.ts';
 
 const MODELO = 'claude-haiku-4-5'; // barato; corre seguido (Rule 4)
 const MAX_TOKENS = 400; // respuestas cortas para chicos → tope de costo por llamada
@@ -47,9 +47,11 @@ Deno.serve(async (req) => {
       }),
     });
     if (!r.ok) throw new Error(`claude_${r.status}: ${await r.text()}`);
-    const texto = extraerTexto(await r.json());
+    // Sin markdown y en burbujas separadas (respuesta / "¿Te quedó claro?");
+    // `texto` queda como fallback para fronts viejos.
+    const burbujas = aBurbujas(extraerTexto(await r.json()));
 
-    return json({ texto });
+    return json({ texto: burbujas.join('\n\n'), burbujas });
   } catch (e) {
     return json({ error: String((e as Error)?.message ?? e) }, 400);
   }
