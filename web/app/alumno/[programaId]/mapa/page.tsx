@@ -1,14 +1,14 @@
 'use client';
 // Mapa real del alumno (diseño Edutia / SP-3): los nodos de la materia (programa_id)
 // desde la DB, pintados por el estado del chico (alumno_nodo). Camino punteado con
-// dos variantes (Camino / Colinas), círculos con ícono + insignia (estrella si lo
-// domina, candado si no empezó) y CTA grande para practicar la parada sugerida.
+// círculos con ícono + insignia (estrella si lo domina, candado si no
+// empezó) y CTA grande para practicar la parada sugerida.
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useMe } from '@/lib/me-context';
 import { alpha, catmull, nodeIcon, starBadge, lockBadge, uiIcon } from '@/lib/art';
-import { colorNodo, LEGEND, layoutVariante } from '@/lib/mapa-layout';
+import { colorNodo, LEGEND, layoutCamino, nodoMasAvanzado } from '@/lib/mapa-layout';
 import { temaMateria, iconoNodo } from '@/lib/materia-tema';
 
 const BALOO = 'var(--font-baloo), cursive';
@@ -23,7 +23,6 @@ export default function MapaMateria() {
   const programaId = String(params.programaId);
   const [nodos, setNodos] = useState<NodoVista[] | null>(null);
   const [materia, setMateria] = useState('');
-  const [variant, setVariant] = useState<'A' | 'B'>('A');
 
   useEffect(() => {
     if (!me) return;
@@ -52,22 +51,12 @@ export default function MapaMateria() {
   }, [me, programaId]);
 
   const tema = temaMateria(materia);
-  const { coords, altoPx } = layoutVariante(variant, nodos?.length || 0);
+  const { coords, altoPx } = layoutCamino(nodos?.length || 0);
 
   function practicarSugerido() {
-    if (!nodos?.length) return;
-    const pendiente = nodos.find((n) => n.estado !== 'dominado');
-    router.push(`/alumno/${programaId}/practicar?nodo=${(pendiente || nodos[0]).id}`);
+    const nodo = nodoMasAvanzado(nodos || []);
+    if (nodo) router.push(`/alumno/${programaId}/practicar?nodo=${nodo}`);
   }
-
-  const seg = (label: string, on: boolean, onClick: () => void) => (
-    <button
-      onClick={onClick}
-      style={{ background: on ? '#F4A93B' : 'transparent', color: on ? '#fff' : '#7A6F5F', border: 'none', borderRadius: 999, padding: '8px 18px', fontFamily: 'var(--font-nunito)', fontWeight: 800, fontSize: 14, cursor: 'pointer' }}
-    >
-      {label}
-    </button>
-  );
 
   return (
     <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', width: '100%', maxWidth: 1000, margin: '0 auto', padding: '24px clamp(16px,4vw,40px) 48px', animation: 'edFade .3s ease' }}>
@@ -81,10 +70,6 @@ export default function MapaMateria() {
             Seguí el camino. Tocá una parada para practicar.{' '}
             <button onClick={() => router.push('/alumno')} style={{ background: 'none', border: 'none', color: '#C77E3A', fontWeight: 800, cursor: 'pointer', fontSize: 15, fontFamily: 'inherit' }}>Cambiar materia</button>
           </p>
-        </div>
-        <div style={{ display: 'flex', gap: 5, background: '#FFFCF5', border: '1.5px solid #EFE3CE', borderRadius: 999, padding: 4 }}>
-          {seg('Camino', variant === 'A', () => setVariant('A'))}
-          {seg('Colinas', variant === 'B', () => setVariant('B'))}
         </div>
       </div>
 

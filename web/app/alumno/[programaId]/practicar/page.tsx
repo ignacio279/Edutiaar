@@ -11,6 +11,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useMe } from '@/lib/me-context';
 import { sol, item, alpha } from '@/lib/art';
+import { nodoMasAvanzado } from '@/lib/mapa-layout';
 import { temaMateria } from '@/lib/materia-tema';
 import { saludo, cierre, praise, encourage } from '@/lib/practica-copy';
 import { toast } from '@/lib/toast';
@@ -72,6 +73,23 @@ function PracticarInner() {
   }
 
   const tema = temaMateria(materia);
+
+  // Sin ?nodo (p.ej. al tocar el pill "Practicar" del header): manda directo a la
+  // parada más avanzada del camino, sin pedirle al chico que elija en el mapa.
+  useEffect(() => {
+    if (nodoId || !me) return;
+    (async () => {
+      const { data: ns } = await supabase.from('nodo').select('id').eq('programa_id', programaId).order('orden');
+      const { data: an } = await supabase.from('alumno_nodo').select('nodo_id,estado').eq('alumno_id', me.id);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const estadoPorNodo = new Map(((an as any[]) || []).map((r) => [r.nodo_id, r.estado] as [string, string]));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const nodos = ((ns as any[]) || []).map((n) => ({ id: n.id as string, estado: estadoPorNodo.get(n.id) || 'no_empezado' }));
+      const sugerido = nodoMasAvanzado(nodos);
+      router.replace(sugerido ? `/alumno/${programaId}/practicar?nodo=${sugerido}` : `/alumno/${programaId}/mapa`);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodoId, me, programaId]);
 
   useEffect(() => {
     if (!nodoId) return;
@@ -262,15 +280,7 @@ function PracticarInner() {
   }
 
   // ----- guards -----
-  if (!nodoId) {
-    return (
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 22px', textAlign: 'center' }}>
-        <p style={{ color: '#7A6F5F', fontWeight: 600 }}>Elegí una parada en tu mapa para practicar.</p>
-        <button onClick={() => router.push(`/alumno/${programaId}/mapa`)} className="ed-primary" style={btnPrimary}>Ir al mapa</button>
-      </div>
-    );
-  }
-  if (ejercicios === null) return <p style={{ padding: 40, color: '#7A6F5F', fontWeight: 600, textAlign: 'center' }}>Cargando…</p>;
+  if (!nodoId || ejercicios === null) return <p style={{ padding: 40, color: '#7A6F5F', fontWeight: 600, textAlign: 'center' }}>Cargando…</p>;
   if (ejercicios.length === 0) {
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 22px', textAlign: 'center' }}>

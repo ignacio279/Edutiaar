@@ -32,6 +32,14 @@ export function colorNodo(estado: string | null | undefined, puntaje = 0): strin
   return estadoColor(estado);
 }
 
+// Parada sugerida para "practicar": la primera no dominada en el camino (frontera de
+// avance), o la primera si ya domina todo.
+export function nodoMasAvanzado<T extends { id: string; estado: string }>(nodos: T[]): string | null {
+  if (!nodos.length) return null;
+  const pendiente = nodos.find((n) => n.estado !== 'dominado');
+  return (pendiente || nodos[0]).id;
+}
+
 export const LEGEND: { label: string; c: string }[] = [
   { label: 'Lo domina', c: COLORES.dominado },
   { label: 'En camino', c: COLORES.en_construccion },
@@ -54,13 +62,10 @@ export const ESCALAS_MAPA = {
 } as const;
 export type EscalaMapa = keyof typeof ESCALAS_MAPA;
 
-// Coordenadas hand-tuned del diseño para las dos variantes (hasta 6 paradas),
+// Coordenadas hand-tuned del diseño (hasta 6 paradas),
 // [x,y] en el viewBox 0..100, en orden de recorrido (para que catmull dibuje bien).
 const COORDS_CAMINO: [number, number][] = [
   [14, 22], [36, 40], [58, 25], [81, 44], [60, 68], [33, 80],
-];
-const COORDS_COLINAS: [number, number][] = [
-  [10, 56], [27, 36], [44, 58], [62, 36], [80, 56], [93, 38],
 ];
 
 // Serpentina alta: x en % (zig-zag por fila), y en % de un alto calculado para que
@@ -87,17 +92,6 @@ export function layoutCamino(n: number, escala: EscalaMapa = 'alumno'): MapaLayo
   if (n <= 0) return { coords: [], altoPx: null };
   if (n <= COORDS_CAMINO.length) return { coords: COORDS_CAMINO.slice(0, n), altoPx: null };
   return serpentinaAlta(n, 3, escala);
-}
-
-export function layoutColinas(n: number, escala: EscalaMapa = 'alumno'): MapaLayout {
-  if (n <= 0) return { coords: [], altoPx: null };
-  if (n <= COORDS_COLINAS.length) return { coords: COORDS_COLINAS.slice(0, n), altoPx: null };
-  return serpentinaAlta(n, 4, escala);
-}
-
-// Variante del mapa → layout. 'A' = Camino (default), 'B' = Colinas.
-export function layoutVariante(variante: string, n: number, escala: EscalaMapa = 'alumno'): MapaLayout {
-  return variante === 'B' ? layoutColinas(n, escala) : layoutCamino(n, escala);
 }
 
 // Saludo cálido de SOL para la pantalla de practicar (tono rioplatense).

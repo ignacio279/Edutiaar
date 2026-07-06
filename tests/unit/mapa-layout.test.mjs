@@ -1,7 +1,7 @@
 // Tests unitarios del layout puro del mapa (web/lib/mapa-layout.ts). `npm test`.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mezclarColor, colorNodo, COLORES, estadoColor, LEGEND, saludoMateria, layoutCamino, layoutColinas, layoutVariante, ESCALAS_MAPA } from '../../web/lib/mapa-layout.ts';
+import { mezclarColor, colorNodo, COLORES, estadoColor, LEGEND, saludoMateria, layoutCamino, ESCALAS_MAPA, nodoMasAvanzado } from '../../web/lib/mapa-layout.ts';
 
 test('mezclarColor: extremos y punto medio', () => {
   assert.equal(mezclarColor('#000000', '#ffffff', 0), '#000000');
@@ -49,32 +49,43 @@ test('saludoMateria: incluye nombre del alumno y la materia', () => {
   assert.match(saludoMateria('', undefined), /¡Hola!/);
 });
 
-test('layoutCamino / layoutColinas: 0 → [], hasta 6 = coords del diseño con aspecto fijo', () => {
+test('nodoMasAvanzado: primer no-dominado (frontera de avance)', () => {
+  const nodos = [
+    { id: 'a', estado: 'dominado' },
+    { id: 'b', estado: 'a_reforzar' },
+    { id: 'c', estado: 'no_empezado' },
+  ];
+  assert.equal(nodoMasAvanzado(nodos), 'b');
+});
+
+test('nodoMasAvanzado: todo dominado → primero; sin nodos → null', () => {
+  assert.equal(nodoMasAvanzado([{ id: 'a', estado: 'dominado' }, { id: 'b', estado: 'dominado' }]), 'a');
+  assert.equal(nodoMasAvanzado([]), null);
+});
+
+test('layoutCamino: 0 → [], hasta 6 = coords del diseño con aspecto fijo', () => {
   assert.deepEqual(layoutCamino(0), { coords: [], altoPx: null });
-  assert.deepEqual(layoutColinas(0), { coords: [], altoPx: null });
   const c3 = layoutCamino(3);
   assert.deepEqual(c3.coords, [[14, 22], [36, 40], [58, 25]]);
   assert.equal(c3.altoPx, null, 'hasta 6 nodos no fuerza altura');
-  assert.deepEqual(layoutColinas(2).coords, [[10, 56], [27, 36]]);
   assert.equal(layoutCamino(6).altoPx, null);
 });
 
 test('layout N>6: N coords en rango, altura que crece con las filas y paso fijo en px', () => {
-  for (const [fn, perRow] of [[layoutCamino, 3], [layoutColinas, 4]]) {
-    const n = 16;
-    const { coords, altoPx } = fn(n);
-    assert.equal(coords.length, n);
-    for (const [x, y] of coords) {
-      assert.ok(x >= 0 && x <= 100, `x en rango: ${x}`);
-      assert.ok(y >= 0 && y <= 100, `y en rango: ${y}`);
-    }
-    const { pitch, margen } = ESCALAS_MAPA.alumno;
-    const filas = Math.ceil(n / perRow);
-    assert.equal(altoPx, margen * 2 + (filas - 1) * pitch, 'la altura acompaña a las filas');
-    // Paso vertical real entre filas consecutivas = pitch px (los círculos no se pisan).
-    const gapPx = ((coords[perRow][1] - coords[0][1]) / 100) * altoPx;
-    assert.ok(Math.abs(gapPx - pitch) < 0.001, `paso ${gapPx} ≈ ${pitch}`);
+  const perRow = 3;
+  const n = 16;
+  const { coords, altoPx } = layoutCamino(n);
+  assert.equal(coords.length, n);
+  for (const [x, y] of coords) {
+    assert.ok(x >= 0 && x <= 100, `x en rango: ${x}`);
+    assert.ok(y >= 0 && y <= 100, `y en rango: ${y}`);
   }
+  const { pitch, margen } = ESCALAS_MAPA.alumno;
+  const filas = Math.ceil(n / perRow);
+  assert.equal(altoPx, margen * 2 + (filas - 1) * pitch, 'la altura acompaña a las filas');
+  // Paso vertical real entre filas consecutivas = pitch px (los círculos no se pisan).
+  const gapPx = ((coords[perRow][1] - coords[0][1]) / 100) * altoPx;
+  assert.ok(Math.abs(gapPx - pitch) < 0.001, `paso ${gapPx} ≈ ${pitch}`);
 });
 
 test('layout N>6: la escala docente usa paso más chico que la del alumno', () => {
@@ -82,11 +93,4 @@ test('layout N>6: la escala docente usa paso más chico que la del alumno', () =
   const docente = layoutCamino(12, 'docente');
   assert.ok(docente.altoPx < alumno.altoPx);
   assert.equal(docente.altoPx, ESCALAS_MAPA.docente.margen * 2 + 3 * ESCALAS_MAPA.docente.pitch);
-});
-
-test('layoutVariante: B = Colinas, default = Camino', () => {
-  assert.deepEqual(layoutVariante('B', 2), layoutColinas(2));
-  assert.deepEqual(layoutVariante('A', 4), layoutCamino(4));
-  assert.deepEqual(layoutVariante('x', 4), layoutCamino(4));
-  assert.deepEqual(layoutVariante('B', 10, 'docente'), layoutColinas(10, 'docente'));
 });

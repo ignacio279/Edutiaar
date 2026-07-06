@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useMe } from '@/lib/me-context';
 import { animal, uiIcon, materiaEmblem, materiaPattern } from '@/lib/art';
+import { nodoMasAvanzado } from '@/lib/mapa-layout';
 import { temaMateria } from '@/lib/materia-tema';
 
 const BALOO = 'var(--font-baloo), cursive';
@@ -75,16 +76,9 @@ export default function Materias() {
     router.refresh();
   }
 
-  // Parada sugerida para "practicar": la primera no dominada (o la primera).
-  function nodoSugerido(m: Materia): string | null {
-    if (!m.nodos.length) return null;
-    const pendiente = m.nodos.find((n) => n.estado !== 'dominado');
-    return (pendiente || m.nodos[0]).id;
-  }
-
   function elegir(m: Materia) {
     if (tab === 'practicar') {
-      const nodo = nodoSugerido(m);
+      const nodo = nodoMasAvanzado(m.nodos);
       router.push(nodo ? `/alumno/${m.programa_id}/practicar?nodo=${nodo}` : `/alumno/${m.programa_id}/mapa`);
     } else {
       router.push(`/alumno/${m.programa_id}/mapa`);
