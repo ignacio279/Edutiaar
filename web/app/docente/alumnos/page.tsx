@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import DocenteSidebar from '@/components/DocenteSidebar';
 import { animal, sol, uiIcon } from '@/lib/art';
 import { toast } from '@/lib/toast';
 
@@ -70,31 +71,10 @@ export default function MiClase() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function signOut() {
-    await supabase.auth.signOut();
-    router.replace('/');
-    router.refresh();
-  }
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', background: '#FBF4E6', animation: 'edFade .3s ease' }}>
-      <aside style={{ width: 236, flexShrink: 0, background: '#FFFCF5', borderRight: '2px solid #EFE3CE', padding: '26px 18px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '6px 10px 22px' }}>
-          <div style={{ width: 36, height: 36, background: solHappy }} />
-          <span style={{ fontFamily: BALOO, fontWeight: 800, fontSize: 22, color: '#3A332A', letterSpacing: '-.5px' }}>EDUTIA</span>
-        </div>
-        <button onClick={() => router.push('/docente')} className="ed-side" style={sideBtn}>
-          <span style={{ width: 22, height: 22, background: `${uiIcon('people')} center/contain no-repeat` }} />Mis alumnos
-        </button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '13px 14px', borderRadius: 14, background: '#E3EEF4', color: '#3A332A', fontFamily: QUICK, fontWeight: 700, fontSize: 16 }}>
-          <span style={{ width: 22, height: 22, background: `${uiIcon('people')} center/contain no-repeat` }} />Mi clase
-        </div>
-        <button onClick={() => router.push('/docente/autoria')} className="ed-side" style={sideBtn}>
-          <span style={{ width: 22, height: 22, background: `${uiIcon('mapI')} center/contain no-repeat` }} />Subir un plan
-        </button>
-        <div style={{ flex: 1 }} />
-        <button onClick={signOut} className="ed-side" style={sideBtn}>Cerrar sesión</button>
-      </aside>
+      <DocenteSidebar activo="clase" />
 
       <main style={{ flex: 1, minWidth: 0, padding: 'clamp(22px,3.5vw,40px)', maxWidth: 820 }}>
         <h1 style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 'clamp(24px,4vw,32px)', color: '#3A332A', margin: '0 0 4px' }}>Mi clase</h1>
@@ -371,11 +351,6 @@ function AlumnoRow({ alumno, aulas, onDone }: { alumno: Alumno; aulas: Aula[]; o
 }
 
 // ---------- estilos ----------
-const sideBtn: React.CSSProperties = {
-  display: 'flex', alignItems: 'center', gap: 11, padding: '13px 14px', borderRadius: 14,
-  background: 'none', border: 'none', color: '#7A6F5F', fontFamily: QUICK, fontWeight: 700,
-  fontSize: 16, cursor: 'pointer', textAlign: 'left',
-};
 const card: React.CSSProperties = { background: '#FFFCF5', border: '1.5px solid #EFE3CE', borderRadius: 18, padding: '16px 18px' };
 const field: React.CSSProperties = { width: '100%', padding: '11px 13px', border: '2px solid #EFE3CE', borderRadius: 12, fontFamily: NUNITO, fontSize: 15, color: '#3A332A', background: '#FBF4E6', outline: 'none' };
 const labelStyle: React.CSSProperties = { display: 'block', fontSize: 13, fontWeight: 700, color: '#7A6F5F', marginBottom: 5 };

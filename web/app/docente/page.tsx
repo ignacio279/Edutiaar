@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import DocenteSidebar from '@/components/DocenteSidebar';
 import { animal, sol, uiIcon } from '@/lib/art';
 import { estadoColor } from '@/lib/mapa-layout';
 import {
@@ -105,11 +106,6 @@ export default function PanelDocente() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function signOut() {
-    await supabase.auth.signOut();
-    router.replace('/');
-    router.refresh();
-  }
 
   function actividadTexto(a: AlumnoVista): string {
     if (a.hoy.cantidad > 0) {
@@ -124,23 +120,7 @@ export default function PanelDocente() {
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', background: '#FBF4E6', animation: 'edFade .3s ease' }}>
-      <aside style={{ width: 236, flexShrink: 0, background: '#FFFCF5', borderRight: '2px solid #EFE3CE', padding: '26px 18px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '6px 10px 22px' }}>
-          <div style={{ width: 36, height: 36, background: solHappy }} />
-          <span style={{ fontFamily: BALOO, fontWeight: 800, fontSize: 22, color: '#3A332A', letterSpacing: '-.5px' }}>EDUTIA</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '13px 14px', borderRadius: 14, background: '#E3EEF4', color: '#3A332A', fontFamily: QUICK, fontWeight: 700, fontSize: 16 }}>
-          <span style={{ width: 22, height: 22, background: `${uiIcon('people')} center/contain no-repeat` }} />Mis alumnos
-        </div>
-        <button onClick={() => router.push('/docente/alumnos')} className="ed-side" style={sideBtn}>
-          <span style={{ width: 22, height: 22, background: `${uiIcon('people')} center/contain no-repeat` }} />Mi clase
-        </button>
-        <button onClick={() => router.push('/docente/autoria')} className="ed-side" style={sideBtn}>
-          <span style={{ width: 22, height: 22, background: `${uiIcon('mapI')} center/contain no-repeat` }} />Subir un plan
-        </button>
-        <div style={{ flex: 1 }} />
-        <button onClick={signOut} className="ed-side" style={sideBtn}>Cerrar sesión</button>
-      </aside>
+      <DocenteSidebar activo="alumnos" />
 
       <main style={{ flex: 1, minWidth: 0, padding: 'clamp(22px,3.5vw,40px)' }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 24 }}>
@@ -196,8 +176,3 @@ export default function PanelDocente() {
   );
 }
 
-const sideBtn: React.CSSProperties = {
-  display: 'flex', alignItems: 'center', gap: 11, padding: '13px 14px', borderRadius: 14,
-  background: 'none', border: 'none', color: '#7A6F5F', fontFamily: QUICK, fontWeight: 700,
-  fontSize: 16, cursor: 'pointer', textAlign: 'left',
-};

@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import DocenteSidebar from '@/components/DocenteSidebar';
 import { animal, sol, uiIcon, nodeIcon, starBadge, lockBadge } from '@/lib/art';
 import { estadoColor, LEGEND, coordsCamino } from '@/lib/mapa-layout';
 import { temaMateria, iconoNodo } from '@/lib/materia-tema';
@@ -136,20 +137,7 @@ export default function DetalleAlumno() {
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', background: '#FBF4E6', animation: 'edFade .3s ease' }}>
-      <aside style={{ width: 236, flexShrink: 0, background: '#FFFCF5', borderRight: '2px solid #EFE3CE', padding: '26px 18px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '6px 10px 22px' }}>
-          <div style={{ width: 36, height: 36, background: solHappy }} />
-          <span style={{ fontFamily: BALOO, fontWeight: 800, fontSize: 22, color: '#3A332A', letterSpacing: '-.5px' }}>EDUTIA</span>
-        </div>
-        <button onClick={() => router.push('/docente')} className="ed-side" style={{ ...sideBtn, background: '#E3EEF4', color: '#3A332A' }}>
-          <span style={{ width: 22, height: 22, background: `${uiIcon('people')} center/contain no-repeat` }} />Mis alumnos
-        </button>
-        <button onClick={() => router.push('/docente/alumnos')} className="ed-side" style={sideBtn}>
-          <span style={{ width: 22, height: 22, background: `${uiIcon('people')} center/contain no-repeat` }} />Mi clase
-        </button>
-        <div style={{ flex: 1 }} />
-        <button onClick={async () => { await supabase.auth.signOut(); router.replace('/'); router.refresh(); }} className="ed-side" style={sideBtn}>Cerrar sesión</button>
-      </aside>
+      <DocenteSidebar activo="alumnos" />
 
       <main style={{ flex: 1, minWidth: 0, padding: 'clamp(22px,3.5vw,40px)' }}>
         <button onClick={() => router.push('/docente')} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: 'none', border: 'none', color: '#7A6F5F', fontWeight: 700, fontSize: 15, cursor: 'pointer', marginBottom: 18 }}>‹ Mis alumnos</button>
@@ -316,11 +304,6 @@ function catmullPath(pts: [number, number][]): string {
   return d;
 }
 
-const sideBtn: React.CSSProperties = {
-  display: 'flex', alignItems: 'center', gap: 11, padding: '13px 14px', borderRadius: 14,
-  background: 'none', border: 'none', color: '#7A6F5F', fontFamily: QUICK, fontWeight: 700,
-  fontSize: 16, cursor: 'pointer', textAlign: 'left',
-};
 const card: React.CSSProperties = {
   background: '#FFFCF5', border: '1.5px solid #EFE3CE', borderRadius: 22, padding: 22, boxShadow: '0 4px 14px rgba(120,90,40,.07)',
 };
