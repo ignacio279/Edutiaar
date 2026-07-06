@@ -49,9 +49,9 @@ export const LEGEND: { label: string; c: string }[] = [
 
 // Layout del mapa. Hasta 6 paradas: coordenadas hand-tuned del diseño dentro del
 // contenedor de aspecto fijo (altoPx = null → el caller usa su aspectRatio).
-// Con más de 6: serpentina en zig-zag con PASO FIJO EN PX por fila — el alto del
-// contenedor crece con las filas (la pantalla scrollea) y los círculos, que tienen
-// tamaño fijo en px, nunca se pisan por más nodos que haya.
+// Con más de 6: serpentina en zig-zag donde CADA nodo baja un paso (no solo al
+// cambiar de fila) — el camino se ve progresivamente descendente en vez de filas
+// planas. El alto del contenedor crece con los nodos (la pantalla scrollea).
 export type MapaLayout = { coords: [number, number][]; altoPx: number | null };
 
 // Paso vertical y margen (px) por consumidor: el mapa grande del alumno
@@ -68,12 +68,13 @@ const COORDS_CAMINO: [number, number][] = [
   [14, 22], [36, 40], [58, 25], [81, 44], [60, 68], [33, 80],
 ];
 
-// Serpentina alta: x en % (zig-zag por fila), y en % de un alto calculado para que
-// entre fila y fila haya exactamente `pitch` px. El orden sigue el recorrido.
+// Serpentina alta: x en % (zig-zag por fila), y baja `pitch/perRow` px por CADA
+// nodo (no solo al cruzar de fila) — entre el primero y el último de una fila
+// completa hay `pitch` px, igual que antes, pero repartido nodo a nodo.
 function serpentinaAlta(n: number, perRow: number, escala: EscalaMapa): MapaLayout {
   const { pitch, margen } = ESCALAS_MAPA[escala];
-  const rows = Math.ceil(n / perRow);
-  const altoPx = margen * 2 + (rows - 1) * pitch;
+  const stepY = pitch / perRow;
+  const altoPx = margen * 2 + (n - 1) * stepY;
   const marginX = 16;
   const colGap = perRow > 1 ? (100 - marginX * 2) / (perRow - 1) : 0;
   const coords: [number, number][] = [];
@@ -82,7 +83,7 @@ function serpentinaAlta(n: number, perRow: number, escala: EscalaMapa): MapaLayo
     const col = i % perRow;
     const slot = row % 2 === 0 ? col : perRow - 1 - col; // zig-zag
     const x = perRow > 1 ? marginX + slot * colGap : 50;
-    const y = ((margen + row * pitch) / altoPx) * 100;
+    const y = ((margen + i * stepY) / altoPx) * 100;
     coords.push([x, y]);
   }
   return { coords, altoPx };

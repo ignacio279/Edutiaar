@@ -92,5 +92,6 @@ test('layout N>6: la escala docente usa paso más chico que la del alumno', () =
   const alumno = layoutCamino(12, 'alumno');
   const docente = layoutCamino(12, 'docente');
   assert.ok(docente.altoPx < alumno.altoPx);
-  assert.equal(docente.altoPx, ESCALAS_MAPA.docente.margen * 2 + 3 * ESCALAS_MAPA.docente.pitch);
+  const { pitch, margen } = ESCALAS_MAPA.docente;
+  assert.equal(docente.altoPx, margen * 2 + 11 * (pitch / 3));
 });
