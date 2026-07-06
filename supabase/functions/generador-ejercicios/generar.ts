@@ -1,6 +1,6 @@
-// Generador de ejercicios — lógica PURA (prompt + validación). La usa el script local
-// (motor = suscripción vía Agent SDK) y queda lista para una Edge Function cuando haya
-// API key. Sin Deno, sin red → unit-testeable desde Node.
+// Generador de ejercicios — lógica PURA (prompt + validación). La usan la Edge
+// Function generador-ejercicios y el script local (motor = suscripción vía Agent
+// SDK). Sin Deno, sin red → unit-testeable desde Node.
 
 export const TIPOS = ['reconocer', 'completar', 'ordenar', 'producir'] as const;
 export type TipoEjercicio = (typeof TIPOS)[number];
@@ -44,28 +44,6 @@ export function celdasParaLote(sinVerPorCelda: Map<string, number>, lote = LOTE_
     estado[0].n++;
   }
   return estado.filter((c) => c.n > 0).map(({ tipo, dificultad, n }) => ({ tipo, dificultad, n }));
-}
-
-// Mock determinístico (sin IA): enunciados únicos vía índice `desde` para que la
-// reposición NUNCA genere un enunciado repetido (DP5), aún en modo mock.
-export function mockEjercicios(nodoId: string, nodoNombre: string, celdas: Array<Celda & { n: number }>, desde = 0): EjercicioGen[] {
-  const out: EjercicioGen[] = [];
-  let i = desde;
-  for (const c of celdas) {
-    for (let k = 0; k < c.n; k++) {
-      i++;
-      const correcta = `Respuesta ${i}`;
-      out.push({
-        nodo_id: nodoId,
-        enunciado: `(${i}) Práctica de ${nodoNombre}: elegí la opción correcta (${c.tipo}, nivel ${c.dificultad}).`,
-        opciones: [correcta, `Distractor ${i}A`, `Distractor ${i}B`, `Distractor ${i}C`],
-        correcta,
-        dificultad: c.dificultad,
-        tipo: c.tipo,
-      });
-    }
-  }
-  return out;
 }
 
 export type EjercicioGen = {

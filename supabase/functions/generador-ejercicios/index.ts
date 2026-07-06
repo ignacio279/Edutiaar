@@ -1,10 +1,10 @@
 // generador-ejercicios (spec 2026-07-03): pool inicial estratificado al publicar y
 // reposición automática cuando a un chico se le acaba lo no visto (DP5/DP6).
-// Mock por defecto (sin gastar); modo real detrás del flag con la key SOLO server-side.
+// Claude real siempre (sin mock: si falta la key, error explícito). Key SOLO server-side.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { cors, json } from '../_shared/cors.ts';
 import {
-  celdasIniciales, celdasParaLote, claveCelda, mockEjercicios,
+  celdasIniciales, celdasParaLote, claveCelda,
   construirPromptEjercicios, parseEjercicios, LOTE_REPOSICION,
 } from './generar.ts';
 import type { Celda, EjercicioGen } from './generar.ts';
@@ -34,7 +34,7 @@ Deno.serve(async (req) => {
     const { data: perfil } = await sb.from('perfil').select('rol, escuela_id').eq('id', user.id).single();
     if (!perfil) return json({ error: 'sin_perfil' }, 403);
 
-    const { programa_id, nodo_id, mock } = await req.json();
+    const { programa_id, nodo_id } = await req.json();
     if (!programa_id && !nodo_id) return json({ error: 'datos_faltantes' }, 400);
 
     // Tope diario (Regla 4): contamos lo generado hoy (UTC) UNA vez acá, y cada
@@ -43,11 +43,10 @@ Deno.serve(async (req) => {
     const { count: generadosHoy } = await sb.from('ejercicio').select('id', { count: 'exact', head: true }).gte('created_at', hoy.toISOString());
 
     const key = Deno.env.get('ANTHROPIC_API_KEY');
-    const usarMock = mock || !key;
+    if (!key) return json({ error: 'falta_anthropic_api_key' }, 500);
 
-    // Generación de un lote para un nodo (mock o Claude), validado.
+    // Generación de un lote para un nodo con Claude, validado.
     async function generarLote(nodo: { id: string; nombre: string; descripcion: string | null }, materia: string, grado: number, celdas: Array<Celda & { n: number }>, desde: number): Promise<EjercicioGen[]> {
-      if (usarMock) return mockEjercicios(nodo.id, nodo.nombre, celdas, desde);
       const { system, user: userMsg } = construirPromptEjercicios(materia, grado, nodo.nombre, nodo.descripcion ?? '', 0, celdas);
       const r = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',

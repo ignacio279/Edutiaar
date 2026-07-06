@@ -1,11 +1,8 @@
 // Lógica PURA del chat con SOL (sol-chat). Sin Deno, sin DOM, sin red: se testea
 // desde Node (tests/unit/chat.test.mjs), igual que evaluar-sesion/diagnostico.ts.
-// La Edge Function (index.ts) importa de acá tanto para el modo real (system +
-// mapeo de mensajes) como para el modo mock (mockRespuesta).
 //
 // Regla pedagógica clave: SOL ayuda con pistas pero NUNCA dice la opción correcta
-// (la app ya la revela sola tras 2 intentos). El system prompt se lo prohíbe a
-// Claude; el mock lo garantiza por construcción (jamás interpola `correcta`).
+// (la app ya la revela sola tras 2 intentos). El system prompt se lo prohíbe a Claude.
 
 export type ChatMsg = { role: 'user' | 'sol'; content: string };
 
@@ -44,20 +41,4 @@ export function construirSystem(ctx: Contexto): string {
     );
   }
   return lineas.join(' ');
-}
-
-// Respuesta mock (sin API): templada y determinista. Garantiza no filtrar la
-// respuesta correcta porque nunca interpola `ctx.ejercicio.correcta`.
-export function mockRespuesta(_ultimo: string, ctx: Contexto, esAyuda: boolean): string {
-  if (esAyuda && ctx.ejercicio) {
-    return [
-      `¡Buena, vamos juntos! 💪 Leé de nuevo: "${ctx.ejercicio.enunciado}".`,
-      `Pensá despacio en ${ctx.nodoNombre} y fijate en cada opción.`,
-      'No te doy la respuesta, ¡pero estás cerca! ¿Cuál te parece y por qué?',
-    ].join(' ');
-  }
-  return [
-    `¡Hola! Estoy para ayudarte con ${ctx.nodoNombre} de ${ctx.materia}. 🌞`,
-    'Contame qué parte no te cierra y lo desarmamos juntos, sin apuro.',
-  ].join(' ');
 }

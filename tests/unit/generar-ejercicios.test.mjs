@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   bandaDeGrado, ESTILO_BANDA, CELDAS, celdasIniciales, celdasParaLote, claveCelda,
-  mockEjercicios, construirPromptEjercicios, parseEjercicios, cubreDominio,
+  construirPromptEjercicios, parseEjercicios, cubreDominio,
   POR_CELDA_INICIAL, LOTE_REPOSICION,
 } from '../../supabase/functions/generador-ejercicios/generar.ts';
 
@@ -86,17 +86,6 @@ test('celdasParaLote: determinístico', () => {
   assert.deepEqual(celdasParaLote(sinVer, 12), celdasParaLote(sinVer, 12));
 });
 
-test('mockEjercicios: respeta celdas, enunciados únicos y correcta entre las opciones', () => {
-  const celdas = [{ tipo: 'producir', dificultad: 3, n: 2 }, { tipo: 'reconocer', dificultad: 1, n: 1 }];
-  const a = mockEjercicios('nodo-1', 'Vocales', celdas, 0);
-  assert.equal(a.length, 3);
-  assert.ok(a.every((e) => e.opciones.includes(e.correcta)));
-  assert.equal(a.filter((e) => e.tipo === 'producir' && e.dificultad === 3).length, 2);
-  // `desde` distinto → enunciados distintos (nunca repetidos aunque se repongan lotes)
-  const b = mockEjercicios('nodo-1', 'Vocales', celdas, a.length);
-  const enunciados = new Set([...a, ...b].map((e) => e.enunciado));
-  assert.equal(enunciados.size, 6);
-});
 
 test('construirPromptEjercicios: incluye estilo de banda y cantidades por celda', () => {
   const { system, user } = construirPromptEjercicios('Lengua', 2, 'Vocales', '', 6, [{ tipo: 'producir', dificultad: 3, n: 2 }]);

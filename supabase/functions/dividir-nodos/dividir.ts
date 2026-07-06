@@ -1,5 +1,5 @@
 // dividir-en-nodos — lógica PURA de la división del contenido en nodos y del perfil
-// de especialista de SOL. El modo mock corre sin Claude (parte el texto); parseDivision
+// de especialista de SOL. parseDivision
 // valida la salida del modo real. Sin Deno, sin red → unit-testeable desde Node.
 
 export type NodoGen = { nombre: string; orden: number; descripcion: string };
@@ -22,10 +22,6 @@ export function partirContenido(contenido: string): string[] {
     .filter((s) => s.length > 0);
 }
 
-function capitalizar(s: string): string {
-  return s.length ? s[0].toUpperCase() + s.slice(1) : s;
-}
-
 export function perfilDe(materia: string, grado: number): PerfilMateria {
   const m = (materia ?? '').trim() || 'la materia';
   return {
@@ -37,17 +33,6 @@ export function perfilDe(materia: string, grado: number): PerfilMateria {
     criterios_eval: ['claridad', 'progresión de dificultad', 'cobertura del temario'],
     ejemplos_zona: [],
   };
-}
-
-// Modo mock: división determinística sin IA (para demo y tests sin API key).
-export function mockDividir(contenido: string, materia: string, grado: number): Division {
-  const m = (materia ?? '').trim() || 'la materia';
-  const nodos: NodoGen[] = partirContenido(contenido).map((nombre, i) => ({
-    nombre: capitalizar(nombre),
-    orden: i,
-    descripcion: `Práctica de "${nombre}" en ${m}.`,
-  }));
-  return { perfil: perfilDe(materia, grado), nodos };
 }
 
 // Valida y normaliza la salida estructurada del modo real (Claude vía tool).

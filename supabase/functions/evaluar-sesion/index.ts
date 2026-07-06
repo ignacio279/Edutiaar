@@ -1,13 +1,13 @@
 // evaluar-sesion (Fase 2 / SP-4c): al cerrar una sesión, SOL produce un DIAGNÓSTICO
 // cualitativo (resumen, errores, a_reforzar) y lo guarda en evaluacion_sesion. NO mueve
-// el estado del nodo (eso es la regla determinística, alumno_nodo). Modo mock por
-// defecto; Haiku real detrás de flag, con la API key SOLO server-side (Rule 1).
-// verify_jwt=true: lo llama el alumno logueado para SU sesión.
+// el estado del nodo (eso es la regla determinística, alumno_nodo). Claude real
+// siempre (sin mock: si falta la key, error explícito). API key SOLO server-side
+// (Rule 1). verify_jwt=true: lo llama el alumno logueado para SU sesión.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { cors, json } from '../_shared/cors.ts';
 import { runToolLoop } from '../_shared/loop.ts';
 import type { LlamarClaude } from '../_shared/loop.ts';
-import { construirPromptEval, mockDiagnostico, parseEval, TOOL_ESCRIBIR_EVALUACION, type RespuestaDiag } from './diagnostico.ts';
+import { construirPromptEval, parseEval, TOOL_ESCRIBIR_EVALUACION, type RespuestaDiag } from './diagnostico.ts';
 
 const MODELO = 'claude-haiku-4-5'; // corre seguido (1 por sesión) → barato (Rule 4)
 const MAX_TOKENS = 1024;
@@ -24,7 +24,7 @@ Deno.serve(async (req) => {
     const { data: { user } } = await asUser.auth.getUser();
     if (!user) return json({ error: 'no_autenticado' }, 401);
 
-    const { sesion_id, mock } = await req.json();
+    const { sesion_id } = await req.json();
     if (!sesion_id) return json({ error: 'falta_sesion_id' }, 400);
 
     const sb = createClient(url, srKey);
@@ -47,31 +47,28 @@ Deno.serve(async (req) => {
     }));
 
     const key = Deno.env.get('ANTHROPIC_API_KEY');
-    let diag;
-    if (mock || !key) {
-      diag = mockDiagnostico(nodoNombre, rs);
-    } else {
-      const { system, user: userMsg } = construirPromptEval(nodoNombre, rs);
-      const callClaude: LlamarClaude = async ({ system, messages, tools }) => {
-        const r = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-          body: JSON.stringify({ model: MODELO, max_tokens: MAX_TOKENS, system, messages, tools }),
-        });
-        if (!r.ok) throw new Error(`claude_${r.status}: ${await r.text()}`);
-        return await r.json();
-      };
-      let cap: unknown = null;
-      await runToolLoop({
-        callClaude,
-        toolImpls: { escribir_evaluacion: (input) => { cap = input; return 'ok'; } },
-        tools: [TOOL_ESCRIBIR_EVALUACION],
-        system,
-        userMessage: userMsg,
-        maxIters: 2,
+    if (!key) return json({ error: 'falta_anthropic_api_key' }, 500);
+
+    const { system, user: userMsg } = construirPromptEval(nodoNombre, rs);
+    const callClaude: LlamarClaude = async ({ system, messages, tools }) => {
+      const r = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+        body: JSON.stringify({ model: MODELO, max_tokens: MAX_TOKENS, system, messages, tools }),
       });
-      diag = parseEval(cap);
-    }
+      if (!r.ok) throw new Error(`claude_${r.status}: ${await r.text()}`);
+      return await r.json();
+    };
+    let cap: unknown = null;
+    await runToolLoop({
+      callClaude,
+      toolImpls: { escribir_evaluacion: (input) => { cap = input; return 'ok'; } },
+      tools: [TOOL_ESCRIBIR_EVALUACION],
+      system,
+      userMessage: userMsg,
+      maxIters: 2,
+    });
+    const diag = parseEval(cap);
 
     const { data: evalRow, error } = await sb
       .from('evaluacion_sesion')

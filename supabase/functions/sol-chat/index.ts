@@ -3,14 +3,14 @@
 // responde. SOL da pistas pero NUNCA dice la opción correcta (la app ya la revela
 // sola tras 2 intentos) — la regla vive en el system prompt (chat.ts).
 //
-// Modo mock por defecto (sin gastar API); Haiku real detrás de flag, con la API key
-// SOLO server-side (Rule 1). Tope de costo: modelo barato + max_tokens bajo +
-// historial recortado (Rule 4). verify_jwt=true: solo el alumno logueado lo llama.
+// Claude real siempre (sin mock: si falta la key, error explícito — nunca una
+// respuesta enlatada). API key SOLO server-side (Rule 1). Tope de costo: modelo
+// barato + max_tokens bajo + historial recortado (Rule 4). verify_jwt=true.
 // El contexto del ejercicio va INLINE: no se lee la DB, no hace falta tool use.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { cors, json } from '../_shared/cors.ts';
 import { extraerTexto } from '../_shared/loop.ts';
-import { recortarHistorial, aMensajesClaude, construirSystem, mockRespuesta, type ChatMsg } from './chat.ts';
+import { recortarHistorial, aMensajesClaude, construirSystem, type ChatMsg } from './chat.ts';
 
 const MODELO = 'claude-haiku-4-5'; // barato; corre seguido (Rule 4)
 const MAX_TOKENS = 400; // respuestas cortas para chicos → tope de costo por llamada
@@ -26,17 +26,14 @@ Deno.serve(async (req) => {
     const { data: { user } } = await asUser.auth.getUser();
     if (!user) return json({ error: 'no_autenticado' }, 401);
 
-    const { mensajes, contexto, esAyuda, mock } = await req.json();
+    const { mensajes, contexto } = await req.json();
     if (!Array.isArray(mensajes) || mensajes.length === 0) return json({ error: 'faltan_mensajes' }, 400);
     if (!contexto?.nodoNombre) return json({ error: 'falta_contexto' }, 400);
 
     const recortados = recortarHistorial(mensajes as ChatMsg[]);
-    const ultimo = [...recortados].reverse().find((m) => m.role === 'user')?.content ?? '';
 
     const key = Deno.env.get('ANTHROPIC_API_KEY');
-    if (mock || !key) {
-      return json({ texto: mockRespuesta(ultimo, contexto, !!esAyuda), mock: true });
-    }
+    if (!key) return json({ error: 'falta_anthropic_api_key' }, 500);
 
     // Real: UNA sola llamada a la Messages API (sin tools; el contexto va inline).
     const r = await fetch('https://api.anthropic.com/v1/messages', {

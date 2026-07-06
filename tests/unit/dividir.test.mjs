@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  construirPromptDivision, partirContenido, perfilDe, mockDividir, parseDivision,
+  construirPromptDivision, partirContenido, perfilDe, parseDivision,
 } from '../../supabase/functions/dividir-nodos/dividir.ts';
 
 test('partirContenido: separa por comas y limpia el punto final', () => {
@@ -21,16 +21,6 @@ test('partirContenido: vacío → []', () => {
   assert.deepEqual(partirContenido('   '), []);
 });
 
-test('mockDividir: arma nodos ordenados y capitalizados + perfil', () => {
-  const { perfil, nodos } = mockDividir('vocales, sílabas, palabras', 'Lengua', 3);
-  assert.equal(nodos.length, 3);
-  assert.deepEqual(nodos.map((n) => n.orden), [0, 1, 2]);
-  assert.equal(nodos[0].nombre, 'Vocales');
-  assert.match(nodos[0].descripcion, /Lengua/);
-  assert.match(perfil.system_prompt, /Lengua/);
-  assert.match(perfil.system_prompt, /3°/);
-  assert.ok(Array.isArray(perfil.criterios_eval) && perfil.criterios_eval.length > 0);
-});
 
 test('perfilDe: cae a "la materia" si viene vacío', () => {
   assert.match(perfilDe('', 1).system_prompt, /la materia/);

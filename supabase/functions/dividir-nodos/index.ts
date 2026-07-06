@@ -1,13 +1,13 @@
 // dividir-nodos (Fase 2 / SP-2): la docente sube contenido → se crea un programa
 // propio + sol_materia (perfil de especialista) + nodos (borrador) que luego revisa
-// y publica. Modo mock por defecto (sin gastar); el modo real (Claude + PDF nativo)
-// queda detrás del flag, con la API key SOLO server-side (Rule 1).
+// y publica. Claude real siempre (texto o PDF nativo; sin mock — si falta la key,
+// error explícito antes de escribir nada). API key SOLO server-side (Rule 1).
 // verify_jwt=true: la seño está logueada; tomamos su identidad del JWT.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { cors, json } from '../_shared/cors.ts';
 import { runToolLoop } from '../_shared/loop.ts';
 import type { Bloque, LlamarClaude } from '../_shared/loop.ts';
-import { construirPromptDivision, mockDividir, parseDivision, TOOL_GUARDAR_DIVISION } from './dividir.ts';
+import { construirPromptDivision, parseDivision, TOOL_GUARDAR_DIVISION } from './dividir.ts';
 
 const MODELO = 'claude-sonnet-4-6'; // división corre raro; calidad/costo OK (Rule 4)
 const MAX_TOKENS = 4096;
@@ -31,16 +31,14 @@ Deno.serve(async (req) => {
     if (!perfil || perfil.rol !== 'docente') return json({ error: 'solo_docente' }, 403);
     if (!perfil.escuela_id) return json({ error: 'docente_sin_escuela' }, 400);
 
-    // 2. Entrada
-    const { materia_nombre, grado, contenido, pdf_base64, mock } = await req.json();
+    // 2. Entrada. La key se chequea acá, ANTES de escribir nada en la DB
+    // (así un error de config no deja programas huérfanos).
+    const { materia_nombre, grado, contenido, pdf_base64 } = await req.json();
     if (!materia_nombre || !grado || (!contenido && !pdf_base64)) {
       return json({ error: 'datos_faltantes' }, 400);
     }
-    // El mock no lee PDF: sin key (o con mock pedido) y sin texto no hay nada que dividir.
     const key = Deno.env.get('ANTHROPIC_API_KEY');
-    if ((mock || !key) && !contenido && pdf_base64) {
-      return json({ error: 'pdf_requiere_api_key' }, 400);
-    }
+    if (!key) return json({ error: 'falta_anthropic_api_key' }, 500);
 
     // 3. find-or-create materia → crear el programa propio del docente.
     let materia = (await sb.from('materia').select('id').ilike('nombre', materia_nombre).maybeSingle()).data;
@@ -54,38 +52,33 @@ Deno.serve(async (req) => {
       .single();
     if (pErr) throw pErr;
 
-    // 4. Generar la división: mock (default / sin key) o real (Claude).
-    let division;
-    if (mock || !key) {
-      division = mockDividir(contenido ?? '', materia_nombre, grado);
-    } else {
-      const { system, user: userMsg } = construirPromptDivision(materia_nombre, grado, contenido ?? '');
-      const callClaude: LlamarClaude = async ({ system, messages, tools }) => {
-        const r = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-          body: JSON.stringify({ model: MODELO, max_tokens: MAX_TOKENS, system, messages, tools }),
-        });
-        if (!r.ok) throw new Error(`claude_${r.status}: ${await r.text()}`);
-        return await r.json();
-      };
-      let capturado: unknown = null;
-      const userMessage: string | Bloque[] = pdf_base64
-        ? [
-            { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdf_base64 } },
-            { type: 'text', text: userMsg },
-          ]
-        : userMsg;
-      await runToolLoop({
-        callClaude,
-        toolImpls: { guardar_division: (input) => { capturado = input; return 'ok'; } },
-        tools: [TOOL_GUARDAR_DIVISION],
-        system,
-        userMessage,
-        maxIters: 3,
+    // 4. Generar la división con Claude (texto o PDF nativo).
+    const { system, user: userMsg } = construirPromptDivision(materia_nombre, grado, contenido ?? '');
+    const callClaude: LlamarClaude = async ({ system, messages, tools }) => {
+      const r = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+        body: JSON.stringify({ model: MODELO, max_tokens: MAX_TOKENS, system, messages, tools }),
       });
-      division = parseDivision(capturado, materia_nombre, grado);
-    }
+      if (!r.ok) throw new Error(`claude_${r.status}: ${await r.text()}`);
+      return await r.json();
+    };
+    let capturado: unknown = null;
+    const userMessage: string | Bloque[] = pdf_base64
+      ? [
+          { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdf_base64 } },
+          { type: 'text', text: userMsg },
+        ]
+      : userMsg;
+    await runToolLoop({
+      callClaude,
+      toolImpls: { guardar_division: (input) => { capturado = input; return 'ok'; } },
+      tools: [TOOL_GUARDAR_DIVISION],
+      system,
+      userMessage,
+      maxIters: 3,
+    });
+    const division = parseDivision(capturado, materia_nombre, grado);
 
     // 5. Guardar sol_materia (borrador) + los nodos.
     const { data: solMat, error: smErr } = await sb

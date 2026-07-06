@@ -1,5 +1,5 @@
-// Diagnóstico cualitativo de una sesión — lógica PURA. El modo mock lo arma sin IA
-// (cuenta y resume); parseEval valida la salida del modo real. SOLO diagnóstico:
+// Diagnóstico cualitativo de una sesión — lógica PURA (prompt + parseo del tool).
+// parseEval valida la salida estructurada de Claude. SOLO diagnóstico:
 // NO decide el estado del nodo (eso es la regla de dominio, web/lib/dominio.ts).
 // Sin Deno, sin red → unit-testeable desde Node.
 
@@ -17,22 +17,6 @@ export type Diagnostico = {
   errores: { pregunta: string; respondio: string; esperaba: string }[];
   a_reforzar: string[];
 };
-
-// Modo mock: diagnóstico determinístico sin IA (demo y tests sin API key).
-export function mockDiagnostico(nodo: string, rs: RespuestaDiag[]): Diagnostico {
-  const total = rs.length;
-  const aciertos = rs.filter((r) => r.correcta).length;
-  const primer = rs.filter((r) => r.correcta && r.reintentos === 0).length;
-  const errados = rs.filter((r) => !r.correcta);
-  const tasa = total ? aciertos / total : 0;
-  const cierre = tasa >= 0.8 ? '¡Muy bien!' : tasa >= 0.5 ? 'Va bien, con algunos tropiezos.' : 'Le costó; conviene reforzar.';
-  const resumen = total === 0
-    ? `No registró respuestas en ${nodo}.`
-    : `Practicó ${nodo}: acertó ${aciertos} de ${total} (${primer} al primer intento). ${cierre}`;
-  const errores = errados.map((e) => ({ pregunta: e.enunciado, respondio: e.dada, esperaba: e.esperaba }));
-  const a_reforzar = total > 0 && tasa < 0.6 ? [nodo] : [];
-  return { resumen, errores, a_reforzar };
-}
 
 // Prompt del modo real (con API key): método evaluar-sesion + tono SOL.
 export function construirPromptEval(nodo: string, rs: RespuestaDiag[]): { system: string; user: string } {
