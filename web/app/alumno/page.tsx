@@ -112,7 +112,7 @@ export default function Materias() {
   const sub = tab === 'practicar' ? 'Elegí una materia y practicamos con SOL.' : 'Elegí una materia para ver cómo vas.';
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap', padding: '14px clamp(16px,4vw,40px)', background: '#FFFCF5', borderBottom: '2px solid #EFE3CE', position: 'sticky', top: 0, zIndex: 6 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ width: 48, height: 48, background: `${animal(me?.avatar || 'fox')} center/contain no-repeat` }} />

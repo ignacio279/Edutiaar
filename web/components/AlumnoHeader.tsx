@@ -66,6 +66,7 @@ export default function AlumnoHeader({
         position: 'sticky',
         top: 0,
         zIndex: 6,
+        flexShrink: 0,
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>

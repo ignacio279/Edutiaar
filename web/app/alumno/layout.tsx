@@ -31,7 +31,9 @@ export default function AlumnoLayout({ children }: { children: React.ReactNode }
 
   return (
     <MeContext.Provider value={me}>
-      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      {/* Altura fija (no minHeight): así el chat de practicar scrollea adentro del hilo
+          y el pie con el input queda siempre a la vista; mapa y picker scrollean internamente. */}
+      <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column' }}>
         {children}
       </div>
     </MeContext.Provider>

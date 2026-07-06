@@ -70,7 +70,7 @@ export default function MapaMateria() {
   );
 
   return (
-    <div style={{ flex: 1, width: '100%', maxWidth: 1000, margin: '0 auto', padding: '24px clamp(16px,4vw,40px) 48px', animation: 'edFade .3s ease' }}>
+    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', width: '100%', maxWidth: 1000, margin: '0 auto', padding: '24px clamp(16px,4vw,40px) 48px', animation: 'edFade .3s ease' }}>
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <div>
           <h1 style={{ fontFamily: BALOO, fontWeight: 800, fontSize: 'clamp(26px,4.5vw,40px)', margin: 0, color: '#3A332A', display: 'flex', alignItems: 'center', gap: 12 }}>
