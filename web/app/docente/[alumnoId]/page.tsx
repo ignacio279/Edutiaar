@@ -11,7 +11,7 @@ import DocenteSidebar from '@/components/DocenteSidebar';
 import { animal, sol, uiIcon, nodeIcon, starBadge, lockBadge } from '@/lib/art';
 import { estadoColor, LEGEND, layoutCamino } from '@/lib/mapa-layout';
 import { temaMateria, iconoNodo } from '@/lib/materia-tema';
-import { ESTADO_LABEL, etiquetaEstado, rangoHoy, resumenHoy, ultimaSesion, haceCuanto, agruparPorMes, type EstadoNodo } from '@/lib/panel';
+import { ESTADO_LABEL, resumenAlumno, rangoHoy, resumenHoy, ultimaSesion, haceCuanto, agruparPorMes, type EstadoNodo } from '@/lib/panel';
 
 const BALOO = 'var(--font-baloo), cursive';
 const QUICK = 'var(--font-quicksand), sans-serif';
@@ -19,7 +19,7 @@ const NUNITO = 'var(--font-nunito), sans-serif';
 const solHappy = `${sol('happy')} center/contain no-repeat`;
 
 type Alumno = { nombre: string; avatar: string; grado: number };
-type NodoEstado = { nodo_id: string; estado: string; override: boolean; nombre: string; orden: number; materia: string };
+type NodoEstado = { nodo_id: string; estado: string; override: boolean; puntaje: number; nombre: string; orden: number; materia: string };
 type Err = { pregunta: string; respondio: string; esperaba: string };
 type Eval = { resumen: string; errores: Err[]; a_reforzar: string[] } | null;
 type Sesion = { fecha: string; aciertos: number; total: number; duracion_seg: number; nodo: string };
@@ -68,11 +68,11 @@ export default function DetalleAlumno() {
 
       const { data: an } = await supabase
         .from('alumno_nodo')
-        .select('nodo_id, estado, estado_override, nodo:nodo_id(nombre, orden, programa:programa_id(materia:materia_id(nombre)))')
+        .select('nodo_id, estado, estado_override, puntaje, nodo:nodo_id(nombre, orden, programa:programa_id(materia:materia_id(nombre)))')
         .eq('alumno_id', alumnoId);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const ns: NodoEstado[] = ((an as any[]) || []).map((r) => ({
-        nodo_id: r.nodo_id, estado: r.estado, override: r.estado_override,
+        nodo_id: r.nodo_id, estado: r.estado, override: r.estado_override, puntaje: Math.round(Number(r.puntaje ?? 0)),
         nombre: r.nodo?.nombre ?? 'Nodo', orden: r.nodo?.orden ?? 0,
         materia: r.nodo?.programa?.materia?.nombre ?? 'Materia',
       }));
@@ -120,6 +120,9 @@ export default function DetalleAlumno() {
   });
   const ultima = ultimaSesion(sesiones);
   const tiempoHoy = sesionesHoy.reduce((acc, s) => acc + s.duracion_seg, 0);
+  // Temas distintos practicados hoy (evita mostrar un tema con totales de otro).
+  const temasHoy = [...new Set(sesionesHoy.map((s) => s.nodo))];
+  const temaHoyTexto = temasHoy.length === 0 ? '—' : temasHoy.length === 1 ? temasHoy[0] : `${temasHoy.length} temas`;
   const meses = agruparPorMes(sesiones);
   const barras = meses.slice(0, 4).reverse().map((m) => ({ label: mesCorto(m.mes), pct: m.total ? Math.round((m.aciertos / m.total) * 100) : 0 }));
   const maxPct = Math.max(1, ...barras.map((b) => b.pct));
@@ -128,7 +131,7 @@ export default function DetalleAlumno() {
   const matActual = materiaSel || materias[0] || '';
   const nodosMat = nodos.filter((n) => n.materia === matActual).sort((a, b) => a.orden - b.orden);
   const { coords, altoPx } = layoutCamino(nodosMat.length, 'docente');
-  const { estado: estadoPeor, label: tagLabel } = etiquetaEstado(nodos);
+  const { estado: estadoPeor, label: tagLabel } = resumenAlumno(nodos);
   const [tagBg, tagCo] = TAG[estadoPeor] ?? TAG.no_empezado;
   const nodoSel = nodos.find((n) => n.nodo_id === selNode) || null;
 
@@ -206,7 +209,7 @@ export default function DetalleAlumno() {
                 {nodoSel && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, background: '#FBF4E6', borderRadius: 14, padding: '10px 14px', flexWrap: 'wrap' }}>
                     <span style={{ flex: 1, minWidth: 120, fontFamily: QUICK, fontWeight: 700, color: '#3A332A' }}>
-                      {nodoSel.nombre} <span style={{ fontSize: 12.5, color: '#7A6F5F', fontWeight: 700 }}>· {ESTADO_LABEL[nodoSel.estado as EstadoNodo] ?? nodoSel.estado}{nodoSel.override ? ' (fijado)' : ''}</span>
+                      {nodoSel.nombre} <span style={{ fontSize: 12.5, color: '#7A6F5F', fontWeight: 700 }}>· {ESTADO_LABEL[nodoSel.estado as EstadoNodo] ?? nodoSel.estado}{nodoSel.override ? ' (fijado)' : ''} · {nodoSel.puntaje} pts</span>
                     </span>
                     <select
                       value={nodoSel.override ? nodoSel.estado : 'auto'}
@@ -232,7 +235,7 @@ export default function DetalleAlumno() {
               <h3 style={cardTitle}>Lo de hoy</h3>
               {hoy.cantidad > 0 ? (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 14 }}>
-                  <Stat label="Tema" value={sesionesHoy[0]?.nodo || '—'} />
+                  <Stat label={temasHoy.length > 1 ? 'Temas' : 'Tema'} value={temaHoyTexto} />
                   <Stat label="Aciertos" value={hoy.total > 0 ? `${hoy.aciertos} de ${hoy.total}` : '—'} />
                   <Stat label="Tiempo" value={duracionTxt(tiempoHoy)} />
                   <Stat label="Sesiones" value={String(hoy.cantidad)} />
@@ -275,6 +278,23 @@ export default function DetalleAlumno() {
                 )}
               </div>
             </div>
+
+            {analisis?.errores && analisis.errores.length > 0 && (
+              <div style={card}>
+                <h3 style={{ ...cardTitle, marginBottom: 4 }}>Qué le costó</h3>
+                <p style={cardSub}>Lo que SOL vio en la última práctica</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {analisis.errores.map((e, i) => (
+                    <div key={i} style={{ background: '#FBF4E6', borderRadius: 12, padding: '10px 14px' }}>
+                      <div style={{ fontFamily: NUNITO, fontWeight: 700, fontSize: 14.5, color: '#3A332A', marginBottom: 4 }}>{e.pregunta}</div>
+                      <div style={{ fontSize: 13.5, color: '#7A6F5F', fontWeight: 600 }}>
+                        Respondió <b style={{ color: '#BB4F3F' }}>{e.respondio}</b> · esperaba <b style={{ color: '#4E7A3A' }}>{e.esperaba}</b>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </main>

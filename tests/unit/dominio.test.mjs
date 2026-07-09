@@ -12,7 +12,10 @@ import {
   esperado,
   aplicarRespuesta,
   puntajeSesion,
+  puntajeHistorico,
   K_ELO,
+  cumpleDominio,
+  progresoNodo,
 } from '../../web/lib/dominio.ts';
 
 // helper: respuesta (correcta, reintentos, tipo, dificultad)
@@ -75,6 +78,15 @@ test('puntajeSesion: replay determinístico en orden cronológico, redondeo a 2 
   assert.equal(puntajeSesion(0, []), 0); // sin respuestas, no se mueve
 });
 
+test('puntajeHistorico: replay de todo el historial desde 0, idempotente y self-healing', () => {
+  const hist = [ft('reconocer', 1), ft('completar', 2), fail('reconocer', 1), ft('producir', 3)];
+  // equivale a replay desde 0 sobre todo el historial
+  assert.equal(puntajeHistorico(hist), puntajeSesion(0, hist));
+  // idempotente: no depende del puntaje persistido (una sesión que no se guardó se reconcilia)
+  assert.equal(puntajeHistorico(hist), puntajeHistorico(hist));
+  assert.equal(puntajeHistorico([]), 0);
+});
+
 const base = { puntaje: 75, totalRespondidos: 55, cobertura: { producir: 3, dificil: 2 }, dosUltimasMal: false, tasaSesion: 0.9, estadoActual: 'en_construccion' };
 
 test('estado: dominado con puntaje, cobertura y 50+ ejercicios', () => {
@@ -128,4 +140,35 @@ test('pesoTipo: producir 2, ordenar 1.5, resto 1', () => {
   assert.equal(pesoTipo('ordenar'), 1.5);
   assert.equal(pesoTipo('reconocer'), 1);
   assert.equal(pesoTipo('completar'), 1);
+});
+
+test('cumpleDominio: exige puntaje + 50 ejercicios + cobertura', () => {
+  const cob = { producir: 2, dificil: 1 };
+  assert.equal(cumpleDominio(75, 55, cob), true);
+  assert.equal(cumpleDominio(69, 55, cob), false); // poco puntaje
+  assert.equal(cumpleDominio(75, 49, cob), false); // pocos ejercicios
+  assert.equal(cumpleDominio(75, 55, { producir: 1, dificil: 1 }), false); // sin cobertura producir
+  assert.equal(cumpleDominio(75, 55, { producir: 2, dificil: 0 }), false); // sin difícil
+});
+
+test('progresoNodo: pct redondea y clampa; faltanEjercicios hacia el mínimo', () => {
+  const p = progresoNodo({ puntaje: 42.7, totalRespondidos: 12, cobertura: { producir: 0, dificil: 0 } });
+  assert.equal(p.pct, 43);
+  assert.equal(p.faltanEjercicios, MIN_EJERCICIOS_DOMINIO - 12);
+  assert.equal(p.casi, false); // puntaje bajo
+  assert.equal(progresoNodo({ puntaje: 150, totalRespondidos: 60, cobertura: { producir: 2, dificil: 1 } }).pct, 100);
+  assert.equal(progresoNodo({ puntaje: -5, totalRespondidos: 0, cobertura: { producir: 0, dificil: 0 } }).pct, 0);
+});
+
+test('progresoNodo: casi = buen puntaje pero todavía no domina y no está dominado', () => {
+  // puntaje alto, pero pocos ejercicios → casi
+  assert.equal(progresoNodo({ puntaje: 80, totalRespondidos: 20, cobertura: { producir: 2, dificil: 1 } }).casi, true);
+  // ya domina (50+ y cobertura) → NO es "casi"
+  assert.equal(progresoNodo({ puntaje: 80, totalRespondidos: 55, cobertura: { producir: 2, dificil: 1 } }).casi, false);
+  // ya está dominado (pegajoso) → NO es "casi"
+  assert.equal(progresoNodo({ puntaje: 80, totalRespondidos: 20, cobertura: { producir: 2, dificil: 1 }, estadoActual: 'dominado' }).casi, false);
+});
+
+test('progresoNodo: faltanEjercicios nunca negativo', () => {
+  assert.equal(progresoNodo({ puntaje: 90, totalRespondidos: 80, cobertura: { producir: 3, dificil: 2 } }).faltanEjercicios, 0);
 });

@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   bandaDeGrado, ESTILO_BANDA, CELDAS, celdasIniciales, celdasParaLote, claveCelda,
-  construirPromptEjercicios, parseEjercicios, cubreDominio,
+  construirPromptEjercicios, parseEjercicios, cubreDominio, CLAVES_IMAGEN,
   POR_CELDA_INICIAL, LOTE_REPOSICION,
 } from '../../supabase/functions/generador-ejercicios/generar.ts';
 
@@ -91,4 +91,24 @@ test('construirPromptEjercicios: incluye estilo de banda y cantidades por celda'
   const { system, user } = construirPromptEjercicios('Lengua', 2, 'Vocales', '', 6, [{ tipo: 'producir', dificultad: 3, n: 2 }]);
   assert.ok(system.includes(ESTILO_BANDA.chiquitos));
   assert.ok(user.includes('2 de tipo "producir" con dificultad 3'));
+});
+
+test('construirPromptEjercicios: solo chiquitos reciben la guía de imagen', () => {
+  const chico = construirPromptEjercicios('Lengua', 1, 'Contar', '', 6);
+  assert.match(chico.system, /imagen/);
+  assert.match(chico.system, /apples3/);
+  // grados más grandes NO llevan imágenes
+  const grande = construirPromptEjercicios('Lengua', 5, 'Cuento', '', 6);
+  assert.doesNotMatch(grande.system, /apples3/);
+});
+
+test('parseEjercicios: conserva imagen solo si está en la whitelist', () => {
+  const conValida = parseEjercicios([{ ...ej('reconocer', 1), imagen: 'apples3' }], 'N1');
+  assert.equal(conValida[0].imagen, 'apples3');
+  const conTrucha = parseEjercicios([{ ...ej('reconocer', 1), imagen: 'https://malo.com/x.png' }], 'N1');
+  assert.equal(conTrucha[0].imagen, undefined);
+  const sinImagen = parseEjercicios([ej('reconocer', 1)], 'N1');
+  assert.equal('imagen' in sinImagen[0], false);
+  // la whitelist son exactamente las claves de art.ts item()
+  assert.deepEqual([...CLAVES_IMAGEN].sort(), ['apples3', 'arbol', 'oveja', 'solcito', 'stars4', 'uva']);
 });

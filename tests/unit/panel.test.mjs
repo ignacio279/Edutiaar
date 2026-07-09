@@ -6,6 +6,7 @@ import {
   ESTADO_LABEL,
   rangoHoy,
   etiquetaEstado,
+  resumenAlumno,
   prioridadAlumno,
   resumenHoy,
   ultimaSesion,
@@ -41,6 +42,36 @@ test('etiquetaEstado: todo dominado → Lo domina', () => {
 
 test('etiquetaEstado: lista vacía → no_empezado', () => {
   assert.equal(etiquetaEstado([]).estado, 'no_empezado');
+});
+
+test('resumenAlumno: a_reforzar → atender=true', () => {
+  const r = resumenAlumno([{ estado: 'dominado' }, { estado: 'a_reforzar' }, { estado: 'en_construccion' }]);
+  assert.equal(r.estado, 'a_reforzar');
+  assert.equal(r.label, 'A reforzar');
+  assert.equal(r.atender, true);
+});
+
+test('resumenAlumno: el que domina casi todo NO figura "Sin empezar" (fix del bug)', () => {
+  // 4 dominados + 1 nodo nuevo: antes daba "Sin empezar"; ahora "Va muy bien".
+  const nodos = [
+    { estado: 'dominado' }, { estado: 'dominado' }, { estado: 'dominado' }, { estado: 'dominado' },
+    { estado: 'no_empezado' },
+  ];
+  const r = resumenAlumno(nodos);
+  assert.equal(r.label, 'Va muy bien');
+  assert.equal(r.atender, false);
+});
+
+test('resumenAlumno: sin mayoría dominada pero en camino → En camino', () => {
+  const r = resumenAlumno([{ estado: 'en_construccion' }, { estado: 'no_empezado' }]);
+  assert.equal(r.estado, 'en_construccion');
+  assert.equal(r.atender, false);
+});
+
+test('resumenAlumno: todo sin empezar → Sin empezar; vacío también', () => {
+  assert.equal(resumenAlumno([{ estado: 'no_empezado' }]).label, 'Sin empezar');
+  assert.equal(resumenAlumno([]).label, 'Sin empezar');
+  assert.equal(resumenAlumno([]).atender, false);
 });
 
 test('prioridadAlumno: a_reforzar antes que dominado; sin práctica antes que con práctica', () => {

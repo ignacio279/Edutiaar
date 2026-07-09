@@ -50,6 +50,14 @@ export function puntajeSesion(inicial: number, cronologicas: RespuestaEval[]): n
   return Math.round(fin * 100) / 100;
 }
 
+// Replay de TODO el historial del nodo desde 0 (orden cronológico). Determinístico
+// e idempotente: no depende del puntaje persistido, así una sesión cuyo upsert
+// falló se reconcilia sola la próxima vez (self-healing). El chico nunca "gasta"
+// ejercicios que no cuentan.
+export function puntajeHistorico(todasCronologicas: RespuestaEval[]): number {
+  return puntajeSesion(0, todasCronologicas);
+}
+
 // Override docente (D6): si la seño fijó el estado a mano, la regla lo respeta — devuelve el
 // estado manual y conserva el puntaje calculado (sigue alimentando el gradiente del mapa).
 export function resolverEstado(
@@ -63,6 +71,21 @@ export function resolverEstado(
 // ── Estados derivados del puntaje (DP2) ───────────────────────────────────────
 export const UMBRAL_DOMINIO = 70; // puntaje mínimo para dominar
 export const MIN_EJERCICIOS_DOMINIO = 50; // constancia: ejercicios respondidos (DP4)
+
+// ¿El nodo cumple TODAS las condiciones de dominio? (puntaje + constancia + cobertura).
+// Único lugar donde vive la regla, la reusan `calcularEstadoProgresivo` y `progresoNodo`.
+export function cumpleDominio(
+  puntaje: number,
+  totalRespondidos: number,
+  cobertura: { producir: number; dificil: number },
+): boolean {
+  return (
+    puntaje >= UMBRAL_DOMINIO &&
+    totalRespondidos >= MIN_EJERCICIOS_DOMINIO &&
+    cobertura.producir >= MIN_PRODUCIR &&
+    cobertura.dificil >= 1
+  );
+}
 
 // Cobertura HISTÓRICA (todas las respuestas del chico en el nodo, no ventana):
 // cuántos `producir` y cuántos difíciles acertó al primer intento.
@@ -97,12 +120,25 @@ export function calcularEstadoProgresivo(args: {
   // Sin datos no se mueve el estado (guardia ante fallas de red; un nodo nuevo
   // sigue arrancando en no_empezado porque `estadoActual` ya default-ea a eso).
   if (totalRespondidos === 0) return estadoActual;
-  const domina =
-    puntaje >= UMBRAL_DOMINIO &&
-    totalRespondidos >= MIN_EJERCICIOS_DOMINIO &&
-    cobertura.producir >= MIN_PRODUCIR &&
-    cobertura.dificil >= 1;
-  if (domina) return 'dominado';
+  if (cumpleDominio(puntaje, totalRespondidos, cobertura)) return 'dominado';
   if (args.dosUltimasMal || args.tasaSesion < PISO_REFORZAR) return 'a_reforzar';
   return 'en_construccion';
+}
+
+// Progreso visible para el chico (no baja el gate de dominio, solo lo muestra).
+// `pct` = puntaje 0..100 redondeado; `casi` = buen puntaje pero todavía le falta
+// constancia/cobertura para dominar; `faltanEjercicios` = cuántos le faltan para
+// llegar al mínimo de constancia.
+export function progresoNodo(args: {
+  puntaje: number;
+  totalRespondidos: number;
+  cobertura: { producir: number; dificil: number };
+  estadoActual?: EstadoNodo;
+}): { pct: number; casi: boolean; faltanEjercicios: number } {
+  const { puntaje, totalRespondidos, cobertura, estadoActual = 'no_empezado' } = args;
+  const pct = Math.min(100, Math.max(0, Math.round(puntaje)));
+  const domina = cumpleDominio(puntaje, totalRespondidos, cobertura);
+  const casi = !domina && estadoActual !== 'dominado' && puntaje >= UMBRAL_DOMINIO;
+  const faltanEjercicios = Math.max(0, MIN_EJERCICIOS_DOMINIO - totalRespondidos);
+  return { pct, casi, faltanEjercicios };
 }

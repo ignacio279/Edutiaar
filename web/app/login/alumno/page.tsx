@@ -25,6 +25,7 @@ export default function LoginAlumno() {
   const [pinPerfil, setPinPerfil] = useState<Alumno | null>(null);
   const [pin, setPin] = useState('');
   const [shake, setShake] = useState(false);
+  const [confirmAula, setConfirmAula] = useState(false); // "Cambiar aula": pide 2 toques (footgun)
 
   useEffect(() => {
     const aula = getAula();
@@ -247,19 +248,22 @@ export default function LoginAlumno() {
           </button>
           <button
             onClick={() => {
+              // Cambiar aula borra la config del dispositivo (pantalla de la seño):
+              // primer toque avisa, el segundo confirma. Evita que un chico la vuele sin querer.
+              if (!confirmAula) { setConfirmAula(true); return; }
               clearAula();
               router.push('/setup');
             }}
             style={{
               background: 'none',
               border: 'none',
-              color: '#C77E3A',
+              color: confirmAula ? '#BB4F3F' : '#C77E3A',
               fontWeight: 800,
               fontSize: 14,
               cursor: 'pointer',
             }}
           >
-            Cambiar aula
+            {confirmAula ? 'Esto es para la seño · Tocá otra vez' : 'Cambiar aula'}
           </button>
         </div>
         <div style={{ textAlign: 'center', marginTop: 8 }}>

@@ -30,7 +30,7 @@ test('layout serpentina: zig-zag — la fila 0 va izq→der, la fila 1 der→izq
 
 test('estadoColor: cubre el enum y cae a no_empezado', () => {
   assert.equal(estadoColor('dominado'), '#7FB069');
-  assert.equal(estadoColor('a_reforzar'), '#D46A5A');
+  assert.equal(estadoColor('a_reforzar'), COLORES.a_reforzar); // violeta cálido, no rojo
   assert.equal(estadoColor('en_construccion'), '#E89B42');
   assert.equal(estadoColor('no_empezado'), '#C9BCA6');
   assert.equal(estadoColor(null), '#C9BCA6');

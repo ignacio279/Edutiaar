@@ -21,6 +21,21 @@ export const ESTILO_BANDA: Record<Banda, string> = {
   grandes: 'Consignas que pueden llevar más de una oración, vocabulario rico de 5° a 7° grado, distractores finos que obligan a pensar.',
 };
 
+// ── Imágenes para pre-lectores (accesibilidad 1°-2°) ─────────────────────────
+// Set FIJO de dibujos que sabe pintar web/lib/art.ts item(). El generador solo
+// puede elegir una de estas claves (whitelist); nada de URLs ni imágenes por IA.
+export const CLAVES_IMAGEN = ['apples3', 'stars4', 'solcito', 'arbol', 'oveja', 'uva'] as const;
+export type ClaveImagen = (typeof CLAVES_IMAGEN)[number];
+
+const IMAGEN_DESC: Record<ClaveImagen, string> = {
+  apples3: '3 manzanas',
+  stars4: '4 estrellas',
+  solcito: 'un sol',
+  arbol: 'un árbol',
+  oveja: 'una oveja',
+  uva: 'un racimo de uvas',
+};
+
 // ── Estratos del pool (DP6): celda = tipo × dificultad. ──────────────────────
 export type Celda = { tipo: TipoEjercicio; dificultad: number };
 
@@ -53,6 +68,7 @@ export type EjercicioGen = {
   correcta: string;
   dificultad: number;
   tipo: TipoEjercicio;
+  imagen?: ClaveImagen; // opcional, solo banda chiquitos y cuando el objeto encaja
 };
 
 // Prompt para generar un pool de ejercicios de opción múltiple de un nodo.
@@ -64,15 +80,23 @@ export function construirPromptEjercicios(
   n = 6,
   celdas?: Array<Celda & { n: number }>,
 ): { system: string; user: string } {
+  const banda = bandaDeGrado(grado);
   const system = [
     `Sos SOL, copiloto de ${materia} para ${grado}° grado en una escuela rural de Argentina.`,
     'Generás ejercicios de OPCIÓN MÚLTIPLE, claros y cálidos, en español rioplatense, con ejemplos de la vida del campo/pueblo cuando sirva.',
-    ESTILO_BANDA[bandaDeGrado(grado)],
+    ESTILO_BANDA[banda],
     'Reglas: cada ejercicio tiene 4 opciones y UNA correcta (la correcta debe ser EXACTAMENTE una de las opciones, copiada igual).',
     `Variá los tipos: reconocer, completar, ordenar, producir. Incluí al menos 2 de tipo "producir" y al menos 1 de dificultad 3.`,
     'Dificultad en escala 1 (fácil) a 3 (difícil). Nada de respuestas ambiguas ni dos opciones correctas.',
     'Devolvé SOLO un array JSON, sin texto extra, con este shape por ítem:',
     '{"enunciado": str, "opciones": [str,str,str,str], "correcta": str, "dificultad": 1|2|3, "tipo": "reconocer"|"completar"|"ordenar"|"producir"}',
+    // Pre-lectores: dibujo opcional solo para los más chicos.
+    ...(banda === 'chiquitos'
+      ? [
+          `Estos chicos todavía no leen bien. Cuando el ejercicio sea de CONTAR o RECONOCER uno de estos objetos, agregá el campo "imagen" con la clave del dibujo, para que SOL lo muestre. Claves: ${CLAVES_IMAGEN.map((k) => `"${k}" (${IMAGEN_DESC[k]})`).join(', ')}.`,
+          'Si el ejercicio no es sobre ninguno de esos objetos, NO incluyas "imagen".',
+        ]
+      : []),
   ].join(' ');
   const pedido = celdas && celdas.length
     ? `Generá EXACTAMENTE: ${celdas.map((c) => `${c.n} de tipo "${c.tipo}" con dificultad ${c.dificultad}`).join(', ')}.`
@@ -97,7 +121,9 @@ export function parseEjercicios(input: unknown, nodoId: string): EjercicioGen[] 
     if (!opciones.includes(correcta)) continue; // la correcta tiene que estar entre las opciones
     const dificultad = Math.min(3, Math.max(1, Math.round(Number(o.dificultad) || 1)));
     const tipo = (TIPOS as readonly string[]).includes(String(o.tipo)) ? (o.tipo as TipoEjercicio) : 'reconocer';
-    out.push({ nodo_id: nodoId, enunciado, opciones, correcta, dificultad, tipo });
+    // Imagen: solo si es una clave del set fijo (whitelist); cualquier otra cosa se descarta.
+    const imagen = (CLAVES_IMAGEN as readonly string[]).includes(String(o.imagen)) ? (o.imagen as ClaveImagen) : undefined;
+    out.push({ nodo_id: nodoId, enunciado, opciones, correcta, dificultad, tipo, ...(imagen ? { imagen } : {}) });
   }
   if (out.length === 0) throw new Error('sin_ejercicios_validos');
   return out;

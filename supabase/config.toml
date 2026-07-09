@@ -8,10 +8,10 @@ verify_jwt = false
 [functions.alumno-login]
 verify_jwt = false
 
-# SOL (Fase 2): la llama el front; por ahora sin verificar JWT (matchea el harness
-# de tests). La auth real del endpoint se endurece en SP-2.
+# SOL (Fase 2): endurecida — verifica JWT y además chequea getUser adentro.
+# (Antes verify_jwt=false la dejaba abierta como vector de costo Claude.)
 [functions.sol]
-verify_jwt = false
+verify_jwt = true
 
 # Autoría docente (Fase 2 / SP-2): la llama la seño logueada; tomamos su identidad
 # del JWT, así que SÍ se verifica.

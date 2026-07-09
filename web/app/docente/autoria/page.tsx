@@ -10,7 +10,8 @@ import { createClient } from '@/lib/supabase/client';
 import DocenteSidebar from '@/components/DocenteSidebar';
 import { toast } from '@/lib/toast';
 import { sol, uiIcon } from '@/lib/art';
-import { bytesABase64, validarArchivoPdf } from '@/lib/autoria';
+import { bytesABase64, validarArchivoPdf, mensajeErrorSol } from '@/lib/autoria';
+import { fetchConTimeout } from '@/lib/edge';
 
 const QUICK = 'var(--font-quicksand), sans-serif';
 const NUNITO = 'var(--font-nunito)';
@@ -47,6 +48,7 @@ function Autoria() {
   const [contenido, setContenido] = useState('');
   const [pdf, setPdf] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
+  const [publicando, setPublicando] = useState(false); // publish en curso (call larga a Sonnet)
   const [modo, setModo] = useState<'crear' | 'editar'>('crear');
 
   const [solMateriaId, setSolMateriaId] = useState<string | null>(null);
@@ -127,19 +129,27 @@ function Autoria() {
       }
     }
     const { data: { session } } = await supabase.auth.getSession();
-    const r = await fetch(`${URL}/functions/v1/dividir-nodos`, {
-      method: 'POST',
-      headers: { apikey: ANON, Authorization: `Bearer ${session?.access_token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        materia_nombre: materia.trim(),
-        grado: Number(grado),
-        contenido: contenido.trim() || undefined,
-        pdf_base64,
-      }),
-    });
+    let r: Response;
+    try {
+      // 90s de tope: SOL divide con Sonnet; si la conexión cuelga, avisamos en vez de spinner infinito.
+      r = await fetchConTimeout(`${URL}/functions/v1/dividir-nodos`, {
+        method: 'POST',
+        headers: { apikey: ANON, Authorization: `Bearer ${session?.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          materia_nombre: materia.trim(),
+          grado: Number(grado),
+          contenido: contenido.trim() || undefined,
+          pdf_base64,
+        }),
+      }, 90000);
+    } catch {
+      setBusy(false);
+      toast('SOL tardó demasiado. Fijate la conexión y probá de nuevo.');
+      return;
+    }
     const j = await r.json().catch(() => ({}));
     setBusy(false);
-    if (!r.ok) { toast(j.error ? `No se pudo: ${j.error}` : 'No se pudo generar'); return; }
+    if (!r.ok) { toast(mensajeErrorSol(j.error)); return; }
     setSolMateriaId(j.sol_materia_id);
     setProgramaId(j.programa_id);
     setNodos(j.nodos || []);
@@ -201,6 +211,7 @@ function Autoria() {
   async function publicar() {
     if (busy || !solMateriaId) return;
     setBusy(true);
+    setPublicando(true);
     try {
       // Guardar primero: un nodo nuevo sin id no recibe ejercicios del generador.
       await guardarNodos();
@@ -225,6 +236,7 @@ function Autoria() {
       }
     } finally {
       setBusy(false);
+      setPublicando(false);
     }
   }
 
@@ -308,7 +320,7 @@ function Autoria() {
               </label>
             )}
           </div>
-          <button onClick={generar} className="ed-primary" style={{ ...btnPrimary, alignSelf: 'flex-start' }}>
+          <button onClick={generar} disabled={busy} className="ed-primary" style={{ ...btnPrimary, alignSelf: 'flex-start', opacity: busy ? 0.6 : 1, cursor: busy ? 'default' : 'pointer' }}>
             {busy ? 'Generando…' : 'Generar nodos'}
           </button>
         </div>
@@ -343,13 +355,21 @@ function Autoria() {
             </div>
 
             <div style={{ display: 'flex', gap: 12, marginTop: 18, flexWrap: 'wrap' }}>
-              <button onClick={guardar} style={{ ...btnPrimary, background: '#FFFCF5', color: '#7A6F5F', border: '2px solid #EFE3CE' }}>
-                {busy ? 'Guardando…' : 'Guardar cambios'}
+              <button onClick={guardar} disabled={busy} style={{ ...btnPrimary, background: '#FFFCF5', color: '#7A6F5F', border: '2px solid #EFE3CE', opacity: busy ? 0.6 : 1, cursor: busy ? 'default' : 'pointer' }}>
+                {busy && !publicando ? 'Guardando…' : 'Guardar cambios'}
               </button>
-              <button onClick={publicar} className="ed-primary" style={{ ...btnPrimary, background: '#7FB069' }}>
-                {estado === 'publicado' ? 'Publicar cambios' : 'Publicar'}
+              <button onClick={publicar} disabled={busy} className="ed-primary" style={{ ...btnPrimary, background: '#7FB069', opacity: busy ? 0.6 : 1, cursor: busy ? 'default' : 'pointer' }}>
+                {publicando ? 'Publicando…' : estado === 'publicado' ? 'Publicar cambios' : 'Publicar'}
               </button>
             </div>
+            {publicando && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, background: '#FBEFD9', border: '1.5px solid #F4D9A6', borderRadius: 14, padding: '12px 16px' }}>
+                <div style={{ width: 26, height: 26, flexShrink: 0, background: solHappy }} />
+                <span style={{ fontSize: 14.5, color: '#7A6F5F', fontWeight: 600 }}>
+                  SOL está preparando los ejercicios… puede tardar un ratito. No cierres esta pantalla.
+                </span>
+              </div>
+            )}
           </div>
         )}
       </main>

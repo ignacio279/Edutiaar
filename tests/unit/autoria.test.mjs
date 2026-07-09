@@ -2,7 +2,7 @@
 // Sin DOM ni red: validación del archivo y base64 chunked corren con `npm test`.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PDF_MAX_BYTES, bytesABase64, validarArchivoPdf } from '../../web/lib/autoria.ts';
+import { PDF_MAX_BYTES, bytesABase64, validarArchivoPdf, mensajeErrorSol } from '../../web/lib/autoria.ts';
 
 test('validarArchivoPdf: acepta PDF por mime type', () => {
   assert.equal(validarArchivoPdf('plan.pdf', 'application/pdf', 1024), null);
@@ -36,4 +36,13 @@ test('bytesABase64: archivo grande (cruza varios chunks) sin reventar el stack',
   const grande = new Uint8Array(300_000);
   for (let i = 0; i < grande.length; i++) grande[i] = i % 256;
   assert.equal(bytesABase64(grande.buffer), Buffer.from(grande).toString('base64'));
+});
+
+test('mensajeErrorSol: traduce códigos crudos a algo legible (nunca filtra el código)', () => {
+  assert.doesNotMatch(mensajeErrorSol('falta_anthropic_api_key'), /anthropic|key/i);
+  assert.match(mensajeErrorSol('division_sin_nodos'), /plan|PDF/i);
+  assert.match(mensajeErrorSol('claude_529'), /ratito|pedido/i);
+  assert.match(mensajeErrorSol('claude_503'), /ratito|pedido/i);
+  assert.match(mensajeErrorSol(undefined), /de nuevo/i);
+  assert.match(mensajeErrorSol('lo_que_sea'), /de nuevo/i);
 });

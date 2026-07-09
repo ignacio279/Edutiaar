@@ -1,7 +1,7 @@
 // Tests de los copys de la práctica-chat (web/lib/practica-copy.ts). `npm test`.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { saludo, cierre, praise, encourage } from '../../web/lib/practica-copy.ts';
+import { saludo, cierre, praise, encourage, estadoCopy } from '../../web/lib/practica-copy.ts';
 
 test('saludo: templatea materia y alumno; sin alumno cae a ¡Hola!', () => {
   const s = saludo('Lengua', 'Mateo');
@@ -16,6 +16,20 @@ test('cierre: templatea alumno y tema', () => {
   assert.match(c, /Vocales/);
   // sin tema sigue siendo cálido
   assert.match(cierre('Lengua'), /genial/i);
+});
+
+test('estadoCopy: frase por estado, casi gana, nunca castiga', () => {
+  assert.match(estadoCopy('dominado'), /dominaste/i);
+  assert.match(estadoCopy('en_construccion'), /camino/i);
+  assert.match(estadoCopy('a_reforzar'), /juntos|practic/i);
+  // casi tiene prioridad sobre el estado
+  assert.match(estadoCopy('en_construccion', true), /casi/i);
+  // estado desconocido cae elegante
+  assert.equal(typeof estadoCopy('cualquier_cosa'), 'string');
+  // ningún copy castiga (no "mal", no "error")
+  for (const e of ['dominado', 'en_construccion', 'a_reforzar', 'no_empezado']) {
+    assert.doesNotMatch(estadoCopy(e), /mal\b|error/i);
+  }
 });
 
 test('praise / encourage: determinísticos por índice y envuelven', () => {

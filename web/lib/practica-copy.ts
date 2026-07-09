@@ -32,6 +32,24 @@ export function cierre(materia: string, alumno?: string, tema?: string): string 
   return `¡Buenísimo${nombre}! Por hoy alcanza. ${loDe} ¡Nos vemos!`;
 }
 
+// Frase cálida según cómo quedó el nodo al cerrar la tanda (nunca castiga).
+// `casi` (buen puntaje pero le falta constancia para dominar) gana sobre el estado.
+export function estadoCopy(estado: string, casi = false): string {
+  if (casi) return '¡Casi lo dominás! Un poquito más y es tuyo.';
+  switch (estado) {
+    case 'dominado':
+      return '¡Lo dominaste! ⭐';
+    case 'a_reforzar':
+      return 'Sigamos practicando esto juntos 💪';
+    case 'en_construccion':
+      return 'Vas en camino 🌱';
+    case 'no_empezado':
+      return '¡Buen comienzo! 🌱';
+    default:
+      return 'Vas en camino 🌱';
+  }
+}
+
 // Festejo cuando acierta (índice determinístico).
 export function praise(i = 0): string {
   return PRAISES[((i % PRAISES.length) + PRAISES.length) % PRAISES.length];

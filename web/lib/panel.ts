@@ -40,6 +40,32 @@ export function etiquetaEstado(nodos: { estado: string }[]): { estado: EstadoNod
   return { estado, label: ESTADO_LABEL[estado] };
 }
 
+// Resumen "a quién atender" del alumno, derivado de CONTEOS (no solo del peor
+// estado): así un chico que domina casi todo no aparece "Sin empezar" por un
+// nodo nuevo. `atender` marca si necesita mirada de la seño (hoy = tiene algo a
+// reforzar). Lista vacía → "Sin empezar", sin atención.
+export function resumenAlumno(
+  nodos: { estado: string }[],
+): { estado: EstadoNodo; label: string; atender: boolean } {
+  const presentes = new Set(nodos.map((n) => n.estado));
+  if (presentes.has('a_reforzar')) {
+    return { estado: 'a_reforzar', label: ESTADO_LABEL.a_reforzar, atender: true };
+  }
+  const total = nodos.length;
+  const dominados = nodos.filter((n) => n.estado === 'dominado').length;
+  // Mayoría dominada (y sin nada a reforzar) → viene muy bien.
+  if (dominados > 0 && dominados > total / 2) {
+    return { estado: 'dominado', label: 'Va muy bien', atender: false };
+  }
+  if (presentes.has('en_construccion')) {
+    return { estado: 'en_construccion', label: ESTADO_LABEL.en_construccion, atender: false };
+  }
+  if (presentes.has('dominado')) {
+    return { estado: 'dominado', label: ESTADO_LABEL.dominado, atender: false };
+  }
+  return { estado: 'no_empezado', label: ESTADO_LABEL.no_empezado, atender: false };
+}
+
 // Clave de orden para la lista: menor = atender primero. Dentro del mismo estado,
 // el que NO practicó hoy va antes (necesita el empujón).
 export function prioridadAlumno(a: { estado: string; practicoHoy: boolean }): number {

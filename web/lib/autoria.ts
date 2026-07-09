@@ -13,6 +13,23 @@ export function validarArchivoPdf(nombre: string, tipo: string, bytes: number): 
   return null;
 }
 
+// Traduce el código de error crudo de la Edge Function a algo que la seño entienda
+// (no mostrar "falta_anthropic_api_key" ni "claude_529" tal cual).
+export function mensajeErrorSol(code?: string): string {
+  switch (code) {
+    case 'falta_anthropic_api_key':
+      return 'SOL no está disponible ahora mismo. Avisale al equipo.';
+    case 'division_sin_nodos':
+      return 'SOL no pudo dividir este plan. Probá con un texto más claro o revisá el PDF.';
+    case 'sin_texto':
+    case 'sin_contenido':
+      return 'Pegá el contenido del plan o adjuntá un PDF.';
+    default:
+      if (code && /^claude_5\d\d/.test(code)) return 'SOL está muy pedido en este momento. Probá de nuevo en un ratito.';
+      return 'No se pudo generar. Probá de nuevo.';
+  }
+}
+
 // btoa(String.fromCharCode(...bytes)) revienta el stack con archivos grandes; de a chunks.
 export function bytesABase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);

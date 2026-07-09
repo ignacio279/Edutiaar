@@ -6,7 +6,9 @@ export type EstadoNodo = 'no_empezado' | 'en_construccion' | 'a_reforzar' | 'dom
 export const COLORES: Record<EstadoNodo, string> = {
   no_empezado: '#C9BCA6',
   en_construccion: '#E89B42',
-  a_reforzar: '#D46A5A',
+  // Violeta cálido, no rojo: "para repasar" es una señal amable, nunca un castigo.
+  // Distinto del naranja (en_construccion) y del verde (dominado).
+  a_reforzar: '#9C8BC4',
   dominado: '#7FB069',
 };
 
@@ -43,7 +45,7 @@ export function nodoMasAvanzado<T extends { id: string; estado: string }>(nodos:
 export const LEGEND: { label: string; c: string }[] = [
   { label: 'Lo domina', c: COLORES.dominado },
   { label: 'En camino', c: COLORES.en_construccion },
-  { label: 'A reforzar', c: COLORES.a_reforzar },
+  { label: 'Para repasar', c: COLORES.a_reforzar },
   { label: 'Sin empezar', c: COLORES.no_empezado },
 ];
 

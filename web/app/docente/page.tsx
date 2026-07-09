@@ -11,7 +11,7 @@ import DocenteSidebar from '@/components/DocenteSidebar';
 import { animal, sol, uiIcon } from '@/lib/art';
 import { estadoColor } from '@/lib/mapa-layout';
 import {
-  etiquetaEstado,
+  resumenAlumno,
   prioridadAlumno,
   resumenHoy,
   ultimaSesion,
@@ -28,6 +28,7 @@ type Alumno = { id: string; nombre: string; avatar: string; grado: number };
 type AlumnoVista = Alumno & {
   estado: EstadoNodo;
   etiqueta: string;
+  atender: boolean;
   hoy: { cantidad: number; aciertos: number; total: number };
   ultima: Date | null;
 };
@@ -53,7 +54,7 @@ export default function PanelDocente() {
   const router = useRouter();
   const supabase = createClient();
   const [me, setMe] = useState<Perfil | null>(null);
-  const [grado, setGrado] = useState<number | null>(null);
+  const [gradoLabel, setGradoLabel] = useState('');
   const [alumnos, setAlumnos] = useState<AlumnoVista[]>([]);
   const [loaded, setLoaded] = useState(false);
 
@@ -72,7 +73,9 @@ export default function PanelDocente() {
         .eq('docente_id', user.id)
         .order('nombre');
       const base = (list as Alumno[]) || [];
-      setGrado(base[0]?.grado ?? null);
+      // Aula plurigrado: mostrar el rango de grados, no el del primer alumno.
+      const grados = [...new Set(base.map((a) => a.grado).filter((g): g is number => typeof g === 'number'))].sort((a, b) => a - b);
+      setGradoLabel(grados.length === 0 ? '' : grados.length === 1 ? `${grados[0]}° grado` : `${grados[0]}°–${grados[grados.length - 1]}° grado`);
       const ids = base.map((a) => a.id);
 
       const [{ data: nodoRows }, { data: sesRows }] = ids.length
@@ -91,8 +94,8 @@ export default function PanelDocente() {
       const vistas: AlumnoVista[] = base.map((a) => {
         const misNodos = nodos.filter((n) => n.alumno_id === a.id);
         const misSes = sesiones.filter((s) => s.alumno_id === a.id);
-        const { estado, label } = etiquetaEstado(misNodos);
-        return { ...a, estado, etiqueta: label, hoy: resumenHoy(misSes, now), ultima: ultimaSesion(misSes) };
+        const { estado, label, atender } = resumenAlumno(misNodos);
+        return { ...a, estado, etiqueta: label, atender, hoy: resumenHoy(misSes, now), ultima: ultimaSesion(misSes) };
       });
       vistas.sort((x, y) => {
         const px = prioridadAlumno({ estado: x.estado, practicoHoy: x.hoy.cantidad > 0 });
@@ -116,7 +119,7 @@ export default function PanelDocente() {
   }
 
   const practicaron = alumnos.filter((a) => a.hoy.cantidad > 0).length;
-  const acompañar = alumnos.filter((a) => a.estado === 'a_reforzar').length;
+  const acompañar = alumnos.filter((a) => a.atender).length;
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', background: '#FBF4E6', animation: 'edFade .3s ease' }}>
@@ -126,7 +129,7 @@ export default function PanelDocente() {
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 24 }}>
           <div>
             <h1 style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 'clamp(26px,4vw,36px)', color: '#3A332A', margin: 0 }}>Hola, seño {me?.nombre || ''}</h1>
-            <p style={{ fontSize: 16, color: '#7A6F5F', margin: '5px 0 0', fontWeight: 600 }}>{grado ? `${grado}° grado · ` : ''}{fechaHoy()}</p>
+            <p style={{ fontSize: 16, color: '#7A6F5F', margin: '5px 0 0', fontWeight: 600 }}>{gradoLabel ? `${gradoLabel} · ` : ''}{fechaHoy()}</p>
           </div>
         </div>
 

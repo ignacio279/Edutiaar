@@ -22,10 +22,18 @@ const SYSTEM = [
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   try {
+    const url = Deno.env.get('SUPABASE_URL')!;
+
+    // Auth: solo usuarios logueados (cierra el endpoint como vector de costo Claude).
+    const anon = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const authHeader = req.headers.get('Authorization') ?? '';
+    const asUser = createClient(url, anon, { global: { headers: { Authorization: authHeader } } });
+    const { data: { user } } = await asUser.auth.getUser();
+    if (!user) return json({ error: 'no_autenticado' }, 401);
+
     const { programa_id } = await req.json();
     if (!programa_id) return json({ error: 'falta_programa_id' }, 400);
 
-    const url = Deno.env.get('SUPABASE_URL')!;
     const key = Deno.env.get('ANTHROPIC_API_KEY');
     if (!key) return json({ error: 'falta_anthropic_api_key' }, 500);
     const sb = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);

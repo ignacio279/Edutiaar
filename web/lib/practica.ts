@@ -8,6 +8,7 @@ export type Ejercicio = {
   correcta: string;
   dificultad: number;
   tipo: string;
+  imagen?: string | null; // clave de dibujo (art.ts item()) para pre-lectores
 };
 
 export type RespuestaReg = {
