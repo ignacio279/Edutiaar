@@ -416,16 +416,6 @@ function PracticarInner() {
                   : { maxWidth: '80%', background: tema.color, borderRadius: 20, borderBottomRightRadius: 6, padding: '12px 20px', boxShadow: `0 6px 14px ${alpha(tema.color, 0.3)}` }}>
                   {qimg && <div style={{ width: 'clamp(120px,32vw,148px)', height: 'clamp(120px,32vw,148px)', margin: '2px 0 10px', background: `${item(qimg)} center/contain no-repeat` }} />}
                   <p style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: NUNITO, fontWeight: 700, fontSize: 'clamp(16px,2.3vw,18px)', lineHeight: 1.35, color: isSol ? '#3A332A' : '#fff' }}>{text}</p>
-                  {isSol && m.kind === 'q' && ttsOk && (
-                    <button
-                      onClick={() => hablar(textoParaLeer(ejercicios[m.ejIdx!].enunciado, ejercicios[m.ejIdx!].opciones))}
-                      aria-label="Escuchar la consigna"
-                      style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 9, background: '#FBF4E6', border: '1.5px solid #EFE3CE', borderRadius: 999, padding: '5px 12px', cursor: 'pointer', color: '#C77E3A', fontFamily: QUICK, fontWeight: 700, fontSize: 13 }}
-                    >
-                      <span style={{ width: 18, height: 18, background: `${uiIcon('speaker')} center/contain no-repeat` }} />
-                      Escuchar
-                    </button>
-                  )}
                 </div>
               </div>
             );
@@ -438,6 +428,16 @@ function PracticarInner() {
         <div style={{ maxWidth: 720, margin: '0 auto', width: '100%' }}>
           {!fin ? (
             <>
+              {ttsOk && (
+                <button
+                  onClick={() => hablar(textoParaLeer(ej.enunciado, ej.opciones))}
+                  aria-label="Escuchar la pregunta"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 7, marginBottom: 12, background: '#FBEFD9', border: '1.5px solid #F4D9A6', borderRadius: 999, padding: '8px 16px', cursor: 'pointer', color: '#C77E3A', fontFamily: QUICK, fontWeight: 700, fontSize: 15 }}
+                >
+                  <span style={{ width: 20, height: 20, background: `${uiIcon('speaker')} center/contain no-repeat` }} />
+                  Escuchar la pregunta
+                </button>
+              )}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(108px,1fr))', gap: 12 }}>
                 {ej.opciones.map((op, i) => {
                   const big = op.length <= 2;
