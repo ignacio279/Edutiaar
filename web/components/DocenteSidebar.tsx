@@ -19,13 +19,14 @@ const sideActive: React.CSSProperties = {
   background: '#E3EEF4', color: '#3A332A', fontFamily: QUICK, fontWeight: 700, fontSize: 16,
 };
 
-const ITEMS: { key: 'alumnos' | 'clase' | 'materias'; label: string; ruta: string; icono: string }[] = [
+const ITEMS: { key: 'alumnos' | 'clase' | 'materias' | 'luna'; label: string; ruta: string; icono: string }[] = [
   { key: 'alumnos', label: 'Mis alumnos', ruta: '/docente', icono: 'people' },
   { key: 'clase', label: 'Mi clase', ruta: '/docente/alumnos', icono: 'people' },
   { key: 'materias', label: 'Mis materias', ruta: '/docente/materias', icono: 'mapI' },
+  { key: 'luna', label: 'LUNA', ruta: '/docente/luna', icono: 'moon' },
 ];
 
-export default function DocenteSidebar({ activo }: { activo: 'alumnos' | 'clase' | 'materias' }) {
+export default function DocenteSidebar({ activo }: { activo: 'alumnos' | 'clase' | 'materias' | 'luna' }) {
   const router = useRouter();
   const supabase = createClient();
 

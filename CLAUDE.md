@@ -30,7 +30,9 @@ El núcleo: cada alumno tiene un **programa** por materia → SOL lo divide en *
 
 **SOL con Claude real, mock RETIRADO (2026-07-06).** Secret `ANTHROPIC_API_KEY` en Supabase + tope de gasto en console.anthropic.com (regla 4). El modo mock fue **eliminado por completo** (funciones, helpers y sus tests): sin key, las funciones devuelven `falta_anthropic_api_key` (500) — error explícito, nunca una respuesta enlatada. Ojo: el secret se había cargado con un typo (`ANTHROPIC_API_KEY.` con punto final) y todo cayó al mock silenciosamente durante horas — esa clase de fallo ahora es visible. Modelos: `claude-haiku-4-5` (`sol`, `sol-chat`, `evaluar-sesion`) y `claude-sonnet-4-6` (`dividir-nodos`, `generador-ejercicios`). Edge Functions desplegadas (todas vía MCP; el CLI da 403): `sol`, `dividir-nodos` v6, `evaluar-sesion` v5, `sol-chat` v5, `generador-ejercicios` v7 (+ login). Migraciones hasta `0013`.
 
-**Pendiente de Fase 2:** decaimiento temporal / repaso espaciado (spec escrita), roles director/familia, copilotos LUNA/TERRA, offline. Ver `docs/ROADMAP.md` y los specs en `docs/superpowers/specs/`.
+**LUNA — copiloto de la docente (2026-07-28).** Spec `2026-07-28-luna-copiloto-docente-design.md`. Sección `/docente/luna`: **dashboard** con métricas del aula, alertas de rendimiento priorizadas (inactividad, caída de precisión, evitación de tipo, adelantado — calculadas on-demand, lógica pura en `web/lib/luna.ts`, listas para mover a un job nocturno) y resumen; **boletines mensuales** (wizard grado → alumno → generación → revisión; Edge Function `luna-boletin` con tool forzada, anclado en evidencia; la seño edita inline, aprueba, regenera o corrige — todo nace `borrador`, principio "LUNA propone, la maestra decide"; tabla `boletin`, un boletín por alumno y mes con versión); **chat 24/7** (`luna-chat`, hilo único persistido en `luna_mensaje`, contexto real del aula en el system, instrucción plurigrado de eje común multi-nivel). Modelos: `claude-sonnet-4-6` en ambas. Tope diario propio (50 chats / 20 boletines por docente, tabla `luna_uso` solo service_role). Migración `0016`; seed `scripts/seed-actividad.mjs` (vuelve el aula plurigrado 1°/3°/5° y siembra ~3 semanas de actividad que dispara cada alerta). RLS: la docente solo ve lo suyo; a la API van solo nombre de pila, grado y desempeño. Unit tests de LUNA en `luna.test.mjs`, `luna-boletin.test.mjs`, `luna-chat.test.mjs`; integración `tests/integration/luna-rls.test.mjs` (necesita envs). **Pendiente: migración 0016 + deploy de `luna-boletin`/`luna-chat` vía MCP** si no se hizo en la sesión.
+
+**Pendiente de Fase 2:** decaimiento temporal / repaso espaciado (spec escrita), roles director/familia, copiloto TERRA (incluida la entrega de boletines a familias), job nocturno de alertas de LUNA, offline. Ver `docs/ROADMAP.md` y los specs en `docs/superpowers/specs/`.
 
 ## Stack
 
@@ -65,7 +67,7 @@ Ver detalle en `docs/ARCHITECTURE.md`.
 - Que la docente cargue materias/programas ella misma (herramienta de autoría).
 - Varias materias o varios grados a la vez.
 - Roles de **director** y **familia**.
-- Los copilotos LUNA y TERRA.
+- El copiloto TERRA (entrega a familias). LUNA ya está construida (2026-07-28).
 - Modo offline, conectividad satelital, multilingüe.
 
 ## Cómo trabajar

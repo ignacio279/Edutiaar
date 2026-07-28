@@ -89,8 +89,13 @@ test('materiaPattern: lengua/mate/ciencias data-uri', () => {
 });
 
 test('uiIcon: íconos de UI data-uri y default chevron', () => {
-  for (const k of ['speaker', 'people', 'mapW', 'mapI', 'sunW', 'sunI', 'chevron']) {
+  for (const k of ['speaker', 'people', 'mapW', 'mapI', 'sunW', 'sunI', 'moon', 'chevron']) {
     assert.ok(uiIcon(k).includes('data:image/svg+xml'), `uiIcon ${k}`);
   }
   assert.equal(uiIcon('zzz'), uiIcon('chevron'));
+});
+
+test('uiIcon: moon (LUNA) es un ícono propio, no el fallback', () => {
+  assert.notEqual(uiIcon('moon'), uiIcon('chevron'));
+  assert.notEqual(uiIcon('moon'), uiIcon('people'));
 });
