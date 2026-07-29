@@ -10,6 +10,40 @@ export function textoParaLeer(enunciado: string, opciones: string[]): string {
   return consigna ? `${consigna}. Opciones: ${ops.join(', ')}.` : `Opciones: ${ops.join(', ')}.`;
 }
 
+// Texto a leer según el formato del ejercicio. Puro. 'escribir' lee SOLO la consigna (no
+// la respuesta). Para 'ordenar'/'unir' hay que pasar los items YA en el orden en que se
+// MUESTRAN (mezclado), para no regalar la solución al leerla.
+export function textoEjercicio(params: {
+  enunciado: string;
+  formato?: string | null;
+  opciones?: string[]; // formato 'opciones'
+  fichas?: string[]; // formato 'ordenar' (mezcladas)
+  izq?: string[]; // formato 'unir', columna A
+  der?: string[]; // formato 'unir', columna B (mezclada)
+}): string {
+  const consigna = (params.enunciado ?? '').trim();
+  const limpiar = (xs?: string[]) => (xs ?? []).map((x) => String(x).trim()).filter(Boolean);
+  switch (params.formato) {
+    case 'escribir':
+      return consigna;
+    case 'ordenar': {
+      const fichas = limpiar(params.fichas);
+      if (!fichas.length) return consigna;
+      return consigna ? `${consigna}. Fichas: ${fichas.join(', ')}.` : `Fichas: ${fichas.join(', ')}.`;
+    }
+    case 'unir': {
+      const izq = limpiar(params.izq);
+      const der = limpiar(params.der);
+      const parts = [consigna];
+      if (izq.length) parts.push(`Columna A: ${izq.join(', ')}.`);
+      if (der.length) parts.push(`Columna B: ${der.join(', ')}.`);
+      return parts.filter(Boolean).join(' ');
+    }
+    default: // 'opciones' (o desconocido): consigna + opciones
+      return textoParaLeer(consigna, params.opciones ?? []);
+  }
+}
+
 // ¿El navegador puede hablar? Feature-detection (evita romper donde no hay TTS).
 export function puedeHablar(): boolean {
   return typeof window !== 'undefined' && 'speechSynthesis' in window && typeof window.SpeechSynthesisUtterance !== 'undefined';

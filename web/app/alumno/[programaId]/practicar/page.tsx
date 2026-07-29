@@ -10,13 +10,15 @@ import { Suspense, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useMe } from '@/lib/me-context';
-import { sol, item, alpha, uiIcon } from '@/lib/art';
-import { hablar, puedeHablar, textoParaLeer } from '@/lib/voz';
+import { sol, item, alpha } from '@/lib/art';
+import { puedeHablar } from '@/lib/voz';
 import { nodoMasAvanzado, colorNodo } from '@/lib/mapa-layout';
 import { temaMateria } from '@/lib/materia-tema';
 import { saludo, cierre, praise, encourage, estadoCopy } from '@/lib/practica-copy';
 import { toast } from '@/lib/toast';
-import { elegirEjercicios, filtrarNoVistos, necesitaReposicion, resumen, type Ejercicio, type RespuestaReg, type HistorialEjercicio } from '@/lib/practica';
+import { elegirEjercicios, filtrarNoVistos, filtrarRenderizables, necesitaReposicion, resumen, bandaDeGrado, pisoBanda, type Ejercicio, type RespuestaReg, type HistorialEjercicio } from '@/lib/practica';
+import { esCorrecta, respuestaComoTexto, type RespuestaDada } from '@/lib/correccion';
+import { WidgetRespuesta } from '@/components/practica/WidgetRespuesta';
 import { guardarProgreso, leerProgreso, borrarProgreso } from '@/lib/practica-storage';
 import { conTimeout } from '@/lib/edge';
 import { puntajeHistorico, calcularEstadoProgresivo, coberturaHistorica, dosUltimasMal, resolverEstado, progresoNodo, type EstadoNodo } from '@/lib/dominio';
@@ -47,7 +49,6 @@ function PracticarInner() {
   const [ejercicios, setEjercicios] = useState<Ejercicio[] | null>(null);
   const [idx, setIdx] = useState(0);
   const [reintentos, setReintentos] = useState(0);
-  const [selWrong, setSelWrong] = useState<number | null>(null);
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [respuestas, setRespuestas] = useState<RespuestaReg[]>([]);
   const [fin, setFin] = useState(false);
@@ -123,12 +124,15 @@ function PracticarInner() {
     (async () => {
       const { data: nodo } = await supabase.from('nodo').select('nombre').eq('id', nodoId).single();
       setNodoNombre((nodo as { nombre?: string } | null)?.nombre || '');
-      const { data: prog } = await supabase.from('programa').select('materia:materia_id(nombre)').eq('id', programaId).single();
+      const { data: prog } = await supabase.from('programa').select('grado, materia:materia_id(nombre)').eq('id', programaId).single();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       setMateria((prog as any)?.materia?.nombre || '');
+      // Piso de dificultad por banda: los grados grandes arrancan en dif 2 (arranque en frío).
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const piso = pisoBanda(bandaDeGrado(Number((prog as any)?.grado) || 1));
       const { data } = await supabase
         .from('ejercicio')
-        .select('id,enunciado,opciones,correcta,dificultad,tipo,imagen')
+        .select('id,enunciado,opciones,correcta,dificultad,tipo,imagen,formato,datos')
         .eq('nodo_id', nodoId);
 
       let historial: HistorialEjercicio[] = [];
@@ -145,7 +149,7 @@ function PracticarInner() {
         vistos = filas.map((x) => x.ejercicio_id);
         historial = filas.slice(0, 8).map((x) => ({ correcta: x.correcta, reintentos: x.reintentos, tipo: x.ejercicio?.tipo, dificultad: x.ejercicio?.dificultad }));
       }
-      const pool = (data as Ejercicio[]) || [];
+      const pool = filtrarRenderizables((data as Ejercicio[]) || []);
       const noVistos = filtrarNoVistos(pool, vistos);
 
       // Pool agotado (ya vio todo lo que había): el chico está bloqueado. Esperamos
@@ -158,11 +162,11 @@ function PracticarInner() {
         if (!error && generados > 0) {
           const { data: data2 } = await supabase
             .from('ejercicio')
-            .select('id,enunciado,opciones,correcta,dificultad,tipo,imagen')
+            .select('id,enunciado,opciones,correcta,dificultad,tipo,imagen,formato,datos')
             .eq('nodo_id', nodoId);
-          const noVistos2 = filtrarNoVistos((data2 as Ejercicio[]) || [], vistos);
+          const noVistos2 = filtrarNoVistos(filtrarRenderizables((data2 as Ejercicio[]) || []), vistos);
           if (noVistos2.length > 0) {
-            setEjercicios(elegirEjercicios(noVistos2, historial));
+            setEjercicios(elegirEjercicios(noVistos2, historial, 8, piso));
             return;
           }
         }
@@ -175,7 +179,7 @@ function PracticarInner() {
       if (me && necesitaReposicion(noVistos.length)) {
         supabase.functions.invoke('generador-ejercicios', { body: { nodo_id: nodoId } }).catch(() => {});
       }
-      setEjercicios(elegirEjercicios(noVistos, historial));
+      setEjercicios(elegirEjercicios(noVistos, historial, 8, piso));
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodoId, me]);
@@ -315,20 +319,23 @@ function PracticarInner() {
     setGuardando(false);
   }
 
-  function selectChat(i: number, e: React.MouseEvent) {
-    if (fin || !ejercicios) return;
+  // Única puerta de respuesta: recibe la respuesta YA construida por el widget (opción tocada,
+  // texto tipeado, orden armado, pares unidos) y el timestamp del evento. La corrección la hace
+  // esCorrecta (web/lib/correccion.ts, Regla 2). Devuelve el resultado para que el widget resetee
+  // su estado transitorio (limpiar input, deshacer construcción) al fallar.
+  function responder(dada: RespuestaDada, ts: number): { correcto: boolean; revelado: boolean } {
+    if (fin || !ejercicios) return { correcto: false, revelado: false };
     const ej = ejercicios[idx];
-    const ahora = e.timeStamp;
-    if (tsRef.current === null) tsRef.current = ahora;
-    const tiempo = Math.max(1, Math.round((ahora - tsRef.current) / 1000));
-    const opcion = ej.opciones[i];
-    const conKid: Msg[] = [...msgs, { who: 'kid', kind: 'text', text: opcion }];
+    if (tsRef.current === null) tsRef.current = ts;
+    const tiempo = Math.max(1, Math.round((ts - tsRef.current) / 1000));
+    const texto = respuestaComoTexto(dada);
+    const correcto = esCorrecta(ej, dada);
+    const conKid: Msg[] = [...msgs, { who: 'kid', kind: 'text', text: texto }];
     const ni = idx + 1;
     const ultimo = ni >= ejercicios.length;
 
-    if (opcion === ej.correcta) {
-      setSelWrong(null);
-      const reg: RespuestaReg = { ejercicio_id: ej.id, dada: opcion, correcta: true, reintentos, tiempo_seg: tiempo };
+    if (correcto) {
+      const reg: RespuestaReg = { ejercicio_id: ej.id, dada: texto, correcta: true, reintentos, tiempo_seg: tiempo };
       const nextRegs = [...respuestas, reg];
       setRespuestas(nextRegs);
       celebrar();
@@ -340,11 +347,11 @@ function PracticarInner() {
         setMsgs([...conKid, { who: 'sol', kind: 'text', text: praise(idx) }, { who: 'sol', kind: 'q', ejIdx: ni }]);
         setIdx(ni);
         setReintentos(0);
-        tsRef.current = ahora;
+        tsRef.current = ts;
       }
+      return { correcto: true, revelado: false };
     } else if (reintentos + 1 >= MAX_REINTENTOS) {
-      setSelWrong(null);
-      const reg: RespuestaReg = { ejercicio_id: ej.id, dada: opcion, correcta: false, reintentos: reintentos + 1, tiempo_seg: tiempo };
+      const reg: RespuestaReg = { ejercicio_id: ej.id, dada: texto, correcta: false, reintentos: reintentos + 1, tiempo_seg: tiempo };
       const nextRegs = [...respuestas, reg];
       setRespuestas(nextRegs);
       const reveal: Msg = { who: 'sol', kind: 'text', text: `Casi. La respuesta era ${ej.correcta}. ¡Seguimos!` };
@@ -356,12 +363,13 @@ function PracticarInner() {
         setMsgs([...conKid, reveal, { who: 'sol', kind: 'q', ejIdx: ni }]);
         setIdx(ni);
         setReintentos(0);
-        tsRef.current = ahora;
+        tsRef.current = ts;
       }
+      return { correcto: false, revelado: true };
     } else {
       setMsgs([...conKid, { who: 'sol', kind: 'text', text: encourage(reintentos) }]);
       setReintentos(reintentos + 1);
-      setSelWrong(i);
+      return { correcto: false, revelado: false };
     }
   }
 
@@ -428,38 +436,7 @@ function PracticarInner() {
         <div style={{ maxWidth: 720, margin: '0 auto', width: '100%' }}>
           {!fin ? (
             <>
-              {ttsOk && (
-                <button
-                  onClick={() => hablar(textoParaLeer(ej.enunciado, ej.opciones))}
-                  aria-label="Escuchar la pregunta"
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 7, marginBottom: 12, background: '#FBEFD9', border: '1.5px solid #F4D9A6', borderRadius: 999, padding: '8px 16px', cursor: 'pointer', color: '#C77E3A', fontFamily: QUICK, fontWeight: 700, fontSize: 15 }}
-                >
-                  <span style={{ width: 20, height: 20, background: `${uiIcon('speaker')} center/contain no-repeat` }} />
-                  Escuchar la pregunta
-                </button>
-              )}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(108px,1fr))', gap: 12 }}>
-                {ej.opciones.map((op, i) => {
-                  const big = op.length <= 2;
-                  const wrong = selWrong === i;
-                  return (
-                    <button
-                      key={op + i}
-                      onClick={(e) => selectChat(i, e)}
-                      style={{
-                        minHeight: 66, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center',
-                        fontFamily: BALOO, fontWeight: 800, fontSize: big ? 'clamp(32px,7vw,46px)' : 'clamp(16px,3vw,21px)',
-                        color: wrong ? '#BB4F3F' : '#3A332A', background: wrong ? '#F7E2DD' : '#FFFCF5',
-                        border: `2.5px solid ${wrong ? '#D46A5A' : '#EFE3CE'}`, borderRadius: 18, cursor: 'pointer',
-                        boxShadow: '0 4px 12px rgba(120,90,40,.07)', padding: '8px 12px', transition: 'transform .1s ease',
-                        animation: wrong ? 'edShake .4s ease' : undefined,
-                      }}
-                    >
-                      {op}
-                    </button>
-                  );
-                })}
-              </div>
+              <WidgetRespuesta key={idx} ej={ej} temaColor={tema.color} ttsOk={ttsOk} onResponder={responder} />
               <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
                 <input
                   value={chatInput}

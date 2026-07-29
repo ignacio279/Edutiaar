@@ -22,7 +22,7 @@ const ENCOURAGES = [
 export function saludo(materia: string, alumno?: string): string {
   const hola = alumno ? `¡Hola ${alumno}!` : '¡Hola!';
   const m = materia || 'un ratito';
-  return `${hola} Soy SOL. Vamos a practicar ${m} un ratito. Mirá bien y tocá la respuesta.`;
+  return `${hola} Soy SOL. Vamos a practicar ${m} un ratito. Mirá bien y respondé.`;
 }
 
 // Mensaje de cierre cuando se terminan los ejercicios.

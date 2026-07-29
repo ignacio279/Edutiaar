@@ -38,12 +38,13 @@ Deno.serve(async (req) => {
 
     const { data: resp } = await sb
       .from('respuesta')
-      .select('dada, correcta, reintentos, ejercicio:ejercicio_id(enunciado, correcta, tipo)')
+      .select('dada, correcta, reintentos, ejercicio:ejercicio_id(enunciado, correcta, tipo, formato)')
       .eq('sesion_id', sesion_id);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rs: RespuestaDiag[] = ((resp as any[]) || []).map((r) => ({
       enunciado: r.ejercicio?.enunciado ?? '', dada: r.dada ?? '', esperaba: r.ejercicio?.correcta ?? '',
       correcta: !!r.correcta, reintentos: r.reintentos ?? 0, tipo: r.ejercicio?.tipo ?? 'reconocer',
+      formato: r.ejercicio?.formato ?? 'opciones',
     }));
 
     const key = Deno.env.get('ANTHROPIC_API_KEY');

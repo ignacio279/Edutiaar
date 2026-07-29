@@ -1,7 +1,7 @@
 // Tests unitarios de la lógica pura de práctica (web/lib/practica.ts). `npm test`.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { elegirEjercicios, resumen, nivelAdaptativo, tiposPendientes, filtrarNoVistos, necesitaReposicion, UMBRAL_REPOSICION } from '../../web/lib/practica.ts';
+import { elegirEjercicios, resumen, nivelAdaptativo, tiposPendientes, filtrarNoVistos, filtrarRenderizables, necesitaReposicion, UMBRAL_REPOSICION, bandaDeGrado, pisoBanda } from '../../web/lib/practica.ts';
 
 const ej = (id, tipo, dif) => ({ id, enunciado: '', opciones: [], correcta: '', dificultad: dif, tipo });
 
@@ -74,6 +74,32 @@ test('nivelAdaptativo: clamp al mínimo del pool (no baja de 1)', () => {
   assert.equal(nivelAdaptativo([fail('reconocer', 1), fail('reconocer', 1)], pool), 1);
 });
 
+test('pisoBanda: grandes arranca en 2, el resto en 1', () => {
+  assert.equal(pisoBanda('chiquitos'), 1);
+  assert.equal(pisoBanda('medianos'), 1);
+  assert.equal(pisoBanda('grandes'), 2);
+});
+
+test('bandaDeGrado (front, espejo del server): 1-2/3-4/5-7', () => {
+  assert.equal(bandaDeGrado(2), 'chiquitos');
+  assert.equal(bandaDeGrado(4), 'medianos');
+  assert.equal(bandaDeGrado(6), 'grandes');
+});
+
+test('nivelAdaptativo: en frío el piso sube el arranque (grandes → dif 2)', () => {
+  assert.equal(nivelAdaptativo([], pool, 2), 2); // piso 2, pool 1..3
+  assert.equal(nivelAdaptativo([], pool, 1), 1); // piso 1 = comportamiento histórico
+});
+
+test('nivelAdaptativo: el piso se acota al máximo del pool', () => {
+  const soloFacil = [{ id: 'a', enunciado: '', opciones: [], correcta: '', dificultad: 1, tipo: 'reconocer' }];
+  assert.equal(nivelAdaptativo([], soloFacil, 2), 1); // no hay dif 2 en el pool → clamp
+});
+
+test('nivelAdaptativo: con historia el piso NO impide bajar', () => {
+  assert.equal(nivelAdaptativo([fail('completar', 2), fail('completar', 2)], pool, 2), 1);
+});
+
 test('tiposPendientes: sin historia, faltan los 4 tipos en orden de demanda', () => {
   assert.deepEqual(tiposPendientes([]), ['reconocer', 'completar', 'ordenar', 'producir']);
 });
@@ -100,4 +126,13 @@ test('filtrarNoVistos: excluye lo ya respondido, conserva el resto y el orden', 
 test('necesitaReposicion: dispara bajo el umbral', () => {
   assert.equal(necesitaReposicion(UMBRAL_REPOSICION), false);
   assert.equal(necesitaReposicion(UMBRAL_REPOSICION - 1), true);
+});
+
+test('filtrarRenderizables: saca los formatos que el front no pinta, conserva los renderizables y legacy', () => {
+  const mk = (id, formato) => ({ id, enunciado: '', opciones: [], correcta: '', dificultad: 1, tipo: 'reconocer', formato });
+  const legacy = { id: 'e', enunciado: '', opciones: [], correcta: '', dificultad: 1, tipo: 'reconocer' }; // sin formato
+  const desconocido = mk('z', 'formato_futuro');
+  const pool = [mk('a', 'opciones'), mk('b', 'escribir'), mk('c', 'ordenar'), mk('d', 'unir'), legacy, desconocido];
+  // los 4 formatos renderizables + legacy (sin formato → opciones); un formato futuro/desconocido queda fuera
+  assert.deepEqual(filtrarRenderizables(pool).map((e) => e.id), ['a', 'b', 'c', 'd', 'e']);
 });

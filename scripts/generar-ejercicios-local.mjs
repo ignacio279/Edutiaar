@@ -3,7 +3,7 @@
 // opción múltiple y lo siembra en `ejercicio` (idempotente: borra y reinserta).
 //   SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... node scripts/generar-ejercicios-local.mjs [--programa <id>] [--nodo <id>] [--n 6]
 import { generarJSON } from './lib/sol-sdk.mjs';
-import { construirPromptEjercicios, parseEjercicios, cubreDominio } from '../supabase/functions/generador-ejercicios/generar.ts';
+import { bandaDeGrado, construirPromptEjercicios, parseEjercicios, cubreDominio } from '../supabase/functions/generador-ejercicios/generar.ts';
 
 const URL = process.env.SUPABASE_URL;
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -38,14 +38,14 @@ async function main() {
   for (const nodo of nodos) {
     let pool = await generarJSON(
       { ...construirPromptEjercicios(materia, grado, nodo.nombre, nodo.descripcion || '', N) },
-      (j) => parseEjercicios(j, nodo.id),
+      (j) => parseEjercicios(j, nodo.id, bandaDeGrado(grado)),
     );
     if (!cubreDominio(pool)) {
       // reintento pidiendo cobertura para que el nodo se pueda dominar (regla SP-4b)
       const p = construirPromptEjercicios(materia, grado, nodo.nombre, nodo.descripcion || '', N);
       pool = await generarJSON(
         { system: p.system, user: `${p.user}\nIMPORTANTE: incluí al menos 2 de tipo "producir" y al menos 1 de dificultad 3.` },
-        (j) => parseEjercicios(j, nodo.id),
+        (j) => parseEjercicios(j, nodo.id, bandaDeGrado(grado)),
       );
     }
     await rest(`ejercicio?nodo_id=eq.${nodo.id}`, { method: 'DELETE', headers: { ...H, Prefer: 'return=minimal' } });

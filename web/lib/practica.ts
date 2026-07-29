@@ -8,8 +8,19 @@ export type Ejercicio = {
   correcta: string;
   dificultad: number;
   tipo: string;
+  formato?: string | null; // 'opciones' (default) | 'escribir' | 'ordenar' | 'unir'
+  datos?: { pares?: { izq: string; der: string }[]; estricto?: boolean } | null;
   imagen?: string | null; // clave de dibujo (art.ts item()) para pre-lectores
 };
+
+// Formatos que el front sabe PINTAR hoy (crece con el widget, slice por slice). Defensa contra
+// skew de versiones: si el server sirviera un formato que este front todavía no renderiza,
+// filtrarRenderizables lo saca del pool en vez de romper la práctica con una tanda vacía.
+export const FORMATOS_RENDERIZABLES = ['opciones', 'escribir', 'ordenar', 'unir'] as const;
+
+export function filtrarRenderizables(pool: Ejercicio[]): Ejercicio[] {
+  return pool.filter((e) => (FORMATOS_RENDERIZABLES as readonly string[]).includes(e.formato ?? 'opciones'));
+}
 
 export type RespuestaReg = {
   ejercicio_id: string;
@@ -21,18 +32,37 @@ export type RespuestaReg = {
 
 export const ORDEN_TIPO = ['reconocer', 'completar', 'ordenar', 'producir'] as const;
 
+// ── Bandas de grado (espejo de generador-ejercicios/generar.ts) ──────────────
+// Mantené bandaDeGrado en sync con el server; hay un test espejo que importa
+// ambas y las compara para grados 1..7.
+export type Banda = 'chiquitos' | 'medianos' | 'grandes';
+
+export function bandaDeGrado(grado: number): Banda {
+  if (grado <= 2) return 'chiquitos';
+  if (grado <= 4) return 'medianos';
+  return 'grandes';
+}
+
+// Piso de dificultad para el arranque EN FRÍO (sin historia en el nodo): los grandes
+// (5°-7°) empiezan en dificultad 2, el resto en 1. Con historia manda la escalera
+// adaptativa, que puede bajar del piso si el chico se traba.
+export function pisoBanda(banda: Banda): number {
+  return banda === 'grandes' ? 2 : 1;
+}
+
 // Una respuesta previa del chico en el nodo (más reciente primero).
 export type HistorialEjercicio = { correcta: boolean; reintentos: number; tipo: string; dificultad: number };
 
 const esPrimerIntento = (h: HistorialEjercicio) => h.correcta && h.reintentos === 0;
 
 // Dificultad objetivo (adaptativa): sube con racha de aciertos al 1er intento, baja si los 2
-// más recientes fallaron. Arranca en la dificultad más baja del pool. Clamp a [min,max] del pool.
-export function nivelAdaptativo(historial: HistorialEjercicio[], pool: Ejercicio[]): number {
+// más recientes fallaron. En frío arranca en el piso (por banda), acotado al rango del pool.
+// Clamp a [min,max] del pool.
+export function nivelAdaptativo(historial: HistorialEjercicio[], pool: Ejercicio[], piso = 1): number {
   const difs = pool.map((e) => e.dificultad);
   const min = difs.length ? Math.min(...difs) : 1;
   const max = difs.length ? Math.max(...difs) : 1;
-  if (historial.length === 0) return min;
+  if (historial.length === 0) return Math.min(max, Math.max(min, piso));
   const ultimaDif = historial[0].dificultad;
   let racha = 0;
   for (const h of historial) { if (esPrimerIntento(h)) racha++; else break; }
@@ -54,8 +84,8 @@ export function tiposPendientes(historial: HistorialEjercicio[]): string[] {
 // (1) ESCALERA DE COBERTURA: prioriza los tipos que le faltan demostrar (reconocer→producir).
 // (2) DIFICULTAD ADAPTATIVA: dentro de eso, acerca la dificultad al nivel adaptativo (sube si
 //     viene acertando, baja si falla). Determinístico (tests estables): desempata por dificultad e id.
-export function elegirEjercicios(pool: Ejercicio[], historial: HistorialEjercicio[] = [], max = 8): Ejercicio[] {
-  const nivel = nivelAdaptativo(historial, pool);
+export function elegirEjercicios(pool: Ejercicio[], historial: HistorialEjercicio[] = [], max = 8, piso = 1): Ejercicio[] {
+  const nivel = nivelAdaptativo(historial, pool, piso);
   const pendientes = tiposPendientes(historial);
   const prioridadTipo = (t: string) => {
     const i = pendientes.indexOf(t);

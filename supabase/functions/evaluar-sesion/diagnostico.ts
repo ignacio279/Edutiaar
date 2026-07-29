@@ -10,6 +10,7 @@ export type RespuestaDiag = {
   correcta: boolean;
   reintentos: number;
   tipo: string;
+  formato?: string;
 };
 
 export type Diagnostico = {
@@ -26,7 +27,7 @@ export function construirPromptEval(nodo: string, rs: RespuestaDiag[]): { system
     'devolvé un diagnóstico CUALITATIVO breve y cálido (nunca castiga) llamando a la tool escribir_evaluacion.',
     'NO decidas si domina el nodo: eso lo hace la app. Solo diagnosticás.',
   ].join(' ');
-  const detalle = rs.map((r, i) => `${i + 1}. [${r.tipo}] "${r.enunciado}" → respondió "${r.dada}" (esperaba "${r.esperaba}") ${r.correcta ? 'OK' : 'MAL'}${r.reintentos ? ` (${r.reintentos} reintentos)` : ''}`).join('\n');
+  const detalle = rs.map((r, i) => `${i + 1}. [${r.tipo}${r.formato && r.formato !== 'opciones' ? `/${r.formato}` : ''}] "${r.enunciado}" → respondió "${r.dada}" (esperaba "${r.esperaba}") ${r.correcta ? 'OK' : 'MAL'}${r.reintentos ? ` (${r.reintentos} reintentos)` : ''}`).join('\n');
   const user = `Nodo: ${nodo}\nRespuestas:\n${detalle}`;
   return { system, user };
 }

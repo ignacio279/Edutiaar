@@ -4,7 +4,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { cors, json } from '../_shared/cors.ts';
 import {
-  celdasIniciales, celdasParaLote, claveCelda,
+  bandaDeGrado, celdasIniciales, celdasParaLote, claveCelda,
   construirPromptEjercicios, parseEjercicios, LOTE_REPOSICION,
 } from './generar.ts';
 import type { Celda, EjercicioGen } from './generar.ts';
@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
       if (!r.ok) throw new Error(`claude_${r.status}: ${await r.text()}`);
       const data = await r.json();
       const texto = (data.content ?? []).filter((b: { type: string }) => b.type === 'text').map((b: { text: string }) => b.text).join('');
-      return parseEjercicios(JSON.parse(texto.slice(texto.indexOf('['), texto.lastIndexOf(']') + 1)), nodo.id);
+      return parseEjercicios(JSON.parse(texto.slice(texto.indexOf('['), texto.lastIndexOf(']') + 1)), nodo.id, bandaDeGrado(grado));
     }
 
     // Datos del programa (materia + grado) — común a los dos modos.
@@ -81,7 +81,7 @@ Deno.serve(async (req) => {
         // El pool queda parcial y devolvemos igual { generados } con lo que entró;
         // reintentar mañana (o al liberar cupo) completa los nodos que faltaron.
         if ((generadosHoy ?? 0) + generados + lotePorNodo > TOPE_EJERCICIOS_DIA) break;
-        const lote = await generarLote(nodo, materia, grado, celdasIniciales(), 0);
+        const lote = await generarLote(nodo, materia, grado, celdasIniciales(bandaDeGrado(grado)), 0);
         const { error } = await sb.from('ejercicio').insert(lote);
         if (error) throw error;
         generados += lote.length;

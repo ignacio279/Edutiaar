@@ -79,9 +79,16 @@ Ejercicios que SOL genera para un nodo (pool, para abaratar la API).
 | id | uuid | PK |
 | nodo_id | uuid | FK → nodo |
 | enunciado | text | |
-| opciones | jsonb | las alternativas |
-| correcta | text | la respuesta buena |
-| dificultad | int | nivel |
+| opciones | jsonb | las alternativas (para `escribir`/`unir` va `[]`; para `ordenar`, las fichas EN ORDEN CORRECTO) |
+| correcta | text | la respuesta buena (siempre legible: en `ordenar` es la oración completa; en `unir` son los pares serializados) |
+| dificultad | int | nivel 1..3 |
+| tipo | enum `tipo_ejercicio` | `reconocer`/`completar`/`ordenar`/`producir` — fija el redactado *(mig. 0008)* |
+| created_at | timestamptz | para el tope diario de generación (Regla 4) *(mig. 0012)* |
+| imagen | text | clave de arte del set fijo (`web/lib/art.ts`), NO una URL; solo pre-lectores 1°-2° *(mig. 0014)* |
+| formato | enum `formato_ejercicio` | `opciones` (default) / `escribir` / `ordenar` / `unir` — CÓMO responde el chico *(mig. 0016)* |
+| datos | jsonb | extra por formato: `{pares:[{izq,der}]}` de `unir`, flag `{estricto:true}` de ortografía *(mig. 0016)* |
+
+> La corrección de cada formato vive en `web/lib/correccion.ts` (`esCorrecta`): `opciones` compara por igualdad EXACTA; `escribir`/`ordenar`/`unir` normalizan (minúsculas, sin tildes, ñ preservada), salvo `datos.estricto`. Qué formatos ve cada grado lo fija `FORMATOS_BANDA` en el generador (chiquitos solo `opciones`).
 
 ### alumno_nodo ⭐
 El estado de cada nodo, por chico. **Una fila por (alumno × nodo).** Es lo que pinta el mapa de cada alumno.
