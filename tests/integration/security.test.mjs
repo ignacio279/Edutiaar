@@ -61,7 +61,7 @@ test('Auth directo con email adivinable falla (creds opacas)', { skip }, async (
   assert.equal(r.ok, false);
 });
 
-test('alumno-login: PIN correcto → sesión; lockout a los 5 intentos (alumno efímero)', { skip }, async () => {
+test('alumno-login: PIN correcto → sesión; lockout al 8° intento fallido, 3 min (alumno efímero)', { skip }, async () => {
   // aula real
   const aula = (await (await fetch(`${URL}/rest/v1/aula?codigo=eq.${AULA}&select=id,escuela_id`, { headers: { apikey: ANON } })).json())[0];
   assert.ok(aula, 'existe el aula de prueba');
@@ -81,13 +81,26 @@ test('alumno-login: PIN correcto → sesión; lockout a los 5 intentos (alumno e
     const ok = await (await callFn('alumno-login', { codigo: AULA, secreto: SECRETO, perfilId: id, pin: '1234' })).json();
     assert.ok(ok.session && ok.session.access_token, 'PIN correcto devuelve sesión');
 
-    // 5 PIN incorrectos → bloqueo
+    // 7 PIN incorrectos → todavía NO bloquea (migración 0015: 8 intentos / 3 min)
     let last;
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 7; i++) {
       last = await (await callFn('alumno-login', { codigo: AULA, secreto: SECRETO, perfilId: id, pin: '0000' })).json();
+      assert.equal(last.error, 'pin_invalido', `fallo ${i + 1} de 7: pin_invalido, todavía sin bloqueo`);
     }
-    assert.equal(last.error, 'bloqueado', 'al 5° intento queda bloqueado');
+    assert.equal(last.dato, 1, 'tras 7 fallos avisa que queda 1 intento');
+
+    // 8° PIN incorrecto → bloqueado (server-authoritative), con segundos del bloqueo de 3 min
+    last = await (await callFn('alumno-login', { codigo: AULA, secreto: SECRETO, perfilId: id, pin: '0000' })).json();
+    assert.equal(last.error, 'bloqueado', 'al 8° intento queda bloqueado');
+    assert.ok(Number.isFinite(last.dato) && last.dato > 0 && last.dato <= 180,
+      `dato trae segundos restantes coherentes con 3 minutos (vino ${last.dato})`);
   } finally {
-    if (id) await fetch(`${URL}/auth/v1/admin/users/${id}`, { method: 'DELETE', headers: srHeaders() });
+    if (id) {
+      // Idempotencia: el bloqueo dura 3 min; borramos explícitamente la fila de
+      // intento_login (además del cascade perfil → intento_login) para no heredar
+      // estado si el test se corre dos veces seguidas.
+      await fetch(`${URL}/rest/v1/intento_login?perfil_id=eq.${id}`, { method: 'DELETE', headers: srHeaders() });
+      await fetch(`${URL}/auth/v1/admin/users/${id}`, { method: 'DELETE', headers: srHeaders() });
+    }
   }
 });
