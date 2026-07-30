@@ -26,3 +26,11 @@ verify_jwt = true
 # (docente o alumno); en ambos casos tomamos la identidad del JWT.
 [functions.generador-ejercicios]
 verify_jwt = true
+
+# LUNA (Fase 2): copiloto de la docente. Las llama la seño logueada; identidad
+# del JWT + re-chequeo de rol docente y pertenencia del alumno adentro.
+[functions.luna-boletin]
+verify_jwt = true
+
+[functions.luna-chat]
+verify_jwt = true

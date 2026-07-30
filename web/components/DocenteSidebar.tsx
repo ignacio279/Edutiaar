@@ -4,6 +4,7 @@
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { sol, uiIcon } from '@/lib/art';
+import { VIOLETA } from '@/lib/luna-tema';
 
 const QUICK = 'var(--font-quicksand), sans-serif';
 const BALOO = 'var(--font-baloo), cursive';
@@ -18,14 +19,18 @@ const sideActive: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 11, padding: '13px 14px', borderRadius: 14,
   background: '#E3EEF4', color: '#3A332A', fontFamily: QUICK, fontWeight: 700, fontSize: 16,
 };
+// LUNA activa se pinta con su propia identidad violeta (el ícono luna ya es
+// violeta también en estado normal — detalle sutil que distingue la sección).
+const lunaActive: React.CSSProperties = { ...sideActive, background: VIOLETA.claro, color: VIOLETA.oscuro };
 
-const ITEMS: { key: 'alumnos' | 'clase' | 'materias'; label: string; ruta: string; icono: string }[] = [
+const ITEMS: { key: 'alumnos' | 'clase' | 'materias' | 'luna'; label: string; ruta: string; icono: string }[] = [
   { key: 'alumnos', label: 'Mis alumnos', ruta: '/docente', icono: 'people' },
   { key: 'clase', label: 'Mi clase', ruta: '/docente/alumnos', icono: 'people' },
   { key: 'materias', label: 'Mis materias', ruta: '/docente/materias', icono: 'mapI' },
+  { key: 'luna', label: 'LUNA', ruta: '/docente/luna', icono: 'moon' },
 ];
 
-export default function DocenteSidebar({ activo }: { activo: 'alumnos' | 'clase' | 'materias' }) {
+export default function DocenteSidebar({ activo }: { activo: 'alumnos' | 'clase' | 'materias' | 'luna' }) {
   const router = useRouter();
   const supabase = createClient();
 
@@ -43,7 +48,7 @@ export default function DocenteSidebar({ activo }: { activo: 'alumnos' | 'clase'
       </div>
       {ITEMS.map((it) =>
         it.key === activo ? (
-          <div key={it.key} style={sideActive}>
+          <div key={it.key} style={it.key === 'luna' ? lunaActive : sideActive}>
             <span style={{ width: 22, height: 22, background: `${uiIcon(it.icono)} center/contain no-repeat` }} />{it.label}
           </div>
         ) : (

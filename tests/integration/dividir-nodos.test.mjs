@@ -1,6 +1,8 @@
 // Tests de integración de la autoría docente (Fase 2 / SP-2): Edge Function
-// `dividir-nodos` + RLS de sol_materia/nodo. Corren en modo MOCK → NO necesitan
-// ANTHROPIC_API_KEY (sí los envs de Supabase; si faltan, se saltean).
+// `dividir-nodos` + RLS de sol_materia/nodo. La función llama a Claude REAL
+// (claude-sonnet-4-6; el secret ANTHROPIC_API_KEY vive en Supabase) → cada corrida
+// gasta UNA llamada real, y la cantidad exacta de nodos la decide el modelo: acá
+// asserteamos solo lo que el código garantiza (borrador, ids, shape y orden).
 // Idempotentes: crean docentes/materia/programa efímeros y los borran. npm run test:db
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -46,23 +48,39 @@ const patchSolMateria = (id, body, token) => fetch(`${URL}/rest/v1/sol_materia?i
   body: JSON.stringify(body),
 });
 
-test('dividir-nodos (mock): genera sol_materia + nodos borrador; RLS solo deja al dueño publicar', { skip }, async () => {
+test('dividir-nodos: genera sol_materia + nodos borrador; RLS solo deja al dueño publicar', { skip }, async () => {
   const materiaNombre = `TEST-${rnd()}`;
   let docente, otro, programaId, materiaId;
   try {
     docente = await nuevoDocente();
     assert.ok(docente.access_token, 'el docente efímero obtuvo sesión');
 
-    // 1. Generar (modo mock → sin API key)
+    // 1. Generar con Claude real. El contenido trae varios temas bien separados
+    // para que la división dé varios nodos; el número exacto lo decide el modelo,
+    // así que NO se assertea una cantidad puntual.
     const r = await callFnAuth('dividir-nodos', {
-      materia_nombre: materiaNombre, grado: 3, contenido: 'Vocales, sílabas, palabras', mock: true,
+      materia_nombre: materiaNombre,
+      grado: 3,
+      contenido: 'Unidad 1: Las vocales y sus sonidos. Unidad 2: Las sílabas y cómo separar palabras en sílabas. Unidad 3: Sustantivos comunes y propios. Unidad 4: Adjetivos calificativos.',
     }, docente.access_token);
-    assert.equal(r.status, 200);
-    const j = await r.json();
+    const cuerpo = await r.text();
+    assert.equal(r.status, 200, `esperaba 200, vino ${r.status}: ${cuerpo}`);
+    const j = JSON.parse(cuerpo);
     programaId = j.programa_id;
     materiaId = j.materia_id;
     assert.ok(j.sol_materia_id && programaId && materiaId, 'devuelve ids');
-    assert.equal(j.nodos.length, 3, '3 nodos del contenido');
+
+    // Lo que el código garantiza de los nodos (la cantidad exacta es de Claude):
+    // varios nodos, cada uno con nombre y descripción con contenido, y el orden
+    // consistente (la función los devuelve ordenados por `orden` ascendente).
+    assert.ok(Array.isArray(j.nodos) && j.nodos.length >= 2, `al menos 2 nodos de un contenido con varios temas (vinieron ${j.nodos?.length})`);
+    for (const [i, n] of j.nodos.entries()) {
+      assert.ok(n.id, `nodo ${i} tiene id`);
+      assert.ok(typeof n.nombre === 'string' && n.nombre.trim().length > 0, `nodo ${i} con nombre no vacío`);
+      assert.ok(typeof n.descripcion === 'string' && n.descripcion.trim().length > 0, `nodo ${i} con descripción no vacía`);
+      assert.ok(typeof n.orden === 'number', `nodo ${i} con orden numérico`);
+      if (i > 0) assert.ok(n.orden >= j.nodos[i - 1].orden, `orden ascendente (nodo ${i})`);
+    }
 
     // 2. Quedó como borrador (leído con service_role)
     const sm = await (await fetch(`${URL}/rest/v1/sol_materia?id=eq.${j.sol_materia_id}&select=estado,docente_id`, { headers: srHeaders() })).json();
@@ -90,6 +108,7 @@ test('dividir-nodos (mock): genera sol_materia + nodos borrador; RLS solo deja a
 });
 
 test('dividir-nodos: sin usuario (solo apikey anon) → 401', { skip }, async () => {
-  const r = await callFnAuth('dividir-nodos', { materia_nombre: 'X', grado: 3, contenido: 'a, b', mock: true }, ANON);
+  // Rebota en el chequeo de identidad ANTES de tocar la DB o la API de Claude.
+  const r = await callFnAuth('dividir-nodos', { materia_nombre: 'X', grado: 3, contenido: 'a, b' }, ANON);
   assert.equal(r.status, 401);
 });

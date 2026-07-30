@@ -1,6 +1,9 @@
-// Tests de integración SP-4c: evaluar-sesion (modo mock, sin ANTHROPIC_API_KEY) crea
-// evaluacion_sesion; la docente del alumno la ve por RLS; el alumno no puede evaluar
-// sesiones ajenas. Idempotente. npm run test:db
+// Tests de integración SP-4c: evaluar-sesion (Claude real, claude-haiku-4-5) crea
+// evaluacion_sesion con el diagnóstico cualitativo; la docente del alumno la ve por RLS;
+// el alumno no puede evaluar sesiones ajenas. La función NO mueve el estado del nodo
+// (eso es la regla determinística ELO-lite en web/lib/dominio.ts, aplicada por la app),
+// así que acá se assertea estructura/presencia del diagnóstico, no contenido literal.
+// Hace 1 llamada real a Haiku. Idempotente. npm run test:db
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -26,7 +29,7 @@ async function nuevoUsuario(rol, extra = {}) {
 }
 const insSR = async (table, row) => (await (await fetch(`${URL}/rest/v1/${table}`, { method: 'POST', headers: { ...sr(), Prefer: 'return=representation' }, body: JSON.stringify(row) })).json())[0];
 
-test('SP-4c: evaluar-sesion (mock) crea diagnóstico; la docente lo ve, otro alumno no puede evaluarla', { skip }, async () => {
+test('SP-4c: evaluar-sesion crea diagnóstico; la docente lo ve, otro alumno no puede evaluarla', { skip }, async () => {
   let prog, docente, alumno, otro;
   try {
     docente = await nuevoUsuario('docente');
@@ -34,26 +37,31 @@ test('SP-4c: evaluar-sesion (mock) crea diagnóstico; la docente lo ve, otro alu
 
     prog = await insSR('programa', { materia_id: MATERIA, grado: 3, contenido: 'test' });
     const nodo = await insSR('nodo', { programa_id: prog.id, nombre: 'TestNodo', orden: 0 });
-    const ejer = await insSR('ejercicio', { nodo_id: nodo.id, enunciado: '2+2', opciones: ['3', '4'], correcta: '4', dificultad: 1, tipo: 'reconocer' });
+    const ejer1 = await insSR('ejercicio', { nodo_id: nodo.id, enunciado: '2+2', opciones: ['3', '4'], correcta: '4', dificultad: 1, tipo: 'reconocer' });
+    const ejer2 = await insSR('ejercicio', { nodo_id: nodo.id, enunciado: '3+3', opciones: ['5', '6'], correcta: '6', dificultad: 1, tipo: 'reconocer' });
 
-    // el alumno crea su sesion + una respuesta (fallada, para que haya diagnóstico)
-    const ses = (await (await fetch(`${URL}/rest/v1/sesion`, { method: 'POST', headers: { ...auth(alumno.access_token), Prefer: 'return=representation' }, body: JSON.stringify({ alumno_id: alumno.id, nodo_id: nodo.id, duracion_seg: 5, aciertos: 0, total: 1 }) })).json())[0];
-    await fetch(`${URL}/rest/v1/respuesta`, { method: 'POST', headers: auth(alumno.access_token), body: JSON.stringify({ sesion_id: ses.id, ejercicio_id: ejer.id, dada: '3', correcta: false, reintentos: 2, tiempo_seg: 4 }) });
+    // el alumno crea su sesion floja: todas falladas, con reintentos (material para el diagnóstico)
+    const ses = (await (await fetch(`${URL}/rest/v1/sesion`, { method: 'POST', headers: { ...auth(alumno.access_token), Prefer: 'return=representation' }, body: JSON.stringify({ alumno_id: alumno.id, nodo_id: nodo.id, duracion_seg: 9, aciertos: 0, total: 2 }) })).json())[0];
+    await fetch(`${URL}/rest/v1/respuesta`, { method: 'POST', headers: auth(alumno.access_token), body: JSON.stringify({ sesion_id: ses.id, ejercicio_id: ejer1.id, dada: '3', correcta: false, reintentos: 2, tiempo_seg: 4 }) });
+    await fetch(`${URL}/rest/v1/respuesta`, { method: 'POST', headers: auth(alumno.access_token), body: JSON.stringify({ sesion_id: ses.id, ejercicio_id: ejer2.id, dada: '5', correcta: false, reintentos: 1, tiempo_seg: 5 }) });
 
-    // 1) el alumno evalúa SU sesion (mock)
-    const r = await callFn('evaluar-sesion', { sesion_id: ses.id, mock: true }, alumno.access_token);
+    // 1) el alumno evalúa SU sesion → Claude real (haiku) escribe el diagnóstico.
+    //    Se assertea estructura/presencia, no contenido literal (la salida no es determinística).
+    const r = await callFn('evaluar-sesion', { sesion_id: ses.id }, alumno.access_token);
     assert.equal(r.status, 200);
     const j = await r.json();
-    assert.ok(j.evaluacion?.resumen, 'devuelve diagnóstico');
-    assert.deepEqual(j.evaluacion.a_reforzar, ['TestNodo'], 'sesión floja → a_reforzar el nodo');
+    assert.ok(typeof j.evaluacion?.resumen === 'string' && j.evaluacion.resumen.trim().length > 0, 'devuelve un resumen no vacío');
+    assert.ok(Array.isArray(j.evaluacion.errores), 'errores es una lista');
+    assert.ok(Array.isArray(j.evaluacion.a_reforzar), 'a_reforzar es una lista');
 
     // 2) la docente del alumno ve la evaluacion (RLS es_mi_alumno)
     const vistas = await (await fetch(`${URL}/rest/v1/evaluacion_sesion?select=id,resumen,sesion:sesion_id!inner(alumno_id)&sesion.alumno_id=eq.${alumno.id}`, { headers: auth(docente.access_token) })).json();
     assert.ok(Array.isArray(vistas) && vistas.length >= 1, 'la docente ve el análisis de su alumno');
+    assert.ok(vistas[0].resumen?.trim().length > 0, 'la docente ve el resumen del diagnóstico');
 
-    // 3) otro alumno NO puede evaluar esa sesion ajena → 403
+    // 3) otro alumno NO puede evaluar esa sesion ajena → 403 (corta antes de llamar a Claude)
     otro = await nuevoUsuario('alumno', { grado: 3 });
-    const r2 = await callFn('evaluar-sesion', { sesion_id: ses.id, mock: true }, otro.access_token);
+    const r2 = await callFn('evaluar-sesion', { sesion_id: ses.id }, otro.access_token);
     assert.equal(r2.status, 403, 'no se puede evaluar una sesión ajena');
   } finally {
     if (prog) await fetch(`${URL}/rest/v1/programa?id=eq.${prog.id}`, { method: 'DELETE', headers: sr() });

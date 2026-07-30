@@ -220,6 +220,8 @@ export function uiIcon(key: string) {
     mapI: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" stroke="#7A6F5F" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><circle cx="30" cy="30" r="6" fill="#7A6F5F"/><circle cx="70" cy="50" r="6" fill="#7A6F5F"/><circle cx="40" cy="74" r="6" fill="#7A6F5F"/><path d="M30 30 Q60 28 70 50 Q72 70 40 74" stroke-dasharray="2 9"/></svg>`,
     sunW: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="18" fill="#fff"/><g stroke="#fff" stroke-width="6" stroke-linecap="round"><path d="M50 18 V8 M50 92 V82 M18 50 H8 M92 50 H82 M27 27 L20 20 M73 27 L80 20 M27 73 L20 80 M73 73 L80 80"/></g></svg>`,
     sunI: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="18" fill="#7A6F5F"/><g stroke="#7A6F5F" stroke-width="6" stroke-linecap="round"><path d="M50 18 V8 M50 92 V82 M18 50 H8 M92 50 H82 M27 27 L20 20 M73 27 L80 20 M27 73 L20 80 M73 73 L80 80"/></g></svg>`,
+    // Violeta: es el ícono de LUNA (identidad propia de la sección).
+    moon: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" stroke="#7C5CC7" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><path d="M62 18 A34 34 0 1 0 82 62 A28 28 0 1 1 62 18 Z"/><circle cx="76" cy="26" r="3" fill="#7C5CC7" stroke="none"/><circle cx="86" cy="40" r="2" fill="#7C5CC7" stroke="none"/></svg>`,
     chevron: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" stroke="#7A6F5F" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"><path d="M38 26 L64 50 L38 74"/></svg>`,
   };
   return uri(k[key] || k.chevron);
