@@ -78,7 +78,8 @@ Deno.serve(async (req) => {
         ? sb.from('sesion').select('id, alumno_id, fecha').in('alumno_id', ids).gte('fecha', desde60)
         : Promise.resolve({ data: [] }),
       ids.length
-        ? sb.from('respuesta').select('correcta, created_at, sesion:sesion_id(alumno_id)').gte('created_at', desde14)
+        ? sb.from('respuesta').select('correcta, created_at, sesion:sesion_id!inner(alumno_id)')
+            .in('sesion.alumno_id', ids).gte('created_at', desde14)
         : Promise.resolve({ data: [] }),
       ids.length
         ? sb.from('alumno_nodo').select('alumno_id, estado').in('alumno_id', ids)
