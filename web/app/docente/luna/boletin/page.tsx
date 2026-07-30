@@ -1,17 +1,22 @@
 'use client';
-// LUNA — flujo "Escribir boletín": grado → alumno → generando → revisión.
+// LUNA — flujo "Escribir boletín": grado → alumno → generando → revisión,
+// acotado al aula activa (`?aula=`): el wizard solo ofrece los alumnos de esa
+// aula y los grados se derivan de ellos. Sin aula resuelta se vuelve al
+// selector de /docente/luna (con una sola aula, auto-selección).
 // LUNA genera el BORRADOR con la evidencia del mes (Edge Function luna-boletin);
 // la seño lo edita inline, lo aprueba, lo regenera o lo corrige. Editar y
 // aprobar van directo por RLS (boletin_update, 0016) con verificación de que
 // la fila volvió (.select) — patrón de Mis materias.
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import DocenteSidebar from '@/components/DocenteSidebar';
 import { toast } from '@/lib/toast';
 import { fetchConTimeout } from '@/lib/edge';
 import { animal, uiIcon } from '@/lib/art';
 import { periodoActual, mensajeErrorLuna, type AlumnoLuna } from '@/lib/luna';
+import { enAula, linkLuna, puedeCambiarAula, resolverAula, type AulaLite } from '@/lib/luna-aula';
+import { VIOLETA } from '@/lib/luna-tema';
 
 const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -19,17 +24,43 @@ const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const QUICK = 'var(--font-quicksand), sans-serif';
 const NUNITO = 'var(--font-nunito), sans-serif';
 
-const card: React.CSSProperties = {
-  background: '#FFFCF5', border: '2px solid #EFE3CE', borderRadius: 22,
-  padding: '18px 20px', boxShadow: '0 3px 10px rgba(120,90,40,.06)',
+// Pill neutra cálida ("‹ LUNA", "‹ Grados", "Cambiar de aula"…): hover violeta
+// vía la clase local .bol-pill.
+const pill: React.CSSProperties = {
+  background: VIOLETA.carta, border: `1.5px solid ${VIOLETA.bordeCalido}`, borderRadius: 999,
+  padding: '8px 16px', fontFamily: QUICK, fontWeight: 700, fontSize: 14, color: VIOLETA.tinta2, cursor: 'pointer',
 };
-const btnSm: React.CSSProperties = {
-  background: '#FFFCF5', color: '#7A6F5F', border: '1.5px solid #EFE3CE', borderRadius: 10,
-  padding: '8px 14px', fontFamily: QUICK, fontWeight: 700, fontSize: 13.5, cursor: 'pointer',
+// Chip violeta claro (aula activa, estado Borrador).
+const chipVioleta: React.CSSProperties = {
+  background: VIOLETA.claro, border: `1.5px solid ${VIOLETA.borde}`, borderRadius: 999,
+  padding: '8px 16px', fontFamily: QUICK, fontWeight: 700, fontSize: 14, color: VIOLETA.medio,
 };
+// Título de paso del wizard.
+const h2Paso: React.CSSProperties = {
+  fontFamily: QUICK, fontWeight: 700, fontSize: 18, color: VIOLETA.oscuro, margin: '24px 0 14px',
+};
+// Tarjeta seleccionable del wizard (grado / alumno): hover levanta + borde base
+// vía la clase local .bol-sel.
+const cardSel: React.CSSProperties = {
+  background: VIOLETA.carta, border: `2px solid ${VIOLETA.borde}`, cursor: 'pointer', textAlign: 'left',
+};
+// CTA primaria pill (violeta base) y secundaria pill (borde violeta, hover
+// fondo claro vía .bol-sec).
 const btnPrimario: React.CSSProperties = {
-  background: '#7FB069', color: '#fff', border: 'none', borderRadius: 12,
-  padding: '11px 18px', fontFamily: QUICK, fontWeight: 700, fontSize: 14.5, cursor: 'pointer',
+  background: VIOLETA.base, color: '#fff', border: 'none', borderRadius: 999,
+  padding: '14px 30px', fontFamily: QUICK, fontWeight: 700, fontSize: 16, cursor: 'pointer',
+  boxShadow: `0 6px 16px ${VIOLETA.sombraFuerte}`,
+};
+const btnSecundario: React.CSSProperties = {
+  background: VIOLETA.carta, color: VIOLETA.medio, border: `2px solid ${VIOLETA.borde}`, borderRadius: 999,
+  padding: '14px 26px', fontFamily: QUICK, fontWeight: 700, fontSize: 16, cursor: 'pointer',
+};
+// Variantes chicas para las acciones de edición inline.
+const btnSecundarioXs: React.CSSProperties = {
+  ...btnSecundario, border: `1.5px solid ${VIOLETA.borde}`, padding: '5px 14px', fontSize: 13,
+};
+const btnPrimarioSm: React.CSSProperties = {
+  ...btnPrimario, padding: '8px 18px', fontSize: 13.5, boxShadow: 'none',
 };
 
 type Contenido = { materias: { materia: string; texto: string }[]; actitud: string; sugerencia: string };
@@ -39,11 +70,15 @@ type Paso = 'grado' | 'alumno' | 'generando' | 'revision';
 // Clave de sección editable: 'm0', 'm1', … / 'actitud' / 'sugerencia'.
 type SeccionKey = string;
 
-export default function EscribirBoletin() {
+type AlumnoConAula = AlumnoLuna & { aula_id: string | null };
+
+function EscribirBoletin({ aulaParam }: { aulaParam: string | null }) {
   const router = useRouter();
   const supabase = createClient();
 
   const [uid, setUid] = useState<string | null>(null);
+  const [aula, setAula] = useState<AulaLite | null>(null);
+  const [cambiable, setCambiable] = useState(false);
   const [alumnos, setAlumnos] = useState<AlumnoLuna[] | null>(null);
   const [boletines, setBoletines] = useState<Boletin[]>([]);
   const [paso, setPaso] = useState<Paso>('grado');
@@ -64,15 +99,22 @@ export default function EscribirBoletin() {
       const { data: perfil } = await supabase.from('perfil').select('rol').eq('id', user.id).single();
       if ((perfil as { rol?: string } | null)?.rol !== 'docente') { router.replace('/alumno'); return; }
       setUid(user.id);
-      const [als, bols] = await Promise.all([
-        supabase.from('perfil').select('id, nombre, avatar, grado').eq('rol', 'alumno').eq('docente_id', user.id).order('nombre'),
+      const [aulasR, als, bols] = await Promise.all([
+        supabase.from('aula').select('id, nombre, codigo').eq('docente_id', user.id).order('nombre'),
+        supabase.from('perfil').select('id, nombre, avatar, grado, aula_id').eq('rol', 'alumno').eq('docente_id', user.id).order('nombre'),
         supabase.from('boletin').select('id, alumno_id, periodo, contenido, estado, version').eq('periodo', periodo.clave),
       ]);
-      setAlumnos(((als.data as AlumnoLuna[]) || []));
+      const aulas = ((aulasR.data as AulaLite[]) || []);
+      const res = resolverAula(aulaParam, aulas);
+      // Sin aula resuelta (2+ aulas y sin param válido) → a elegirla al selector.
+      if (res.modo === 'selector') { router.replace('/docente/luna'); return; }
+      setAula(res.aula);
+      setCambiable(puedeCambiarAula(aulas));
+      setAlumnos(enAula(((als.data as AlumnoConAula[]) || []), res.aula.id));
       setBoletines(((bols.data as Boletin[]) || []));
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [aulaParam]);
 
   const boletinDe = (alumnoId: string) => boletines.find((b) => b.alumno_id === alumnoId) ?? null;
 
@@ -178,32 +220,57 @@ export default function EscribirBoletin() {
   const esAprobado = boletin?.estado === 'aprobado';
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', background: '#FBF4E6', animation: 'edFade .3s ease' }}>
+    <div style={{ minHeight: '100vh', display: 'flex', background: VIOLETA.suave, animation: 'edFade .3s ease' }}>
+      {/* edPop no existe en globals.css (edBob y edFade sí): va local. Ídem los
+          hovers del diseño (pill → borde violeta; tarjeta → levanta + borde base;
+          secundaria → fondo claro). */}
+      <style>{`
+        @keyframes edPop {
+          0% { transform: scale(.85); opacity: 0; }
+          65% { transform: scale(1.04); }
+          100% { transform: scale(1); opacity: 1; }
+        }
+        .bol-pill { transition: border-color .15s ease, color .15s ease; }
+        .bol-pill:hover { border-color: ${VIOLETA.base}; color: ${VIOLETA.medio}; }
+        .bol-sel { transition: transform .14s ease, border-color .14s ease; }
+        .bol-sel:hover { transform: translateY(-3px); border-color: ${VIOLETA.base}; }
+        .bol-sec { transition: background .15s ease; }
+        .bol-sec:hover:not(:disabled) { background: ${VIOLETA.claro}; }
+      `}</style>
       <DocenteSidebar activo="luna" />
 
       <main style={{ flex: 1, minWidth: 0, padding: 'clamp(22px,3.5vw,40px)', maxWidth: 860 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
-          <div style={{ width: 30, height: 30, background: `${uiIcon('moon')} center/contain no-repeat` }} />
-          <h1 style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 'clamp(24px,4vw,32px)', color: '#3A332A', margin: 0 }}>Escribir boletín</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ width: 56, height: 56, flexShrink: 0, background: `${uiIcon('moon')} center/contain no-repeat` }} />
+          <h1 style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 'clamp(24px,3.5vw,30px)', color: VIOLETA.ink, margin: 0 }}>Escribir boletín</h1>
         </div>
-        <p style={{ fontSize: 15.5, color: '#7A6F5F', margin: '0 0 22px', fontWeight: 600 }}>
+        {aula && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 14 }}>
+            <button onClick={() => router.push(linkLuna('/docente/luna', aula.id))} className="bol-pill" style={pill}>‹ LUNA</button>
+            <span style={chipVioleta}>Aula: {aula.nombre} · {aula.codigo}</span>
+            {cambiable && (
+              <button onClick={() => router.push('/docente/luna')} className="bol-pill" style={pill}>Cambiar de aula</button>
+            )}
+          </div>
+        )}
+        <p style={{ fontSize: 15.5, color: VIOLETA.tinta2, fontWeight: 600, margin: '16px 0 0' }}>
           Boletines de {periodo.label}. LUNA redacta el borrador con la evidencia del mes; vos lo revisás y decidís.
         </p>
 
         {alumnos === null ? (
-          <p style={{ color: '#7A6F5F', fontWeight: 600 }}>Cargando…</p>
+          <p style={{ color: VIOLETA.tinta2, fontWeight: 600, marginTop: 24 }}>Cargando…</p>
         ) : alumnos.length === 0 ? (
-          <p style={{ color: '#7A6F5F', fontWeight: 600 }}>Todavía no tenés alumnos. Cargalos desde «Mi clase» y después volvé por acá.</p>
+          <p style={{ color: VIOLETA.tinta2, fontWeight: 600, marginTop: 24 }}>Esta aula todavía no tiene alumnos. Cargalos desde «Mi clase» y después volvé por acá.</p>
         ) : paso === 'grado' ? (
           <>
-            <h2 style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 19, color: '#3A332A', margin: '0 0 12px' }}>1 · Elegí el grado</h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+            <h2 style={h2Paso}>1 · Elegí el grado</h2>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, maxWidth: 760 }}>
               {grados.map((g) => {
                 const n = alumnos.filter((a) => a.grado === g).length;
                 return (
-                  <button key={g} onClick={() => { setGradoSel(g); setPaso('alumno'); }} className="ed-materia-card" style={{ ...card, cursor: 'pointer', textAlign: 'left' }}>
-                    <div style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 26, color: '#3A332A' }}>{g}° grado</div>
-                    <div style={{ fontSize: 14, color: '#7A6F5F', fontWeight: 600, marginTop: 3 }}>{n} {n === 1 ? 'alumno' : 'alumnos'}</div>
+                  <button key={g} onClick={() => { setGradoSel(g); setPaso('alumno'); }} className="bol-sel" style={{ ...cardSel, borderRadius: 22, padding: '22px 24px', boxShadow: `0 4px 14px ${VIOLETA.sombra}` }}>
+                    <div style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 22, color: VIOLETA.ink }}>{g}° grado</div>
+                    <div style={{ fontSize: 14.5, color: VIOLETA.tinta2, fontWeight: 600, marginTop: 4 }}>{n} {n === 1 ? 'alumno' : 'alumnos'}</div>
                   </button>
                 );
               })}
@@ -211,83 +278,84 @@ export default function EscribirBoletin() {
           </>
         ) : paso === 'alumno' ? (
           <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-              <button onClick={() => setPaso('grado')} style={btnSm}>← Grados</button>
-              <h2 style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 19, color: '#3A332A', margin: 0 }}>2 · Elegí el alumno ({gradoSel}° grado)</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '24px 0 14px', flexWrap: 'wrap' }}>
+              <button onClick={() => setPaso('grado')} className="bol-pill" style={pill}>‹ Grados</button>
+              <h2 style={{ ...h2Paso, margin: 0 }}>2 · Elegí el alumno ({gradoSel}° grado)</h2>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 760 }}>
               {alumnos.filter((a) => a.grado === gradoSel).map((a) => {
                 const b = boletinDe(a.id);
                 return (
-                  <button key={a.id} onClick={() => elegirAlumno(a)} className="ed-materia-card" style={{ ...card, cursor: 'pointer', textAlign: 'left', display: 'flex', gap: 12, alignItems: 'center' }}>
-                    <div style={{ width: 48, height: 48, flexShrink: 0, background: `${animal(a.avatar ?? 'fox')} center/contain no-repeat` }} />
-                    <div>
-                      <div style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 17, color: '#3A332A' }}>{a.nombre}</div>
-                      {b && (
-                        <span style={{
-                          background: b.estado === 'aprobado' ? '#E6F0DC' : '#FBEBD6',
-                          color: b.estado === 'aprobado' ? '#4E7A3A' : '#B9722A',
-                          padding: '3px 10px', borderRadius: 999, fontFamily: QUICK, fontWeight: 700, fontSize: 11.5,
-                        }}>{b.estado === 'aprobado' ? 'Aprobado' : 'Borrador'}</span>
-                      )}
-                    </div>
+                  <button key={a.id} onClick={() => elegirAlumno(a)} className="bol-sel" style={{ ...cardSel, display: 'flex', alignItems: 'center', gap: 16, borderRadius: 18, padding: '14px 18px' }}>
+                    <div style={{ width: 50, height: 50, flexShrink: 0, background: `${animal(a.avatar ?? 'fox')} center/contain no-repeat` }} />
+                    <span style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 18, color: VIOLETA.ink }}>{a.nombre}</span>
+                    {b && (
+                      b.estado === 'aprobado' ? (
+                        <span style={{ marginLeft: 'auto', background: VIOLETA.okFondo, border: `1.5px solid ${VIOLETA.okBorde}`, color: VIOLETA.okTexto, padding: '4px 12px', borderRadius: 999, fontFamily: QUICK, fontWeight: 700, fontSize: 12.5 }}>Aprobado</span>
+                      ) : (
+                        <span style={{ ...chipVioleta, marginLeft: 'auto', padding: '4px 12px', fontSize: 12.5 }}>Borrador</span>
+                      )
+                    )}
                   </button>
                 );
               })}
             </div>
           </>
         ) : paso === 'generando' ? (
-          <div style={{ ...card, maxWidth: 560 }}>
-            {genError === null ? (
-              <>
-                <p style={{ margin: 0, fontFamily: QUICK, fontWeight: 700, fontSize: 18, color: '#3A332A' }}>
+          genError === null ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 18, background: VIOLETA.carta, border: `2px solid ${VIOLETA.borde}`, borderRadius: 24, padding: '26px 28px', marginTop: 24, maxWidth: 680, boxShadow: `0 6px 18px ${VIOLETA.sombra}` }}>
+              <div style={{ width: 64, height: 64, flexShrink: 0, background: `${uiIcon('moon')} center/contain no-repeat`, animation: 'edBob 1.6s ease-in-out infinite' }} />
+              <div>
+                <div style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 20, color: VIOLETA.oscuro }}>
                   LUNA está leyendo la actividad de {alumnoSel?.nombre}…
-                </p>
-                <p style={{ margin: '8px 0 0', fontSize: 14.5, color: '#7A6F5F', fontWeight: 600 }}>
-                  Puede tardar un ratito. No cierres esta pantalla.
-                </p>
-              </>
-            ) : (
-              <>
-                <p style={{ margin: 0, fontSize: 15, color: '#3A332A', fontWeight: 600, lineHeight: 1.5 }}>{genError}</p>
-                <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
-                  <button onClick={() => alumnoSel && generar(alumnoSel)} style={btnPrimario}>Reintentar</button>
-                  <button onClick={() => { setGenError(null); setPaso('alumno'); }} style={btnSm}>← Volver</button>
                 </div>
-              </>
-            )}
-          </div>
+                <div style={{ fontSize: 15, color: VIOLETA.tinta2, fontWeight: 600, marginTop: 4 }}>
+                  Puede tardar un ratito. No cierres esta pantalla.
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div style={{ background: VIOLETA.carta, border: `2px solid ${VIOLETA.borde}`, borderRadius: 24, padding: '26px 28px', marginTop: 24, maxWidth: 680, boxShadow: `0 6px 18px ${VIOLETA.sombra}` }}>
+              <p style={{ margin: 0, fontSize: 15.5, color: VIOLETA.ink, fontWeight: 600, lineHeight: 1.55, fontFamily: NUNITO }}>{genError}</p>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 18 }}>
+                <button onClick={() => alumnoSel && generar(alumnoSel)} className="ed-primary" style={btnPrimario}>Reintentar</button>
+                <button onClick={() => { setGenError(null); setPaso('alumno'); }} className="bol-sec" style={btnSecundario}>‹ Volver</button>
+              </div>
+            </div>
+          )
         ) : boletin && alumnoSel ? (
           <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
-              <button onClick={() => { setPaso('alumno'); setBoletin(null); setEditKey(null); }} style={btnSm}>← Alumnos</button>
-              <div style={{ width: 40, height: 40, background: `${animal(alumnoSel.avatar ?? 'fox')} center/contain no-repeat` }} />
-              <h2 style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 20, color: '#3A332A', margin: 0 }}>{alumnoSel.nombre} · {periodo.label}</h2>
-              <span style={{
-                background: esAprobado ? '#E6F0DC' : '#FBEBD6', color: esAprobado ? '#4E7A3A' : '#B9722A',
-                padding: '4px 12px', borderRadius: 999, fontFamily: QUICK, fontWeight: 700, fontSize: 12.5,
-              }}>{esAprobado ? 'Aprobado' : 'Borrador'} · v{boletin.version}</span>
+            <div style={{ marginTop: 22 }}>
+              <button onClick={() => { setPaso('alumno'); setBoletin(null); setEditKey(null); }} className="bol-pill" style={pill}>‹ Alumnos</button>
             </div>
-
-            {esAprobado && (
-              <div style={{ ...card, borderColor: '#D9E8CB', background: '#F5FAEF', marginBottom: 14 }}>
-                <p style={{ margin: 0, fontSize: 14.5, color: '#4E7A3A', fontWeight: 700 }}>
-                  Boletín aprobado: es el documento oficial de {periodo.label}, listo para entregar a la familia.
-                </p>
+            <div style={{ maxWidth: 780, background: VIOLETA.carta, border: `2px solid ${VIOLETA.borde}`, borderRadius: 24, padding: '26px 28px', marginTop: 14, boxShadow: `0 8px 22px ${VIOLETA.sombra}` }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+                <div style={{ width: 52, height: 52, flexShrink: 0, background: `${animal(alumnoSel.avatar ?? 'fox')} center/contain no-repeat` }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 21, color: VIOLETA.ink }}>Boletín de {periodo.label} · {alumnoSel.nombre}</div>
+                  <div style={{ fontSize: 14, color: VIOLETA.tinta2, fontWeight: 600 }}>
+                    {esAprobado ? 'Escrito por LUNA con la evidencia del mes; aprobado por vos' : 'Borrador escrito por LUNA con la evidencia del mes'}
+                  </div>
+                </div>
+                {esAprobado ? (
+                  <span style={{ background: VIOLETA.okFondo, border: `1.5px solid ${VIOLETA.okBorde}`, color: VIOLETA.okTexto, padding: '6px 14px', borderRadius: 999, fontFamily: QUICK, fontWeight: 700, fontSize: 13 }}>
+                    Aprobado · v{boletin.version}
+                  </span>
+                ) : (
+                  <span style={{ ...chipVioleta, padding: '6px 14px', fontSize: 13 }}>Borrador · v{boletin.version}</span>
+                )}
               </div>
-            )}
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {[
                 ...boletin.contenido.materias.map((m, i) => ({ key: `m${i}`, titulo: m.materia, texto: m.texto })),
                 { key: 'actitud', titulo: 'Actitud frente al aprendizaje', texto: boletin.contenido.actitud },
                 { key: 'sugerencia', titulo: 'Sugerencia para el próximo período', texto: boletin.contenido.sugerencia },
               ].map((s) => (
-                <div key={s.key} style={card}>
+                <div key={s.key} style={{ marginTop: 18 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                    <h3 style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 16, color: '#3A332A', margin: 0 }}>{s.titulo}</h3>
+                    <div style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 15, color: VIOLETA.oscuro }}>{s.titulo}</div>
                     {!esAprobado && editKey !== s.key && (
-                      <button onClick={() => empezarEdicion(s.key, s.texto)} style={{ ...btnSm, padding: '5px 12px', fontSize: 12.5 }}>Editar</button>
+                      <button onClick={() => empezarEdicion(s.key, s.texto)} className="bol-sec" style={btnSecundarioXs}>Editar</button>
                     )}
                   </div>
                   {editKey === s.key ? (
@@ -297,39 +365,65 @@ export default function EscribirBoletin() {
                         onChange={(e) => setEditTexto(e.target.value)}
                         rows={5}
                         autoFocus
-                        style={{ width: '100%', marginTop: 10, padding: '12px 14px', border: '2px solid #EFE3CE', borderRadius: 12, fontFamily: NUNITO, fontSize: 15, color: '#3A332A', background: '#FBF4E6', outline: 'none', resize: 'vertical' }}
+                        style={{ width: '100%', marginTop: 8, padding: '12px 14px', border: `2px solid ${VIOLETA.borde}`, borderRadius: 14, fontFamily: NUNITO, fontSize: 15.5, fontWeight: 600, color: VIOLETA.ink, background: VIOLETA.suave, outline: 'none', resize: 'vertical' }}
                       />
-                      <div style={{ display: 'flex', gap: 8, marginTop: 8, justifyContent: 'flex-end' }}>
-                        <button onClick={() => setEditKey(null)} style={btnSm} disabled={busy}>Cancelar</button>
-                        <button onClick={guardarEdicion} style={{ ...btnPrimario, padding: '8px 14px', fontSize: 13.5, opacity: busy ? 0.6 : 1, cursor: busy ? 'default' : 'pointer' }} disabled={busy}>
+                      <div style={{ display: 'flex', gap: 10, marginTop: 8, justifyContent: 'flex-end' }}>
+                        <button onClick={() => setEditKey(null)} className="bol-sec" style={{ ...btnSecundarioXs, opacity: busy ? 0.6 : 1 }} disabled={busy}>Cancelar</button>
+                        <button onClick={guardarEdicion} className="ed-primary" style={{ ...btnPrimarioSm, opacity: busy ? 0.6 : 1, cursor: busy ? 'default' : 'pointer' }} disabled={busy}>
                           {busy ? 'Guardando…' : 'Guardar'}
                         </button>
                       </div>
                     </>
                   ) : (
-                    <p style={{ margin: '8px 0 0', fontSize: 15, color: '#3A332A', fontWeight: 500, fontFamily: NUNITO, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
+                    <p style={{ margin: '4px 0 0', fontSize: 15.5, color: VIOLETA.ink, fontWeight: 600, fontFamily: NUNITO, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
                       {s.texto || 'Sin texto todavía. Tocá «Editar» para escribirlo.'}
                     </p>
                   )}
                 </div>
               ))}
-            </div>
 
-            <div style={{ display: 'flex', gap: 10, marginTop: 18, flexWrap: 'wrap' }}>
               {esAprobado ? (
-                <button onClick={corregir} style={{ ...btnSm, opacity: busy ? 0.6 : 1 }} disabled={busy}>Corregir (vuelve a borrador)</button>
-              ) : (
                 <>
-                  <button onClick={aprobar} className="ed-primary" style={{ ...btnPrimario, opacity: busy ? 0.6 : 1, cursor: busy ? 'default' : 'pointer' }} disabled={busy}>
-                    {busy ? 'Un momento…' : 'Aprobar boletín'}
-                  </button>
-                  <button onClick={regenerar} style={{ ...btnSm, opacity: busy ? 0.6 : 1 }} disabled={busy}>Regenerar</button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: VIOLETA.okFondo, border: `1.5px solid ${VIOLETA.okBorde}`, borderRadius: 16, padding: '16px 20px', marginTop: 26, animation: 'edPop .35s ease' }}>
+                    <span style={{ width: 26, height: 26, flexShrink: 0, borderRadius: '50%', background: VIOLETA.okCheck, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 15 }}>✓</span>
+                    <span style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 16, color: VIOLETA.okTexto }}>
+                      Boletín aprobado. Listo para compartir con la familia de {alumnoSel.nombre}.
+                    </span>
+                  </div>
+                  <div style={{ marginTop: 14 }}>
+                    <button onClick={corregir} className="bol-sec" style={{ ...btnSecundario, padding: '11px 22px', fontSize: 14.5, opacity: busy ? 0.6 : 1 }} disabled={busy}>
+                      Corregir (vuelve a borrador)
+                    </button>
+                  </div>
                 </>
+              ) : (
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 26 }}>
+                  <button onClick={aprobar} className="ed-primary" style={{ ...btnPrimario, opacity: busy ? 0.6 : 1, cursor: busy ? 'default' : 'pointer' }} disabled={busy}>
+                    {busy ? 'Un momento…' : 'Aprobar y guardar'}
+                  </button>
+                  <button onClick={regenerar} className="bol-sec" style={{ ...btnSecundario, opacity: busy ? 0.6 : 1 }} disabled={busy}>Regenerar</button>
+                </div>
               )}
             </div>
           </>
         ) : null}
       </main>
     </div>
+  );
+}
+
+// useSearchParams exige Suspense en el App Router (mismo patrón que autoría).
+// El key por aula remonta el wizard al cambiar de aula: arranca de cero
+// (grado → alumno) con estado fresco, sin setState sincrónico en el efecto.
+function ConAula() {
+  const aulaParam = useSearchParams().get('aula');
+  return <EscribirBoletin key={aulaParam ?? ''} aulaParam={aulaParam} />;
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={<p style={{ padding: 40, color: VIOLETA.tinta2, fontWeight: 600 }}>Cargando…</p>}>
+      <ConAula />
+    </Suspense>
   );
 }

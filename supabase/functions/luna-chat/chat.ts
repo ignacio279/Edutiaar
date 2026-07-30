@@ -113,6 +113,17 @@ export function haceCuanto(fecha: Date | string, now: Date): string {
   return `hace ${dias} días`;
 }
 
+// Sanea el aula_id que manda el front (LUNA por aula): tiene que ser un UUID
+// (la columna es uuid; otra cosa rompería la query). Inválido o ausente → null
+// = comportamiento de siempre (el contexto lleva a todos los alumnos de la
+// docente).
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export function sanearAulaId(input: unknown): string | null {
+  if (typeof input !== 'string') return null;
+  const s = input.trim();
+  return UUID_RE.test(s) ? s : null;
+}
+
 // Sanea las alertas que manda el front (client-computed): tope y truncado.
 export function sanearAlertas(input: unknown, maxItems = 10, maxLen = 200): { alumno: string; prioridad: string; detalle: string }[] {
   if (!Array.isArray(input)) return [];

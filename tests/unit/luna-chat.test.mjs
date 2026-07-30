@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   recortarHistorial, aMensajesClaude, construirSystemLuna, aParrafos,
-  momentoDelAnio, haceCuanto, sanearAlertas,
+  momentoDelAnio, haceCuanto, sanearAlertas, sanearAulaId,
 } from '../../supabase/functions/luna-chat/chat.ts';
 
 const CTX = {
@@ -107,4 +107,16 @@ test('sanearAlertas: capea cantidad, trunca campos y descarta lo que no sirve', 
   assert.equal(r[0].detalle.length, 200);
   assert.deepEqual(sanearAlertas('basura'), []);
   assert.deepEqual(sanearAlertas([{ alumno: 'A' }]), []); // sin detalle no entra
+});
+
+test('sanearAulaId: solo pasa un UUID; lo demás → null (contexto sin filtro)', () => {
+  const id = '4fe9f983-0f37-4b3f-9a3b-2f2f6a1c9d10';
+  assert.equal(sanearAulaId(id), id);
+  assert.equal(sanearAulaId(`  ${id}  `), id); // trim
+  assert.equal(sanearAulaId(id.toUpperCase()), id.toUpperCase()); // case-insensitive
+  assert.equal(sanearAulaId('no-es-uuid'), null);
+  assert.equal(sanearAulaId(''), null);
+  assert.equal(sanearAulaId(42), null);
+  assert.equal(sanearAulaId(undefined), null);
+  assert.equal(sanearAulaId(null), null);
 });

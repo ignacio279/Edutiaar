@@ -9,7 +9,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { cors, json } from '../_shared/cors.ts';
 import {
   aMensajesClaude, aParrafos, construirSystemLuna, haceCuanto, momentoDelAnio,
-  recortarHistorial, sanearAlertas, type AlumnoCtx, type LunaMsg,
+  recortarHistorial, sanearAlertas, sanearAulaId, type AlumnoCtx, type LunaMsg,
 } from './chat.ts';
 
 const MODELO = 'claude-sonnet-4-6'; // pocas docentes + tope diario → calidad pedagógica
@@ -42,6 +42,7 @@ Deno.serve(async (req) => {
     if (!mensaje) return json({ error: 'falta_mensaje' }, 400);
     if (mensaje.length > MAX_MENSAJE) return json({ error: 'mensaje_largo' }, 400);
     const alertas = sanearAlertas(body?.alertas);
+    const aulaId = sanearAulaId(body?.aula_id);
 
     const sb = createClient(url, srKey);
     const { data: yo } = await sb.from('perfil').select('rol, nombre, escuela_id').eq('id', user.id).single();
@@ -59,9 +60,14 @@ Deno.serve(async (req) => {
     if (!key) return json({ error: 'falta_anthropic_api_key' }, 500);
 
     // --- Contexto real del aula (scoped a los alumnos de ESTA docente) ---
+    // LUNA por aula: si el front manda aula_id, el contexto se acota a los
+    // alumnos de esa aula. El .eq('docente_id') se mantiene SIEMPRE: un aula
+    // ajena da 0 alumnos, nunca datos de otra docente (Regla 5).
     const now = new Date();
-    const { data: als } = await sb.from('perfil')
-      .select('id, nombre, grado').eq('rol', 'alumno').eq('docente_id', user.id).order('nombre');
+    let alumnosQ = sb.from('perfil')
+      .select('id, nombre, grado').eq('rol', 'alumno').eq('docente_id', user.id);
+    if (aulaId) alumnosQ = alumnosQ.eq('aula_id', aulaId);
+    const { data: als } = await alumnosQ.order('nombre');
     const alumnosRows = ((als as { id: string; nombre: string; grado: number | null }[]) || []);
     const ids = alumnosRows.map((a) => a.id);
 

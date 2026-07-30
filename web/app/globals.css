@@ -136,6 +136,15 @@ button {
   transform: translateY(-6px);
   box-shadow: 0 18px 34px rgba(120, 90, 40, 0.18);
 }
+/* cards de la sección LUNA (selector de aula, wizard de boletines) */
+.ed-luna-card {
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+.ed-luna-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 18px 34px rgba(92, 64, 166, 0.16);
+  border-color: #c9b8ea;
+}
 /* filas de alumno (panel docente) */
 .ed-roster-row {
   transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
