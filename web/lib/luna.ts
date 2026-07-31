@@ -28,6 +28,19 @@ export type Alerta = {
   positiva: boolean;
 };
 
+// Clave estable de una alerta para persistir "atendida" (tabla
+// luna_alerta_atendida, migración 0017): mismo chico + mismo tipo = misma
+// clave, así "Listo ✓" la elimina definitivamente aunque se recalcule.
+export function claveAlerta(a: Pick<Alerta, 'tipo' | 'alumnoId'>): string {
+  return `${a.tipo}:${a.alumnoId}`;
+}
+
+// Saca de la lista las alertas que la maestra ya marcó como atendidas.
+export function filtrarAtendidas(alertas: Alerta[], clavesAtendidas: Iterable<string>): Alerta[] {
+  const set = new Set(clavesAtendidas);
+  return alertas.filter((a) => !set.has(claveAlerta(a)));
+}
+
 // Subconjuntos de las filas que trae el componente (vía RLS).
 export type AlumnoLuna = { id: string; nombre: string; avatar: string | null; grado: number | null };
 export type SesionLuna = { alumno_id: string; nodo_id: string; fecha: string; aciertos?: number | null; total?: number | null };

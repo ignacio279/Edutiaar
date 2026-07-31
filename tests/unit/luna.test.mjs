@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import {
   periodoActual, detectarInactividad, detectarCaidaPrecision, detectarEvitaTipo,
   detectarAdelantado, alertasAula, metricasAula, resumenAula, mensajeErrorLuna,
+  claveAlerta, filtrarAtendidas,
 } from '../../web/lib/luna.ts';
 
 // 28 jul 2026, mediodía local.
@@ -212,4 +213,30 @@ test('mensajeErrorLuna: códigos conocidos con copy propio, resto genérico', ()
   assert.match(mensajeErrorLuna('timeout'), /tardó demasiado/);
   assert.match(mensajeErrorLuna('claude_500: pum'), /Probá de nuevo/);
   assert.match(mensajeErrorLuna(undefined), /Probá de nuevo/);
+});
+
+// --- claveAlerta / filtrarAtendidas (alertas atendidas, migración 0017) ---
+
+test('claveAlerta: estable por tipo + alumno', () => {
+  assert.equal(claveAlerta({ tipo: 'inactividad', alumnoId: 'a1' }), 'inactividad:a1');
+  assert.equal(claveAlerta({ tipo: 'inactividad', alumnoId: 'a1' }), claveAlerta({ tipo: 'inactividad', alumnoId: 'a1' }));
+  assert.notEqual(claveAlerta({ tipo: 'inactividad', alumnoId: 'a1' }), claveAlerta({ tipo: 'evita_tipo', alumnoId: 'a1' }));
+  assert.notEqual(claveAlerta({ tipo: 'inactividad', alumnoId: 'a1' }), claveAlerta({ tipo: 'inactividad', alumnoId: 'a2' }));
+});
+
+test('filtrarAtendidas: saca solo las claves marcadas, conserva el resto', () => {
+  const alertas = [
+    { tipo: 'inactividad', alumnoId: 'a1' },
+    { tipo: 'evita_tipo', alumnoId: 'a1' },
+    { tipo: 'inactividad', alumnoId: 'a2' },
+  ];
+  const quedan = filtrarAtendidas(alertas, ['inactividad:a1']);
+  assert.equal(quedan.length, 2);
+  assert.ok(!quedan.some((a) => a.tipo === 'inactividad' && a.alumnoId === 'a1'));
+});
+
+test('filtrarAtendidas: sin atendidas devuelve todo; con todas atendidas, nada', () => {
+  const alertas = [{ tipo: 'adelantado', alumnoId: 'a3' }];
+  assert.equal(filtrarAtendidas(alertas, []).length, 1);
+  assert.equal(filtrarAtendidas(alertas, ['adelantado:a3']).length, 0);
 });

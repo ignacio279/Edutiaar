@@ -82,7 +82,7 @@ function normalizarContenido(c: any): Contenido {
   };
 }
 type Boletin = { id: string; alumno_id: string; periodo: string; contenido: Contenido; estado: 'borrador' | 'aprobado'; version: number };
-type Paso = 'grado' | 'alumno' | 'generando' | 'revision';
+type Paso = 'alumno' | 'generando' | 'revision';
 
 // Clave de sección editable: 's0', 's1', … / 'actitud' / 'sugerencia'.
 type SeccionKey = string;
@@ -98,8 +98,9 @@ function EscribirBoletin({ aulaParam }: { aulaParam: string | null }) {
   const [cambiable, setCambiable] = useState(false);
   const [alumnos, setAlumnos] = useState<AlumnoLuna[] | null>(null);
   const [boletines, setBoletines] = useState<Boletin[]>([]);
-  const [paso, setPaso] = useState<Paso>('grado');
-  const [gradoSel, setGradoSel] = useState<number | null>(null);
+  // Sin paso de grados: el aula ya acota (decisión 2026-07-31) — directo a los
+  // alumnos del aula, cada uno con su chip de grado (plurigrado a la vista).
+  const [paso, setPaso] = useState<Paso>('alumno');
   const [alumnoSel, setAlumnoSel] = useState<AlumnoLuna | null>(null);
   const [boletin, setBoletin] = useState<Boletin | null>(null);
   const [genError, setGenError] = useState<string | null>(null);
@@ -233,7 +234,6 @@ function EscribirBoletin({ aulaParam }: { aulaParam: string | null }) {
     generar(alumnoSel);
   }
 
-  const grados = [...new Set((alumnos ?? []).map((a) => a.grado ?? 0))].sort((a, b) => a - b);
   const esAprobado = boletin?.estado === 'aprobado';
 
   return (
@@ -278,34 +278,17 @@ function EscribirBoletin({ aulaParam }: { aulaParam: string | null }) {
           <p style={{ color: VIOLETA.tinta2, fontWeight: 600, marginTop: 24 }}>Cargando…</p>
         ) : alumnos.length === 0 ? (
           <p style={{ color: VIOLETA.tinta2, fontWeight: 600, marginTop: 24 }}>Esta aula todavía no tiene alumnos. Cargalos desde «Mi clase» y después volvé por acá.</p>
-        ) : paso === 'grado' ? (
-          <>
-            <h2 style={h2Paso}>1 · Elegí el grado</h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, maxWidth: 760 }}>
-              {grados.map((g) => {
-                const n = alumnos.filter((a) => a.grado === g).length;
-                return (
-                  <button key={g} onClick={() => { setGradoSel(g); setPaso('alumno'); }} className="bol-sel" style={{ ...cardSel, borderRadius: 22, padding: '22px 24px', boxShadow: `0 4px 14px ${VIOLETA.sombra}` }}>
-                    <div style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 22, color: VIOLETA.ink }}>{g}° grado</div>
-                    <div style={{ fontSize: 14.5, color: VIOLETA.tinta2, fontWeight: 600, marginTop: 4 }}>{n} {n === 1 ? 'alumno' : 'alumnos'}</div>
-                  </button>
-                );
-              })}
-            </div>
-          </>
         ) : paso === 'alumno' ? (
           <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '24px 0 14px', flexWrap: 'wrap' }}>
-              <button onClick={() => setPaso('grado')} className="bol-pill" style={pill}>‹ Grados</button>
-              <h2 style={{ ...h2Paso, margin: 0 }}>2 · Elegí el alumno ({gradoSel}° grado)</h2>
-            </div>
+            <h2 style={h2Paso}>Elegí el alumno</h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 760 }}>
-              {alumnos.filter((a) => a.grado === gradoSel).map((a) => {
+              {alumnos.map((a) => {
                 const b = boletinDe(a.id);
                 return (
                   <button key={a.id} onClick={() => elegirAlumno(a)} className="bol-sel" style={{ ...cardSel, display: 'flex', alignItems: 'center', gap: 16, borderRadius: 18, padding: '14px 18px' }}>
                     <div style={{ width: 50, height: 50, flexShrink: 0, background: `${animal(a.avatar ?? 'fox')} center/contain no-repeat` }} />
                     <span style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 18, color: VIOLETA.ink }}>{a.nombre}</span>
+                    <span style={{ fontFamily: NUNITO, fontSize: 13, color: VIOLETA.tinta2, fontWeight: 700 }}>{a.grado}° grado</span>
                     {b && (
                       b.estado === 'aprobado' ? (
                         <span style={{ marginLeft: 'auto', background: VIOLETA.okFondo, border: `1.5px solid ${VIOLETA.okBorde}`, color: VIOLETA.okTexto, padding: '4px 12px', borderRadius: 999, fontFamily: QUICK, fontWeight: 700, fontSize: 12.5 }}>Aprobado</span>
