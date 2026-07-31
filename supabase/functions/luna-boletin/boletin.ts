@@ -1,37 +1,100 @@
-// Lógica PURA de luna-boletin: resumen de evidencia, prompt y parseo de la tool.
-// Sin Deno, sin red → unit-testeable desde Node (tests/unit/luna-boletin.test.mjs),
-// igual que evaluar-sesion/diagnostico.ts.
+// Lógica PURA de luna-boletin: evidencia resumida, prompt y parseo del JSON.
+// Sin Deno, sin red → unit-testeable desde Node (tests/unit/luna-boletin.test.mjs).
 //
-// Regla pedagógica clave: el boletín va ANCLADO EN EVIDENCIA. El prompt le
-// prohíbe a Claude inventar logros o dificultades que no estén en los datos, y
-// a la API van datos mínimos: nombre de pila, grado y desempeño (Regla 5).
+// Spec de prompts 2026-07-31: system fijo (SYSTEM_BOLETIN) + bloque
+// <datos_del_alumno> con datos YA PROCESADOS (el backend traduce — precisiones,
+// evoluciones, rachas — el modelo no calcula). Salida: JSON crudo validado por
+// parseBoletin, con UN retry si no parsea (patrón generador-ejercicios).
+// A la API van datos mínimos: nombre de pila, grado y desempeño (Regla 5).
 // LUNA propone, la docente decide: esto genera BORRADORES, nunca aprueba.
 
 export type SesionBol = { nodo_id: string; fecha: string; aciertos?: number | null; total?: number | null };
-export type RespuestaBol = { nodoId: string; tipo: string; correcta: boolean; createdAt: string };
+export type RespuestaBol = { nodoId: string; tipo: string; correcta: boolean; createdAt: string; reintentos?: number };
 export type NodoBol = { id: string; nombre: string; programa_id: string };
 export type MateriaBol = { nombre: string; programa_id: string };
-export type EstadoBol = { nodo_id: string; estado: string };
 
-export type TemaResumen = { nombre: string; sesiones: number; precision: number | null; estado: string };
+export type Evolucion = 'mejoró' | 'estable' | 'bajó' | 'sin datos suficientes';
+
+export type TemaResumen = {
+  materia: string;
+  tema: string;
+  cantidad: number;
+  precision: number | null;
+  evolucion: Evolucion;
+  observaciones: string[];
+};
 
 export type ActividadAlumno = {
   nombre: string;
   grado: number;
   periodoLabel: string;
-  materias: { materia: string; temas: TemaResumen[] }[];
-  evolucion: { mitad1: { sesiones: number; precision: number | null }; mitad2: { sesiones: number; precision: number | null } };
-  diasPracticados: number;
-  tipos: Record<string, number>;
+  fechaInicio: string;
+  fechaFin: string;
+  diasActivos: number;
+  diasHabiles: number;
+  rachaMaxima: number;
+  totalEjercicios: number;
   totalSesiones: number;
-  totalRespuestas: number;
+  temas: TemaResumen[];
+  comparacionAnterior: string;
+  alertasPeriodo: string[];
 };
 
 export type ContenidoBoletin = {
-  materias: { materia: string; texto: string }[];
+  secciones: { titulo: string; texto: string }[];
   actitud: string;
-  sugerencia: string;
+  sugerencia_proximo_periodo: string;
 };
+
+// System prompt FIJO del boletín (spec del usuario, verbatim).
+export const SYSTEM_BOLETIN = `Sos LUNA, asistente pedagógica de EDUTIA. Tu tarea es redactar el BORRADOR
+del boletín de un alumno para que su maestra lo revise, lo ajuste y lo
+apruebe. El destinatario final del texto es la familia del alumno.
+
+Reglas de contenido:
+
+1. EVIDENCIA OBLIGATORIA: cada afirmación debe surgir de los datos del
+   período que recibís abajo. Prohibido inventar logros, dificultades,
+   anécdotas o actitudes que no estén respaldadas por los datos. Si para
+   alguna sección no hay datos suficientes, escribí una observación breve y
+   honesta (ej: "En este período hubo poca actividad registrada en esta
+   área") en lugar de rellenar.
+2. Tono: cálido, constructivo, profesional y cercano. Español rioplatense.
+   Lenguaje llano: la familia puede tener cualquier nivel educativo. Nada de
+   jerga técnica ni porcentajes crudos; traducí los datos a observaciones
+   pedagógicas ("resolvió con seguridad los problemas de suma" en vez de
+   "82% de precisión").
+3. Estructura de cada dificultad: siempre en clave de proceso y próximo
+   paso. Primero qué logró, después qué está en construcción, y cómo se lo
+   va a acompañar. Nunca en clave de déficit del chico.
+4. No compares al alumno con sus compañeros ni con promedios del aula.
+   Compará solo contra su propio recorrido.
+5. No menciones datos sensibles, situaciones familiares ni nada externo al
+   aprendizaje.
+6. Nombrá al alumno por su nombre de pila.
+7. Longitud: cada sección entre 40 y 80 palabras. Boletín completo legible
+   en 2 minutos.
+
+Formato de salida: respondé ÚNICAMENTE con un JSON válido, sin texto antes
+ni después, sin markdown, con esta forma exacta:
+
+{
+  "secciones": [
+    { "titulo": "...", "texto": "..." }
+  ],
+  "actitud": "...",
+  "sugerencia_proximo_periodo": "..."
+}
+
+Incluí una sección por cada materia presente en los datos. "actitud" resume
+la disposición del alumno frente al aprendizaje (constancia, reacción al
+error, autonomía) según los datos. "sugerencia_proximo_periodo" propone 1 o 2
+focos concretos de acompañamiento.`;
+
+// Pedido del retry único cuando la primera respuesta no parseó (spec: "si
+// falla, reintentá una vez pidiendo solo el JSON corregido").
+export const PROMPT_REINTENTO_JSON =
+  'La respuesta anterior no fue un JSON válido con el esquema pedido. Respondé ahora ÚNICAMENTE con el JSON corregido, sin ningún otro texto.';
 
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 
@@ -65,13 +128,102 @@ export function periodoDesdeClave(clave: string): { clave: string; label: string
   };
 }
 
+// Clave del mes anterior a una clave 'YYYY-MM' ('2026-01' → '2025-12').
+export function claveAnterior(clave: string): string | null {
+  const p = periodoDesdeClave(clave);
+  if (!p) return null;
+  const [y, m] = clave.split('-').map(Number);
+  const d = new Date(y, m - 2, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
 function precision(rs: { correcta: boolean }[]): number | null {
   if (!rs.length) return null;
   return Math.round((100 * rs.filter((r) => r.correcta).length) / rs.length);
 }
 
-// Colapsa la actividad cruda del período en el bloque compacto de evidencia que
-// va al prompt. Solo primer nombre, grado y desempeño: nada de identificadores.
+const diaLocal = (iso: string) => {
+  const f = new Date(iso);
+  return new Date(f.getFullYear(), f.getMonth(), f.getDate());
+};
+
+// Días hábiles (lun–vie) del período [desde, hasta).
+export function diasHabilesDelPeriodo(desde: string, hasta: string): number {
+  let n = 0;
+  for (let d = diaLocal(desde); d < new Date(hasta); d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) {
+    if (d.getDay() !== 0 && d.getDay() !== 6) n++;
+  }
+  return n;
+}
+
+// Máxima cantidad de días de calendario CONSECUTIVOS con práctica.
+export function rachaMaxima(fechas: string[]): number {
+  const dias = [...new Set(fechas.map((f) => diaLocal(f).getTime()))].sort((a, b) => a - b);
+  let max = 0;
+  let actual = 0;
+  let previo: number | null = null;
+  for (const d of dias) {
+    actual = previo !== null && d - previo === 86_400_000 ? actual + 1 : 1;
+    if (actual > max) max = actual;
+    previo = d;
+  }
+  return max;
+}
+
+const MIN_MITAD = 4; // respuestas mínimas por quincena para hablar de evolución
+const UMBRAL_EVOLUCION = 10; // puntos de precisión
+
+// Evolución del tema dentro del período: 2ª quincena vs 1ª.
+export function evolucionTema(rs: RespuestaBol[], desde: string, hasta: string): Evolucion {
+  const medio = (new Date(desde).getTime() + new Date(hasta).getTime()) / 2;
+  const m1 = rs.filter((r) => new Date(r.createdAt).getTime() < medio);
+  const m2 = rs.filter((r) => new Date(r.createdAt).getTime() >= medio);
+  if (m1.length < MIN_MITAD || m2.length < MIN_MITAD) return 'sin datos suficientes';
+  const dif = precision(m2)! - precision(m1)!;
+  if (dif >= UMBRAL_EVOLUCION) return 'mejoró';
+  if (dif <= -UMBRAL_EVOLUCION) return 'bajó';
+  return 'estable';
+}
+
+const MIN_EVITA_TEMA = 8; // respuestas del tema para hablar de evitación
+const MIN_FALLADAS_REINTENTO = 3;
+
+// Observaciones de comportamiento del tema (spec: "evita el tema, reintenta
+// tras el error, etc."), derivadas SOLO de los datos.
+export function observacionesTema(rs: RespuestaBol[]): string[] {
+  const obs: string[] = [];
+  if (rs.length >= MIN_EVITA_TEMA && !rs.some((r) => r.tipo === 'producir')) {
+    obs.push('evita los ejercicios de producir');
+  }
+  const falladas = rs.filter((r) => !r.correcta);
+  if (falladas.length >= MIN_FALLADAS_REINTENTO) {
+    const conReintento = falladas.filter((r) => (r.reintentos ?? 0) > 0).length;
+    if (conReintento / falladas.length >= 0.5) obs.push('reintenta tras el error');
+  }
+  return obs;
+}
+
+// Comparación intra-alumno con el mes anterior (nunca contra compañeros).
+export function compararPeriodos(
+  actual: { sesiones: number; precision: number | null },
+  anterior: { sesiones: number; precision: number | null } | null,
+  labelAnterior: string | null,
+): string {
+  if (!anterior || anterior.sesiones === 0) return 'Primer período con actividad registrada; todavía no hay período anterior para comparar.';
+  const partes: string[] = [];
+  if (actual.sesiones > anterior.sesiones) partes.push(`practicó más que en ${labelAnterior} (${actual.sesiones} vs ${anterior.sesiones} sesiones)`);
+  else if (actual.sesiones < anterior.sesiones) partes.push(`practicó menos que en ${labelAnterior} (${actual.sesiones} vs ${anterior.sesiones} sesiones)`);
+  else partes.push(`mantuvo el ritmo de práctica de ${labelAnterior} (${actual.sesiones} sesiones)`);
+  if (actual.precision !== null && anterior.precision !== null) {
+    const dif = actual.precision - anterior.precision;
+    if (dif >= UMBRAL_EVOLUCION) partes.push('su precisión subió');
+    else if (dif <= -UMBRAL_EVOLUCION) partes.push('su precisión bajó');
+    else partes.push('su precisión se mantuvo estable');
+  }
+  return `${partes.join(' y ')}.`;
+}
+
+// Colapsa la actividad cruda del período en el bloque compacto de evidencia.
 export function resumirActividad(
   nombre: string,
   grado: number,
@@ -80,7 +232,7 @@ export function resumirActividad(
   respuestas: RespuestaBol[],
   nodos: NodoBol[],
   materias: MateriaBol[],
-  estados: EstadoBol[],
+  anterior: { sesiones: SesionBol[]; respuestas: RespuestaBol[]; label: string } | null = null,
 ): ActividadAlumno {
   const rsPorNodo = new Map<string, RespuestaBol[]>();
   for (const r of respuestas) {
@@ -88,127 +240,118 @@ export function resumirActividad(
     g.push(r);
     rsPorNodo.set(r.nodoId, g);
   }
-  const sesPorNodo = new Map<string, number>();
-  for (const s of sesiones) sesPorNodo.set(s.nodo_id, (sesPorNodo.get(s.nodo_id) ?? 0) + 1);
-  const estadoDe = new Map(estados.map((e) => [e.nodo_id, e.estado]));
+  const materiaDe = new Map(materias.map((m) => [m.programa_id, m.nombre]));
 
-  const materiasOut = materias.map((m) => ({
-    materia: m.nombre,
-    temas: nodos
-      .filter((n) => n.programa_id === m.programa_id)
-      .map((n) => ({
-        nombre: n.nombre,
-        sesiones: sesPorNodo.get(n.id) ?? 0,
-        precision: precision(rsPorNodo.get(n.id) ?? []),
-        estado: estadoDe.get(n.id) ?? 'no_empezado',
-      }))
-      .filter((t) => t.sesiones > 0 || t.estado !== 'no_empezado'),
-  }));
+  const temas: TemaResumen[] = nodos
+    .map((n) => {
+      const rs = rsPorNodo.get(n.id) ?? [];
+      return {
+        materia: materiaDe.get(n.programa_id) ?? 'Materia',
+        tema: n.nombre,
+        cantidad: rs.length,
+        precision: precision(rs),
+        evolucion: evolucionTema(rs, periodo.desde, periodo.hasta),
+        observaciones: observacionesTema(rs),
+      };
+    })
+    .filter((t) => t.cantidad > 0);
 
-  const medio = (new Date(periodo.desde).getTime() + new Date(periodo.hasta).getTime()) / 2;
-  const mitad = (filtro: (t: number) => boolean) => {
-    const ses = sesiones.filter((s) => filtro(new Date(s.fecha).getTime()));
-    const rs = respuestas.filter((r) => filtro(new Date(r.createdAt).getTime()));
-    return { sesiones: ses.length, precision: precision(rs) };
-  };
+  const alertasPeriodo: string[] = [];
+  for (const t of temas) {
+    if (t.evolucion === 'bajó') alertasPeriodo.push(`Bajó la precisión en ${t.tema} durante el período.`);
+    if (t.observaciones.includes('evita los ejercicios de producir')) alertasPeriodo.push(`Evitó los ejercicios de producir en ${t.tema}.`);
+  }
 
-  const dias = new Set(sesiones.map((s) => {
-    const f = new Date(s.fecha);
-    return `${f.getFullYear()}-${f.getMonth()}-${f.getDate()}`;
-  }));
-
-  const tipos: Record<string, number> = {};
-  for (const r of respuestas) tipos[r.tipo] = (tipos[r.tipo] ?? 0) + 1;
+  const finVisible = new Date(new Date(periodo.hasta).getTime() - 86_400_000);
+  const fmt = (d: Date) => `${d.getDate()} de ${MESES[d.getMonth()]} de ${d.getFullYear()}`;
 
   return {
-    nombre, grado, periodoLabel: periodo.label,
-    materias: materiasOut,
-    evolucion: { mitad1: mitad((t) => t < medio), mitad2: mitad((t) => t >= medio) },
-    diasPracticados: dias.size,
-    tipos,
+    nombre, grado,
+    periodoLabel: periodo.label,
+    fechaInicio: fmt(diaLocal(periodo.desde)),
+    fechaFin: fmt(finVisible),
+    diasActivos: new Set(sesiones.map((s) => diaLocal(s.fecha).getTime())).size,
+    diasHabiles: diasHabilesDelPeriodo(periodo.desde, periodo.hasta),
+    rachaMaxima: rachaMaxima(sesiones.map((s) => s.fecha)),
+    totalEjercicios: respuestas.length,
     totalSesiones: sesiones.length,
-    totalRespuestas: respuestas.length,
+    temas,
+    comparacionAnterior: compararPeriodos(
+      { sesiones: sesiones.length, precision: precision(respuestas) },
+      anterior ? { sesiones: anterior.sesiones.length, precision: precision(anterior.respuestas) } : null,
+      anterior?.label ?? null,
+    ),
+    alertasPeriodo,
   };
 }
 
-const ESTADO_TXT: Record<string, string> = {
-  no_empezado: 'sin empezar',
-  en_construccion: 'en camino',
-  a_reforzar: 'a reforzar',
-  dominado: 'lo domina',
-};
-
-// Serializa la evidencia en líneas etiquetadas (un dato por línea): es lo único
-// que Claude sabe del alumno.
+// Serializa la evidencia en el bloque <datos_del_alumno> del spec: es lo único
+// que el modelo sabe del alumno.
 export function serializarActividad(d: ActividadAlumno): string {
   const lineas = [
-    `Alumno: ${d.nombre} (${d.grado}° grado). Período: ${d.periodoLabel}.`,
-    `Práctica total del período: ${d.totalSesiones} sesiones en ${d.diasPracticados} días distintos, ${d.totalRespuestas} ejercicios respondidos.`,
+    '<datos_del_alumno>',
+    `Alumno: ${d.nombre} — ${d.grado}° grado`,
+    `Período: ${d.periodoLabel} (del ${d.fechaInicio} al ${d.fechaFin})`,
+    '',
+    'Actividad del período:',
+    `- Días activos: ${d.diasActivos} de ${d.diasHabiles} hábiles — racha máxima: ${d.rachaMaxima} ${d.rachaMaxima === 1 ? 'día' : 'días'} seguidos`,
+    `- Ejercicios resueltos: ${d.totalEjercicios} (en ${d.totalSesiones} sesiones)`,
+    '',
+    'Desempeño por materia y tema:',
   ];
-  for (const m of d.materias) {
-    if (!m.temas.length) { lineas.push(`${m.materia}: sin actividad registrada este período.`); continue; }
-    lineas.push(`${m.materia}:`);
-    for (const t of m.temas) {
-      lineas.push(`- ${t.nombre}: ${t.sesiones} sesiones, precisión ${t.precision === null ? 'sin datos' : `${t.precision}%`}, estado "${ESTADO_TXT[t.estado] ?? t.estado}".`);
+  if (d.temas.length) {
+    for (const t of d.temas) {
+      const partes = [`- ${t.materia} — ${t.tema}: ${t.cantidad} ejercicios`, `precisión ${t.precision === null ? 'sin datos' : `${t.precision}%`}`, `evolución: ${t.evolucion}`];
+      if (t.observaciones.length) partes.push(`observaciones: ${t.observaciones.join(', ')}`);
+      lineas.push(partes.join(', '));
     }
+  } else {
+    lineas.push('Sin actividad registrada por tema en este período.');
   }
-  const ev = (x: { sesiones: number; precision: number | null }) =>
-    `${x.sesiones} sesiones${x.precision === null ? '' : ` con ${x.precision}% de aciertos`}`;
-  lineas.push(`Evolución: primera mitad del mes ${ev(d.evolucion.mitad1)}; segunda mitad ${ev(d.evolucion.mitad2)}.`);
-  const tipos = Object.entries(d.tipos).map(([t, n]) => `${t}: ${n}`).join(', ');
-  if (tipos) lineas.push(`Ejercicios por tipo: ${tipos}.`);
+  lineas.push('');
+  lineas.push('Comparación con el período anterior (solo del propio alumno):');
+  lineas.push(d.comparacionAnterior);
+  lineas.push('');
+  lineas.push('Alertas del período (si hubo):');
+  lineas.push(d.alertasPeriodo.length ? d.alertasPeriodo.map((a) => `- ${a}`).join('\n') : 'Sin alertas en el período.');
+  lineas.push('</datos_del_alumno>');
   return lineas.join('\n');
 }
 
-// System prompt del boletín: persona LUNA + anclaje en evidencia + tono familia.
 export function construirPromptBoletin(d: ActividadAlumno): { system: string; user: string } {
-  const system = [
-    'Sos LUNA, copiloto pedagógico de una docente de escuela primaria rural de Argentina.',
-    'Vas a redactar el BORRADOR del boletín del período para la familia de un alumno; la docente lo revisa, lo edita si quiere y decide si lo aprueba.',
-    'Escribí en español rioplatense cálido, constructivo y profesional, dirigido a la familia; nada infantilizado ni burocrático.',
-    'Usá SOLO los datos de actividad que te paso: NO inventes logros, temas, anécdotas ni avances que no estén en los datos.',
-    'Cada afirmación sobre el desempeño tiene que apoyarse en un dato concreto de los provistos (tema, precisión, evolución, constancia, cantidad de práctica).',
-    'Si la actividad del período es poca, decilo con honestidad y en positivo, sin inflar ni dramatizar.',
-    'Las dificultades se presentan como oportunidades de crecimiento, jamás como reproche al chico ni a la familia.',
-    'Nada de jerga estadística ni tecnicismos: nombrá los temas tal como figuran en los datos y traducí los porcentajes a lenguaje cotidiano.',
-    'Usá la herramienta escribir_boletin exactamente UNA vez: un texto por materia trabajada, un párrafo sobre la actitud frente al aprendizaje y una sugerencia concreta para el próximo período.',
-  ].join(' ');
-  return { system, user: serializarActividad(d) };
+  return { system: SYSTEM_BOLETIN, user: serializarActividad(d) };
 }
 
-export const TOOL_ESCRIBIR_BOLETIN = {
-  name: 'escribir_boletin',
-  description: 'Guarda el borrador del boletín: un texto por materia, la actitud frente al aprendizaje y una sugerencia para el próximo período.',
-  input_schema: {
-    type: 'object',
-    properties: {
-      materias: {
-        type: 'array',
-        items: {
-          type: 'object',
-          properties: { materia: { type: 'string' }, texto: { type: 'string' } },
-          required: ['materia', 'texto'],
-        },
-      },
-      actitud: { type: 'string' },
-      sugerencia: { type: 'string' },
-    },
-    required: ['materias', 'actitud', 'sugerencia'],
-  },
-};
+// Recorta el JSON de la respuesta (del primer { al último }) y parsea.
+// Inválido → null, nunca tira (patrón generador-ejercicios).
+export function extraerJson(texto: string): unknown | null {
+  const desde = texto.indexOf('{');
+  const hasta = texto.lastIndexOf('}');
+  if (desde < 0 || hasta <= desde) return null;
+  try {
+    return JSON.parse(texto.slice(desde, hasta + 1));
+  } catch {
+    return null;
+  }
+}
 
-// Valida la salida estructurada (el schema es el contrato con la DB). Nunca
-// tira: defaults vacíos y descarta materias malformadas.
+// Valida/coacciona al esquema del spec. Nunca tira: defaults vacíos y descarta
+// secciones malformadas (esBoletinValido decide después si amerita retry).
 export function parseBoletin(input: unknown): ContenidoBoletin {
   const o = (input ?? {}) as Record<string, unknown>;
-  const materias = Array.isArray(o.materias)
-    ? (o.materias as Record<string, unknown>[])
-        .map((m) => ({ materia: String(m?.materia ?? '').trim(), texto: String(m?.texto ?? '').trim() }))
-        .filter((m) => m.materia && m.texto)
+  const secciones = Array.isArray(o.secciones)
+    ? (o.secciones as Record<string, unknown>[])
+        .map((s) => ({ titulo: String(s?.titulo ?? '').trim(), texto: String(s?.texto ?? '').trim() }))
+        .filter((s) => s.titulo && s.texto)
     : [];
   return {
-    materias,
+    secciones,
     actitud: String(o.actitud ?? '').trim(),
-    sugerencia: String(o.sugerencia ?? '').trim(),
+    sugerencia_proximo_periodo: String(o.sugerencia_proximo_periodo ?? '').trim(),
   };
+}
+
+// ¿La salida alcanza para mostrar un borrador? (decide el retry único)
+export function esBoletinValido(c: ContenidoBoletin): boolean {
+  return c.secciones.length > 0 && c.actitud.length > 0 && c.sugerencia_proximo_periodo.length > 0;
 }
