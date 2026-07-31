@@ -3,8 +3,10 @@
 //
 // A diferencia de sol-chat (chat efímero de menores, Regla 5), el hilo de LUNA
 // se persiste en luna_mensaje: es la conversación de la seño y necesita
-// continuidad entre sesiones. El system lleva el contexto REAL del aula
-// (datos mínimos: nombre de pila, grado, desempeño — nada de identificadores).
+// continuidad entre sesiones. El system = SYSTEM_CHAT (fijo, spec del usuario
+// 2026-07-31) + bloque <contexto_del_aula> con datos YA PROCESADOS por el
+// backend (datos mínimos: nombre de pila, grado, desempeño — nada de
+// identificadores). El backend traduce, el modelo no calcula.
 
 export type LunaMsg = { role: 'user' | 'luna'; content: string };
 
@@ -14,16 +16,64 @@ export type AlumnoCtx = {
   estado: string;           // label ya humanizado ("en camino", "a reforzar"…)
   ultimaPractica: string | null; // "hace 3 días" / null si nunca
   precisionReciente: number | null;
+  fortalezas: string[];     // nodos dominados (nombres)
+  dificultades: string[];   // nodos a reforzar (nombres)
 };
+
+export type MateriaCtx = { nombre: string; avancePct: number; contenidos: string[] };
 
 export type ContextoAula = {
   docenteNombre: string;
-  grados: number[];
+  fecha: string;            // "28 de julio de 2026"
+  tipoEscuela: string;      // "rural, zona Neuquén, Patagonia"
+  gradosConCantidad: { grado: number; cantidad: number }[];
+  materias: MateriaCtx[];
+  hitos: string;
   alumnos: AlumnoCtx[];
   alertas: { alumno: string; prioridad: string; detalle: string }[];
-  programa: { materia: string; nodos: string[] }[];
   momento: string;
 };
+
+// System prompt FIJO del chat (spec del usuario, verbatim).
+export const SYSTEM_CHAT = `Sos LUNA, la copiloto pedagógica de una maestra dentro de EDUTIA, una
+plataforma educativa para escuelas rurales argentinas. Muchas de estas aulas
+son plurigrado: una sola docente enseña a chicos de varios grados a la vez.
+
+Tu rol es el de una colega experimentada y cercana: ayudás a planificar
+clases, sugerís estrategias didácticas, respondés dudas pedagógicas y ayudás
+a interpretar cómo viene cada alumno. Hablás en español rioplatense, con tono
+cálido, práctico y directo. Sos concreta: la maestra suele consultarte con
+poco tiempo, muchas veces minutos antes de entrar al aula.
+
+Reglas:
+
+1. Basate SIEMPRE en el contexto real del aula que recibís abajo. Si te
+   preguntan por un alumno o dato que no está en el contexto, decilo
+   honestamente y pedí la información; no inventes.
+2. Vos proponés, la maestra decide. Ofrecé opciones y fundamentos, nunca
+   impongas. Ella es la autoridad pedagógica.
+3. Si el aula es plurigrado y te piden planificar, proponé actividades con
+   UN eje temático común y niveles de dificultad diferenciados por grado,
+   para que toda el aula trabaje junta y cada chico a su altura.
+4. Asumí recursos limitados: proponé actividades realizables con materiales
+   simples y sin depender de conectividad, salvo que la maestra diga lo
+   contrario.
+5. Respuestas cortas por defecto (el equivalente a un mensaje de WhatsApp
+   largo). Ofrecé profundizar en vez de escribir de más. Usá listas solo
+   cuando ayudan de verdad.
+6. Alineá tus sugerencias al programa curricular del contexto cuando sea
+   relevante, y decí a qué contenido corresponden.
+7. No hagas diagnósticos médicos ni psicológicos sobre ningún alumno. Si la
+   maestra plantea una situación que excede lo pedagógico (posible problema
+   de salud, situación familiar grave, indicios de maltrato), acompañala con
+   respeto y recomendale los canales que correspondan (equipo de orientación,
+   supervisión, profesionales de salud). No especules.
+8. Nunca hables mal de un alumno ni de una familia. Las dificultades se
+   describen como desafíos de aprendizaje, no como defectos del chico.
+9. No compartas ni compares datos de un alumno con los de otro salvo que la
+   maestra lo pida explícitamente para decisiones de enseñanza.
+10. Si una consulta se sale por completo de tu rol pedagógico, redirigila
+    con amabilidad a lo que sí podés hacer.`;
 
 // Tope de costo (Regla 4): a Claude van solo los últimos `max` turnos. Más
 // generoso que sol-chat (8): las consultas docentes hilan más largo.
@@ -38,65 +88,86 @@ export function aMensajesClaude(msgs: LunaMsg[]): { role: 'user' | 'assistant'; 
 
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 
-// Momento del ciclo lectivo argentino (marzo–diciembre), para que LUNA sitúe
-// sus sugerencias ("estamos cerca del receso", "cierre de año", etc.).
+export function fechaLarga(now: Date): string {
+  return `${now.getDate()} de ${MESES[now.getMonth()]} de ${now.getFullYear()}`;
+}
+
+// Momento del ciclo lectivo argentino en clave de CUATRIMESTRES (formato del
+// spec: "octubre, último tramo del 2° cuatrimestre"). 1er cuatrimestre
+// mar–jul, 2° ago–dic, ene–feb receso.
 export function momentoDelAnio(now: Date): string {
   const m = now.getMonth(); // 0-11
-  const mes = `${MESES[m]} de ${now.getFullYear()}`;
+  const mes = MESES[m];
   if (m === 0 || m === 1) return `${mes}, receso de verano (el ciclo lectivo arranca en marzo)`;
-  if (m <= 4) return `${mes}, primera parte del ciclo lectivo`;
-  if (m === 5 || m === 6) return `${mes}, mitad del ciclo lectivo (receso invernal cerca o en curso)`;
-  if (m <= 9) return `${mes}, segunda parte del ciclo lectivo`;
-  return `${mes}, cierre del ciclo lectivo`;
+  if (m <= 3) return `${mes}, primer tramo del 1er cuatrimestre`;
+  if (m <= 5) return `${mes}, mitad del 1er cuatrimestre`;
+  if (m === 6) return `${mes}, último tramo del 1er cuatrimestre (receso invernal cerca)`;
+  if (m <= 8) return `${mes}, primer tramo del 2° cuatrimestre`;
+  return `${mes}, último tramo del 2° cuatrimestre`;
 }
 
-// System prompt: persona LUNA + guardrails + contexto real del aula.
-export function construirSystemLuna(ctx: ContextoAula): string {
-  const grados = ctx.grados.length ? ctx.grados.map((g) => `${g}°`).join(', ') : 'sin grados cargados';
-  const lineas = [
-    `Sos LUNA, copiloto pedagógico 24/7 de la docente ${ctx.docenteNombre} en una escuela primaria rural de Argentina.`,
-    'La ayudás con planificación de clases, estrategias didácticas y la lectura del estado real de su aula.',
-    'Respondé en español rioplatense, profesional y cercano, con sugerencias concretas y accionables, nunca genéricas.',
-    'Escribí en texto plano, en párrafos cortos: nada de markdown, ni asteriscos, ni títulos, ni viñetas.',
-    'Basate SOLO en el contexto del aula que sigue; si un dato no está, decilo con honestidad y no inventes.',
-    'Si el aula todavía no tiene actividad registrada, decí que no hay datos aún en lugar de suponer.',
-    `El aula es plurigrado: hay chicos de ${grados}. Si te pide planificar, proponé UN eje común y actividades en varios niveles de dificultad, un nivel por cada grado presente.`,
-    'No hagas diagnósticos clínicos ni etiquetes chicos: hablá de señales observadas y de próximos pasos posibles.',
-    'La decisión final es siempre de la docente: vos proponés.',
-    `Momento del año: ${ctx.momento}.`,
-  ];
+// Bloque <contexto_del_aula> con datos ya procesados. Aula vacía → líneas
+// honestas ("todavía no hay…"), nunca inventadas.
+export function construirContextoAula(ctx: ContextoAula): string {
+  const lineas: string[] = ['<contexto_del_aula>'];
+  lineas.push(`Fecha: ${ctx.fecha} — ${ctx.momento}`);
+  lineas.push(`Escuela: ${ctx.tipoEscuela}`);
+  lineas.push(
+    ctx.gradosConCantidad.length
+      ? `Grados presentes: ${ctx.gradosConCantidad.map((g) => `${g.grado}° (${g.cantidad})`).join(', ')}`
+      : 'Grados presentes: todavía no hay alumnos cargados',
+  );
+  if (ctx.materias.length) {
+    for (const m of ctx.materias) {
+      lineas.push(`Materia y programa: ${m.nombre} — avance ${m.avancePct}%. Contenidos en curso: ${m.contenidos.length ? m.contenidos.join(', ') : 'sin actividad todavía'}`);
+    }
+  } else {
+    lineas.push('Materia y programa: todavía no hay materias publicadas');
+  }
+  lineas.push(`Próximos hitos: ${ctx.hitos}`);
+  lineas.push('');
+  lineas.push('Estado de los alumnos (resumen por alumno):');
   if (ctx.alumnos.length) {
-    const filas = ctx.alumnos.map((a) => {
-      const partes = [`${a.nombre} (${a.grado}°)`, a.estado];
+    for (const a of ctx.alumnos) {
+      const partes = [`- ${a.nombre} (${a.grado}°): ${a.estado}`];
       partes.push(a.ultimaPractica ? `última práctica ${a.ultimaPractica}` : 'todavía no practicó');
       if (a.precisionReciente !== null) partes.push(`precisión reciente ${a.precisionReciente}%`);
-      return partes.join(', ');
-    });
-    lineas.push(`Alumnos del aula: ${filas.join(' · ')}.`);
+      if (a.fortalezas.length) partes.push(`fortalezas: ${a.fortalezas.join(', ')}`);
+      if (a.dificultades.length) partes.push(`dificultades actuales: ${a.dificultades.join(', ')}`);
+      const suyas = ctx.alertas.filter((al) => al.alumno === a.nombre);
+      if (suyas.length) partes.push(`alertas: ${suyas.map((al) => al.detalle).join(' / ')}`);
+      lineas.push(partes.join('; '));
+    }
   } else {
-    lineas.push('El aula todavía no tiene alumnos cargados.');
+    lineas.push('Todavía no hay alumnos cargados en el aula.');
   }
+  lineas.push('');
+  lineas.push('Alertas abiertas hoy:');
   lineas.push(
     ctx.alertas.length
-      ? `Alertas activas: ${ctx.alertas.map((a) => `[${a.prioridad}] ${a.alumno}: ${a.detalle}`).join(' · ')}.`
-      : 'Sin alertas activas.',
+      ? ctx.alertas.map((al) => `- [${al.prioridad}] ${al.alumno}: ${al.detalle}`).join('\n')
+      : 'Sin alertas abiertas.',
   );
-  for (const p of ctx.programa) {
-    lineas.push(`Programa de ${p.materia}: ${p.nodos.join(', ')}.`);
-  }
-  return lineas.join(' ');
+  lineas.push('');
+  lineas.push('Últimas planificaciones trabajadas con LUNA:');
+  lineas.push('Todavía no hay planificaciones registradas con LUNA.');
+  lineas.push('</contexto_del_aula>');
+  return lineas.join('\n');
 }
 
-// Limpia el markdown que Claude puede meter igual y separa en párrafos (a
-// diferencia de sol-chat NO capea a 2 burbujas: la seño banca respuestas largas).
+// System completo = parte fija + contexto dinámico fresco de cada llamada.
+export function construirSystemLuna(ctx: ContextoAula): string {
+  return `${SYSTEM_CHAT}\n\n${construirContextoAula(ctx)}`;
+}
+
+// Limpia el markdown de énfasis/títulos que Claude puede meter igual y separa
+// en párrafos. Las viñetas "- " se CONSERVAN: la regla 5 del spec permite
+// listas cuando ayudan, y en el render pre-wrap se leen bien.
 export function aParrafos(texto: string): string[] {
   const plano = texto
     .replace(/\*\*([^*]+)\*\*/g, '$1')
     .replace(/__([^_]+)__/g, '$1')
     .replace(/^#{1,6}[ \t]+/gm, '')
-    // solo espacios de la MISMA línea antes de la viñeta: \s* se tragaría la
-    // línea en blanco anterior y fundiría párrafos (bug heredado de aBurbujas).
-    .replace(/^[ \t]*[-*•][ \t]+/gm, '')
     .trim();
   return plano.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
 }

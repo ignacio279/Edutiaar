@@ -125,6 +125,34 @@ con niveles por grado presente. Historial: últimos 12 mensajes de
 - `tests/integration/luna-rls.test.mjs` — scoping entre docentes y contra
   alumnos, ciclo borrador→aprobado→corregir→re-aprobar, limpieza del chat.
 
+## Prompts v2 (2026-07-31)
+
+El usuario entregó la especificación definitiva de los dos prompts y la
+implementación la adoptó tal cual:
+
+- **Estructura**: system FIJO (constantes `SYSTEM_CHAT` / `SYSTEM_BOLETIN`,
+  verbatim del spec) + bloque de contexto dinámico (`<contexto_del_aula>` /
+  `<datos_del_alumno>`) que el backend llena en cada llamada con datos **ya
+  procesados** (precisiones, avances, evoluciones, rachas — el modelo no
+  calcula nada).
+- **Chat**: reglas de colega experimentada (plurigrado con UN eje temático
+  común, recursos limitados sin conectividad, respuestas cortas estilo
+  WhatsApp, sin diagnósticos → derivar a equipo de orientación/supervisión/
+  salud, nunca hablar mal, no comparar alumnos). Contexto: fecha + momento en
+  cuatrimestres, escuela/zona, grados con cantidad, avance y contenidos en
+  curso por materia, hitos, línea por alumno (fortalezas/dificultades =
+  nodos dominados/a reforzar), alertas, planificaciones ("todavía no hay
+  registradas" — persistirlas es futuro). `temperature: 0.7`.
+- **Boletín**: salida **JSON crudo** con esquema
+  `{ secciones:[{titulo,texto}], actitud, sugerencia_proximo_periodo }`
+  (reemplaza a la tool forzada; patrón generador-ejercicios), validado por
+  `parseBoletin`/`esBoletinValido` con **UN retry** pidiendo solo el JSON
+  corregido. Evidencia ampliada: días activos / hábiles, racha máxima,
+  evolución por tema (mejoró/estable/bajó, quincenas ±10 pts), observaciones
+  de comportamiento (evita producir, reintenta tras el error), comparación
+  con el período anterior (solo intra-alumno) y alertas del período.
+  `temperature: 0.3`.
+
 ## Fuera de alcance (YAGNI)
 
 - Entrega de boletines a las familias (TERRA, fase futura). El aprobado queda

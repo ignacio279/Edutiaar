@@ -82,7 +82,7 @@ test('LUNA: boletin y luna_mensaje respetan el scoping por docente (RLS 0016)', 
 
     boletin = await insSR('boletin', {
       alumno_id: alumno.id, docente_id: docA.id, periodo: '2026-07',
-      contenido: { materias: [{ materia: 'Lengua', texto: 'borrador inicial' }], actitud: 'x', sugerencia: 'y' },
+      contenido: { secciones: [{ titulo: 'Lengua', texto: 'borrador inicial' }], actitud: 'x', sugerencia_proximo_periodo: 'y' },
     });
     assert.ok(boletin?.id, 'seed boletin');
     assert.equal(boletin.estado, 'borrador');
@@ -106,11 +106,11 @@ test('LUNA: boletin y luna_mensaje respetan el scoping por docente (RLS 0016)', 
 
     // --- Ciclo del boletín ---
     const edit = await patchAs(docA.access_token, 'boletin', `id=eq.${boletin.id}`, {
-      contenido: { materias: [{ materia: 'Lengua', texto: 'editado por la seño' }], actitud: 'x', sugerencia: 'y' },
+      contenido: { secciones: [{ titulo: 'Lengua', texto: 'editado por la seño' }], actitud: 'x', sugerencia_proximo_periodo: 'y' },
     });
     assert.equal(edit.length, 1, 'A edita su borrador');
 
-    const editB = await patchAs(docB.access_token, 'boletin', `id=eq.${boletin.id}`, { contenido: { materias: [], actitud: 'hack', sugerencia: '' } });
+    const editB = await patchAs(docB.access_token, 'boletin', `id=eq.${boletin.id}`, { contenido: { secciones: [], actitud: 'hack', sugerencia_proximo_periodo: '' } });
     assert.equal(editB.length, 0, 'B NO edita el boletín de A');
 
     const aprob = await patchAs(docA.access_token, 'boletin', `id=eq.${boletin.id}`, {

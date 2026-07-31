@@ -63,11 +63,28 @@ const btnPrimarioSm: React.CSSProperties = {
   ...btnPrimario, padding: '8px 18px', fontSize: 13.5, boxShadow: 'none',
 };
 
-type Contenido = { materias: { materia: string; texto: string }[]; actitud: string; sugerencia: string };
+type Contenido = { secciones: { titulo: string; texto: string }[]; actitud: string; sugerencia_proximo_periodo: string };
+
+// Lectura tolerante: los boletines generados antes de los prompts v2 quedaron
+// en la DB con el shape viejo { materias:[{materia,texto}], actitud, sugerencia }.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function normalizarContenido(c: any): Contenido {
+  const secciones = Array.isArray(c?.secciones)
+    ? c.secciones
+    : Array.isArray(c?.materias)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ? c.materias.map((m: any) => ({ titulo: String(m?.materia ?? ''), texto: String(m?.texto ?? '') }))
+      : [];
+  return {
+    secciones,
+    actitud: String(c?.actitud ?? ''),
+    sugerencia_proximo_periodo: String(c?.sugerencia_proximo_periodo ?? c?.sugerencia ?? ''),
+  };
+}
 type Boletin = { id: string; alumno_id: string; periodo: string; contenido: Contenido; estado: 'borrador' | 'aprobado'; version: number };
 type Paso = 'grado' | 'alumno' | 'generando' | 'revision';
 
-// Clave de sección editable: 'm0', 'm1', … / 'actitud' / 'sugerencia'.
+// Clave de sección editable: 's0', 's1', … / 'actitud' / 'sugerencia'.
 type SeccionKey = string;
 
 type AlumnoConAula = AlumnoLuna & { aula_id: string | null };
@@ -111,7 +128,7 @@ function EscribirBoletin({ aulaParam }: { aulaParam: string | null }) {
       setAula(res.aula);
       setCambiable(puedeCambiarAula(aulas));
       setAlumnos(enAula(((als.data as AlumnoConAula[]) || []), res.aula.id));
-      setBoletines(((bols.data as Boletin[]) || []));
+      setBoletines((((bols.data as Boletin[]) || []).map((b) => ({ ...b, contenido: normalizarContenido(b.contenido) }))));
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aulaParam]);
@@ -141,7 +158,7 @@ function EscribirBoletin({ aulaParam }: { aulaParam: string | null }) {
       }, 60000);
       const j = await r.json().catch(() => ({}));
       if (!r.ok || !j?.boletin) { setGenError(mensajeErrorLuna(j?.error)); return; }
-      const b = j.boletin as Boletin;
+      const b = { ...(j.boletin as Boletin), contenido: normalizarContenido(j.boletin.contenido) };
       setBoletin(b);
       setBoletines((prev) => [...prev.filter((x) => x.id !== b.id), b]);
       setPaso('revision');
@@ -173,9 +190,9 @@ function EscribirBoletin({ aulaParam }: { aulaParam: string | null }) {
     if (!boletin || editKey === null || busy) return;
     setBusy(true);
     const c: Contenido = {
-      materias: boletin.contenido.materias.map((m, i) => (editKey === `m${i}` ? { ...m, texto: editTexto } : m)),
+      secciones: boletin.contenido.secciones.map((s, i) => (editKey === `s${i}` ? { ...s, texto: editTexto } : s)),
       actitud: editKey === 'actitud' ? editTexto : boletin.contenido.actitud,
-      sugerencia: editKey === 'sugerencia' ? editTexto : boletin.contenido.sugerencia,
+      sugerencia_proximo_periodo: editKey === 'sugerencia' ? editTexto : boletin.contenido.sugerencia_proximo_periodo,
     };
     const ok = await guardarContenido(c);
     setBusy(false);
@@ -347,9 +364,9 @@ function EscribirBoletin({ aulaParam }: { aulaParam: string | null }) {
               </div>
 
               {[
-                ...boletin.contenido.materias.map((m, i) => ({ key: `m${i}`, titulo: m.materia, texto: m.texto })),
+                ...boletin.contenido.secciones.map((sec, i) => ({ key: `s${i}`, titulo: sec.titulo, texto: sec.texto })),
                 { key: 'actitud', titulo: 'Actitud frente al aprendizaje', texto: boletin.contenido.actitud },
-                { key: 'sugerencia', titulo: 'Sugerencia para el próximo período', texto: boletin.contenido.sugerencia },
+                { key: 'sugerencia', titulo: 'Sugerencia para el próximo período', texto: boletin.contenido.sugerencia_proximo_periodo },
               ].map((s) => (
                 <div key={s.key} style={{ marginTop: 18 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>

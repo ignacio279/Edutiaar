@@ -1,19 +1,22 @@
 // luna-chat (Fase 2 / LUNA): chat 24/7 de la docente con LUNA, con el contexto
-// real de SU aula en el system prompt. El hilo se persiste en luna_mensaje
-// (continuidad entre sesiones); el par pregunta/respuesta se guarda JUNTO y
-// solo si Claude respondió (si falla, no queda nada a medias → reintento
-// seguro). API key SOLO server-side (Regla 1). verify_jwt=true + re-chequeo de
-// rol docente; el contexto se arma con service_role pero scoped a mano a los
-// alumnos de la que llama (Regla 5).
+// real de SU aula en el system prompt (bloque <contexto_del_aula>, spec de
+// prompts 2026-07-31: el backend TRADUCE los datos — precisiones, avances,
+// fortalezas — y el modelo no calcula nada). El hilo se persiste en
+// luna_mensaje; el par pregunta/respuesta se guarda JUNTO y solo si Claude
+// respondió (si falla, no queda nada a medias → reintento seguro). API key
+// SOLO server-side (Regla 1). verify_jwt=true + re-chequeo de rol docente; el
+// contexto se arma con service_role pero scoped a mano a los alumnos de la que
+// llama (Regla 5).
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { cors, json } from '../_shared/cors.ts';
 import {
-  aMensajesClaude, aParrafos, construirSystemLuna, haceCuanto, momentoDelAnio,
-  recortarHistorial, sanearAlertas, sanearAulaId, type AlumnoCtx, type LunaMsg,
+  aMensajesClaude, aParrafos, construirSystemLuna, fechaLarga, haceCuanto, momentoDelAnio,
+  recortarHistorial, sanearAlertas, sanearAulaId, type AlumnoCtx, type LunaMsg, type MateriaCtx,
 } from './chat.ts';
 
 const MODELO = 'claude-sonnet-4-6'; // pocas docentes + tope diario → calidad pedagógica
 const MAX_TOKENS = 900;
+const TEMPERATURA = 0.7; // naturalidad en la conversación (spec de prompts)
 const MAX_MENSAJE = 2000;
 const TOPE_CHATS_DIA = 50; // mensajes por docente por día (Regla 4)
 
@@ -47,6 +50,7 @@ Deno.serve(async (req) => {
     const sb = createClient(url, srKey);
     const { data: yo } = await sb.from('perfil').select('rol, nombre, escuela_id').eq('id', user.id).single();
     if ((yo as { rol?: string } | null)?.rol !== 'docente') return json({ error: 'no_docente' }, 403);
+    const escuelaId = (yo as { escuela_id?: string }).escuela_id ?? '';
 
     // Tope diario (Regla 4), contado en luna_uso (inmune a "Limpiar conversación").
     const dia = new Date().toISOString().slice(0, 10);
@@ -64,6 +68,7 @@ Deno.serve(async (req) => {
     // alumnos de esa aula. El .eq('docente_id') se mantiene SIEMPRE: un aula
     // ajena da 0 alumnos, nunca datos de otra docente (Regla 5).
     const now = new Date();
+    const periodoClave = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     let alumnosQ = sb.from('perfil')
       .select('id, nombre, grado').eq('rol', 'alumno').eq('docente_id', user.id);
     if (aulaId) alumnosQ = alumnosQ.eq('aula_id', aulaId);
@@ -73,7 +78,8 @@ Deno.serve(async (req) => {
 
     const desde60 = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 60).toISOString();
     const desde14 = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 14).toISOString();
-    const [sesR, respR, estR, solsR] = await Promise.all([
+    const [escR, sesR, respR, estR, solsR, bolR] = await Promise.all([
+      escuelaId ? sb.from('escuela').select('zona').eq('id', escuelaId).maybeSingle() : Promise.resolve({ data: null }),
       ids.length
         ? sb.from('sesion').select('id, alumno_id, fecha').in('alumno_id', ids).gte('fecha', desde60)
         : Promise.resolve({ data: [] }),
@@ -82,11 +88,12 @@ Deno.serve(async (req) => {
             .in('sesion.alumno_id', ids).gte('created_at', desde14)
         : Promise.resolve({ data: [] }),
       ids.length
-        ? sb.from('alumno_nodo').select('alumno_id, estado').in('alumno_id', ids)
+        ? sb.from('alumno_nodo').select('alumno_id, nodo_id, estado').in('alumno_id', ids)
         : Promise.resolve({ data: [] }),
       sb.from('sol_materia')
         .select('programa_id, programa:programa_id(grado, materia:materia_id(nombre))')
-        .eq('estado', 'publicado').eq('escuela_id', (yo as { escuela_id?: string }).escuela_id ?? ''),
+        .eq('estado', 'publicado').eq('escuela_id', escuelaId),
+      sb.from('boletin').select('alumno_id, estado').eq('docente_id', user.id).eq('periodo', periodoClave),
     ]);
 
     const ultimaDe = new Map<string, string>();
@@ -105,45 +112,80 @@ Deno.serve(async (req) => {
       if (r.correcta) g.ok += 1;
       precDe.set(aid, g);
     }
-    const estadosDe = new Map<string, string[]>();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    for (const e of ((estR.data as any[]) || [])) {
-      const g = estadosDe.get(e.alumno_id) ?? [];
-      g.push(e.estado);
-      estadosDe.set(e.alumno_id, g);
-    }
+    const nodosAlumno = ((estR.data as any[]) || []) as { alumno_id: string; nodo_id: string; estado: string }[];
+
+    // Nodos de las materias publicadas (nombres para fortalezas/dificultades y
+    // contenidos en curso).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sols = ((solsR.data as any[]) || []);
+    const progIds = sols.map((s) => s.programa_id);
+    const { data: nodosR } = progIds.length
+      ? await sb.from('nodo').select('id, nombre, programa_id').in('programa_id', progIds).order('orden')
+      : { data: [] };
+    const nodos = ((nodosR as { id: string; nombre: string; programa_id: string }[]) || []);
+    const nombreNodo = new Map(nodos.map((n) => [n.id, n.nombre]));
 
     const alumnos: AlumnoCtx[] = alumnosRows.map((a) => {
-      const presentes = new Set(estadosDe.get(a.id) ?? []);
+      const mios = nodosAlumno.filter((n) => n.alumno_id === a.id);
+      const presentes = new Set(mios.map((n) => n.estado));
       const peor = PEOR_PRIMERO.find((e) => presentes.has(e)) ?? 'no_empezado';
       const ultima = ultimaDe.get(a.id) ?? null;
       const p = precDe.get(a.id);
+      const nombresDe = (estado: string) =>
+        mios.filter((n) => n.estado === estado).map((n) => nombreNodo.get(n.nodo_id)).filter(Boolean) as string[];
       return {
         nombre: String(a.nombre ?? '').split(' ')[0], // solo nombre de pila (datos mínimos)
         grado: a.grado ?? 0,
         estado: ESTADO_TXT[peor] ?? peor,
         ultimaPractica: ultima ? haceCuanto(ultima, now) : null,
         precisionReciente: p && p.total ? Math.round((100 * p.ok) / p.total) : null,
+        fortalezas: nombresDe('dominado').slice(0, 4),
+        dificultades: nombresDe('a_reforzar').slice(0, 4),
       };
     });
 
-    // Programa por materia (con el grado en el nombre: aula plurigrado).
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sols = ((solsR.data as any[]) || []);
-    const progIds = sols.map((s) => s.programa_id);
-    const { data: nodosR } = progIds.length
-      ? await sb.from('nodo').select('nombre, programa_id').in('programa_id', progIds).order('orden')
-      : { data: [] };
-    const programa = sols.map((s) => ({
-      materia: `${s.programa?.materia?.nombre ?? 'Materia'} (${s.programa?.grado ?? '?'}°)`,
-      nodos: ((nodosR as { nombre: string; programa_id: string }[]) || [])
-        .filter((n) => n.programa_id === s.programa_id).map((n) => n.nombre),
-    })).filter((p) => p.nodos.length);
+    // Materias con avance (dominados de sus alumnos del grado / esperados) y
+    // contenidos en curso (nodos en construcción o a reforzar; si nada, los
+    // primeros del programa).
+    const materias: MateriaCtx[] = sols.map((s) => {
+      const susNodos = nodos.filter((n) => n.programa_id === s.programa_id);
+      const grado = s.programa?.grado ?? 0;
+      const delGrado = alumnosRows.filter((a) => a.grado === grado);
+      const idsNodos = new Set(susNodos.map((n) => n.id));
+      const idsAlumnos = new Set(delGrado.map((a) => a.id));
+      const filas = nodosAlumno.filter((n) => idsNodos.has(n.nodo_id) && idsAlumnos.has(n.alumno_id));
+      const esperados = susNodos.length * delGrado.length;
+      const dominados = filas.filter((n) => n.estado === 'dominado').length;
+      const enCurso = [...new Set(filas
+        .filter((n) => n.estado === 'en_construccion' || n.estado === 'a_reforzar')
+        .map((n) => nombreNodo.get(n.nodo_id)))].filter(Boolean) as string[];
+      return {
+        nombre: `${s.programa?.materia?.nombre ?? 'Materia'} (${grado}°)`,
+        avancePct: esperados > 0 ? Math.round((100 * dominados) / esperados) : 0,
+        contenidos: enCurso.length ? enCurso : susNodos.slice(0, 3).map((n) => n.nombre),
+      };
+    }).filter((m) => m.contenidos.length);
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const aprobados = new Set(((bolR.data as any[]) || []).filter((b) => b.estado === 'aprobado').map((b) => b.alumno_id));
+    const pendientes = alumnosRows.filter((a) => !aprobados.has(a.id)).length;
+    const mesLabel = fechaLarga(new Date(now.getFullYear(), now.getMonth(), 1)).replace(/^1 de /, '');
+    const hitos = alumnosRows.length
+      ? `Cierre de boletines de ${mesLabel} (${pendientes} sin aprobar)`
+      : 'Sin hitos todavía (aula sin alumnos)';
+
+    const zona = (escR.data as { zona?: string } | null)?.zona;
     const system = construirSystemLuna({
       docenteNombre: String((yo as { nombre?: string }).nombre ?? ''),
-      grados: [...new Set(alumnosRows.map((a) => a.grado ?? 0).filter(Boolean))].sort(),
-      alumnos, alertas, programa,
+      fecha: fechaLarga(now),
+      tipoEscuela: zona ? `rural, zona ${zona}` : 'rural',
+      gradosConCantidad: [...new Set(alumnosRows.map((a) => a.grado ?? 0).filter(Boolean))].sort()
+        .map((g) => ({ grado: g, cantidad: alumnosRows.filter((a) => a.grado === g).length })),
+      materias,
+      hitos,
+      alumnos,
+      alertas,
       momento: momentoDelAnio(now),
     });
 
@@ -160,7 +202,7 @@ Deno.serve(async (req) => {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: MODELO, max_tokens: MAX_TOKENS, system, messages }),
+      body: JSON.stringify({ model: MODELO, max_tokens: MAX_TOKENS, temperature: TEMPERATURA, system, messages }),
     });
     if (!r.ok) throw new Error(`claude_${r.status}: ${await r.text()}`);
     const data = await r.json();
