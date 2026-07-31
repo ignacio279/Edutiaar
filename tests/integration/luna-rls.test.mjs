@@ -147,3 +147,43 @@ test('LUNA: boletin y luna_mensaje respetan el scoping por docente (RLS 0016)', 
     if (escuela?.id) await fetch(`${URL}/rest/v1/escuela?id=eq.${escuela.id}`, { method: 'DELETE', headers: sr() });
   }
 });
+
+// --- 0017: luna_alerta_atendida — el "Listo ✓" es de cada docente ---
+
+test('LUNA: luna_alerta_atendida respeta a la dueña (RLS 0017)', { skip }, async () => {
+  let escuela, docA, docB;
+  try {
+    escuela = await insSR('escuela', { nombre: `Esc Test ${rnd()}` });
+    docA = await nuevoUsuario(escuela.id, 'docente');
+    docB = await nuevoUsuario(escuela.id, 'docente');
+
+    // A inserta SU clave como usuaria (insert directo vía RLS, sin service_role).
+    const insA = await fetch(`${URL}/rest/v1/luna_alerta_atendida`, {
+      method: 'POST',
+      headers: { ...asUser(docA.access_token), Prefer: 'return=representation' },
+      body: JSON.stringify({ docente_id: docA.id, clave: 'inactividad:x1' }),
+    });
+    assert.equal(insA.status, 201, 'la docente inserta su propia atendida');
+
+    // B no la ve; A sí.
+    assert.equal((await selectAs(docB.access_token, 'luna_alerta_atendida', 'select=clave')).length, 0, 'B no ve atendidas de A');
+    assert.equal((await selectAs(docA.access_token, 'luna_alerta_atendida', 'select=clave')).length, 1, 'A ve la suya');
+
+    // B NO puede insertar una atendida a nombre de A (with check).
+    const insB = await fetch(`${URL}/rest/v1/luna_alerta_atendida`, {
+      method: 'POST',
+      headers: { ...asUser(docB.access_token), Prefer: 'return=representation' },
+      body: JSON.stringify({ docente_id: docA.id, clave: 'evita_tipo:x2' }),
+    });
+    assert.ok(insB.status >= 400, `insert ajeno rechazado (status ${insB.status})`);
+
+    // A borra la suya (reactivación futura); queda limpio.
+    const del = await deleteAs(docA.access_token, 'luna_alerta_atendida', `clave=eq.inactividad:x1`);
+    assert.equal(del.length, 1, 'A borra su atendida');
+  } finally {
+    for (const u of [docA, docB]) {
+      if (u?.id) await fetch(`${URL}/auth/v1/admin/users/${u.id}`, { method: 'DELETE', headers: sr() });
+    }
+    if (escuela?.id) await fetch(`${URL}/rest/v1/escuela?id=eq.${escuela.id}`, { method: 'DELETE', headers: sr() });
+  }
+});

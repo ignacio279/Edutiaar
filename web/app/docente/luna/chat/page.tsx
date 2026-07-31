@@ -15,7 +15,7 @@ import DocenteSidebar from '@/components/DocenteSidebar';
 import { toast } from '@/lib/toast';
 import { fetchConTimeout } from '@/lib/edge';
 import { uiIcon } from '@/lib/art';
-import { alertasAula, mensajeErrorLuna, type RespuestaLuna } from '@/lib/luna';
+import { alertasAula, filtrarAtendidas, mensajeErrorLuna, type RespuestaLuna } from '@/lib/luna';
 import { enAula, linkLuna, puedeCambiarAula, resolverAula, type AulaLite } from '@/lib/luna-aula';
 import { VIOLETA } from '@/lib/luna-tema';
 
@@ -103,8 +103,12 @@ function ChatLuna({ aulaParam }: { aulaParam: string | null }) {
           alumnoId: r.sesion.alumno_id, nodoId: r.sesion.nodo_id ?? '',
           tipo: r.ejercicio?.tipo ?? 'reconocer', correcta: !!r.correcta, createdAt: r.created_at,
         }));
+      // Las alertas atendidas ("Listo ✓" en el dashboard, 0017) tampoco van al
+      // contexto del chat: para la maestra ya están resueltas.
+      const { data: at } = await supabase.from('luna_alerta_atendida').select('clave');
+      const atendidas = (((at as { clave: string }[]) || [])).map((c) => c.clave);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const todas = alertasAula(alumnos, ((ses.data as any[]) || []), respuestas, ((nodosAl.data as any[]) || []), [], now);
+      const todas = filtrarAtendidas(alertasAula(alumnos, ((ses.data as any[]) || []), respuestas, ((nodosAl.data as any[]) || []), [], now), atendidas);
       setAlertas(todas.filter((a) => !a.positiva).map((a) => ({ alumno: a.alumnoNombre, prioridad: a.prioridad, detalle: a.detalle })));
 
       setMsgs(((hist.data as Msg[]) || []));

@@ -12,7 +12,7 @@ import { createClient } from '@/lib/supabase/client';
 import DocenteSidebar from '@/components/DocenteSidebar';
 import { animal, uiIcon } from '@/lib/art';
 import {
-  alertasAula, metricasAula, resumenAula, periodoActual,
+  alertasAula, claveAlerta, filtrarAtendidas, metricasAula, resumenAula, periodoActual,
   type Alerta, type AlumnoLuna, type MetricasAula, type ResumenAula, type RespuestaLuna,
 } from '@/lib/luna';
 import { enAula, linkLuna, puedeCambiarAula, resolverAula, type AulaLite } from '@/lib/luna-aula';
@@ -91,7 +91,7 @@ function LunaDashboard({ aulaParam }: { aulaParam: string | null }) {
       const ids = alumnos.map((a) => a.id);
       const idsAula = new Set(ids);
 
-      const [ses, resp, nodosAl, sols, bols] = await Promise.all([
+      const [ses, resp, nodosAl, sols, bols, atR] = await Promise.all([
         ids.length
           ? supabase.from('sesion').select('alumno_id, nodo_id, fecha, aciertos, total').in('alumno_id', ids).gte('fecha', desde21)
           : Promise.resolve({ data: [] }),
@@ -103,6 +103,7 @@ function LunaDashboard({ aulaParam }: { aulaParam: string | null }) {
           : Promise.resolve({ data: [] }),
         supabase.from('sol_materia').select('programa_id, estado, docente_id, programa:programa_id(grado)'),
         supabase.from('boletin').select('alumno_id, estado').eq('periodo', periodo.clave),
+        supabase.from('luna_alerta_atendida').select('clave'), // RLS: solo las mías
       ]);
 
       // respuesta viene con embeds → la aplanamos a la forma del lib. La RLS ya
@@ -136,7 +137,9 @@ function LunaDashboard({ aulaParam }: { aulaParam: string | null }) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const boletines = ((bols.data as any[]) || []);
 
-      const alertas = alertasAula(alumnos, sesiones, respuestas, nodosAlumno, nodos, now);
+      // "Listo ✓" definitivo: las claves atendidas no vuelven a mostrarse (0017).
+      const atendidas = (((atR.data as { clave: string }[]) || [])).map((c) => c.clave);
+      const alertas = filtrarAtendidas(alertasAula(alumnos, sesiones, respuestas, nodosAlumno, nodos, now), atendidas);
       setEstado({
         modo: 'aula',
         aula: res.aula,
@@ -153,6 +156,26 @@ function LunaDashboard({ aulaParam }: { aulaParam: string | null }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aulaParam]);
 
+  // "Listo ✓": la alerta sale de la vista al toque (optimista) y la clave queda
+  // persistida en luna_alerta_atendida — no vuelve nunca (decisión 2026-07-31).
+  const atender = async (a: Alerta) => {
+    const clave = claveAlerta(a);
+    setEstado((prev) => {
+      if (prev.modo !== 'aula') return prev;
+      const alertas = prev.vista.alertas.filter((x) => claveAlerta(x) !== clave);
+      return {
+        ...prev,
+        vista: {
+          ...prev.vista,
+          alertas,
+          metricas: { ...prev.vista.metricas, alertasAbiertas: alertas.filter((x) => x.prioridad !== 'info').length },
+        },
+      };
+    });
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) await supabase.from('luna_alerta_atendida').upsert({ docente_id: user.id, clave }, { ignoreDuplicates: true });
+  };
+
   return (
     <div style={{ minHeight: '100vh', display: 'flex', background: VIOLETA.suave, animation: 'edFade .3s ease' }}>
       {/* Hovers exactos del diseño, locales a esta página (globals.css es
@@ -162,6 +185,8 @@ function LunaDashboard({ aulaParam }: { aulaParam: string | null }) {
         .ed-luna-aula:hover { transform: translateY(-3px); box-shadow: 0 12px 24px rgba(94,84,144,.16); border-color: ${VIOLETA.base}; }
         .ed-luna-cta { transition: transform .14s ease, filter .14s ease; }
         .ed-luna-cta:hover { transform: translateY(-3px); }
+        .ed-luna-listo { transition: background .14s ease, border-color .14s ease; }
+        .ed-luna-listo:hover { background: ${VIOLETA.claro}; border-color: ${VIOLETA.base}; }
         .ed-luna-cta--base:hover { filter: brightness(1.04); }
         .ed-luna-cta--oscuro:hover { filter: brightness(1.06); }
         .ed-luna-cambiar { transition: border-color .15s ease, color .15s ease; }
@@ -282,6 +307,14 @@ function LunaDashboard({ aulaParam }: { aulaParam: string | null }) {
                         <p style={{ margin: '4px 0 0', fontFamily: NUNITO, fontSize: 15, color: VIOLETA.ink, fontWeight: 600 }}>{a.detalle}</p>
                         <p style={{ margin: '3px 0 0', fontFamily: NUNITO, fontSize: 14.5, color: VIOLETA.oscuro, fontWeight: 700 }}>Sugerencia: {a.sugerencia}</p>
                       </div>
+                      <button
+                        onClick={() => atender(a)}
+                        className="ed-luna-listo"
+                        title="Marcar como atendida: no vuelve a aparecer"
+                        style={{ alignSelf: 'flex-start', flexShrink: 0, background: VIOLETA.carta, border: `1.5px solid ${VIOLETA.borde}`, borderRadius: 999, padding: '8px 16px', fontFamily: QUICK, fontWeight: 700, fontSize: 14, color: VIOLETA.oscuro, cursor: 'pointer' }}
+                      >
+                        Listo ✓
+                      </button>
                     </div>
                   );
                 })}
