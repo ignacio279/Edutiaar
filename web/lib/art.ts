@@ -223,6 +223,13 @@ export function uiIcon(key: string) {
     // Violeta: es el ícono de LUNA (identidad propia de la sección).
     moon: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" stroke="#7C5CC7" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><path d="M62 18 A34 34 0 1 0 82 62 A28 28 0 1 1 62 18 Z"/><circle cx="76" cy="26" r="3" fill="#7C5CC7" stroke="none"/><circle cx="86" cy="40" r="2" fill="#7C5CC7" stroke="none"/></svg>`,
     chevron: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" stroke="#7A6F5F" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"><path d="M38 26 L64 50 L38 74"/></svg>`,
+    // Íconos del panel admin (Dashboard admin v3) — mismo trazo cálido.
+    chart: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" stroke="#7A6F5F" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 82 H86"/><path d="M28 82 V58 M48 82 V38 M68 82 V50 M86 30 L64 46 L46 34 L26 50"/></svg>`,
+    coin: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" stroke="#7A6F5F" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><circle cx="50" cy="50" r="30"/><path d="M50 34 V66 M42 40 h12 a7 7 0 0 1 0 14 h-8 a7 7 0 0 0 0 14 h12"/></svg>`,
+    bell: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" stroke="#7A6F5F" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><path d="M50 20 a20 20 0 0 1 20 20 v14 l8 12 H22 l8 -12 V40 a20 20 0 0 1 20 -20 Z"/><path d="M42 76 a8 8 0 0 0 16 0"/></svg>`,
+    megaphone: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" stroke="#7A6F5F" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><path d="M22 44 v14 l14 2 6 20 h10 l-5 -19 L76 70 V26 Z"/><path d="M84 40 q6 8 0 16"/></svg>`,
+    book: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" stroke="#7A6F5F" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><path d="M50 26 q-12 -8 -28 -6 v56 q16 -2 28 6 q12 -8 28 -6 V20 q-16 -2 -28 6 Z"/><path d="M50 26 V82"/></svg>`,
+    gear: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" stroke="#7A6F5F" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><circle cx="50" cy="50" r="12"/><path d="M50 22 V12 M50 88 V78 M78 50 H88 M12 50 H22 M70 30 L77 23 M23 77 L30 70 M70 70 L77 77 M23 23 L30 30"/></svg>`,
   };
   return uri(k[key] || k.chevron);
 }

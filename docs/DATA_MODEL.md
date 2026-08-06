@@ -145,3 +145,32 @@ El **especialista de SOL** para un programa: lo crea la autoría docente (la se�
 - **El histórico mes a mes no necesita tabla propia:** sale de agrupar `sesion` por mes. Si más adelante hace falta, se agrega una tabla de "fotos" mensuales.
 - En el MVP varias tablas tienen **una sola fila** (una escuela, una materia, un grado). Diseñarlas así ahora hace que Fase 2 sea solo agregar filas, sin cambiar la estructura.
 - La regla exacta para que un nodo pase a `dominado` está **pendiente de definir** (ver `DECISIONS.md`).
+## Plataforma / administración *(Dashboard admin v3, mig. 0018 — ADR-009)*
+
+> El admin de plataforma **no tiene fila en `perfil`**: es un usuario de Auth
+> registrado en `plataforma_admin` (server-only). Toda su operación pasa por
+> Edge Functions `admin-*`. "Server-only" = RLS habilitada **sin policies**
+> (solo service_role), el patrón de `aula_secreto`/`luna_uso`.
+
+### escuela (columnas nuevas)
+`tipo` (`rural|unidocente|plurigrado`) · `estado` (`trial|activo|suspendido|archivado` — todo el acceso cuelga de acá) · `trial_inicio`/`trial_fin` (date) · `contacto` (jsonb CRM) · `limites` (jsonb `{sol_mes, boletines_mes, chats_mes}`; null = default) · `created_at`.
+
+### plataforma_admin *(server-only)*
+`perfil_id` (PK, → auth.users) · `nivel` (`super|operativo`) · `nombre` · `activo` · `creado_por` · `created_at`.
+
+### auditoria *(server-only)*
+`id` · `actor_id` (sin FK: sobrevive al borrado del admin) · `actor_email` · `nivel` · `accion` · `entidad` · `entidad_id` · `detalle` (jsonb) · `created_at`. Índices por fecha y entidad.
+
+### escuela_feature
+`escuela_id` (PK → escuela) · `flags` (jsonb `{"sol":…,"luna":{…},"terra":…}`) · `plan` (`basico|docente|completo|custom`) · `updated_at`. SELECT por RLS para la docente de esa escuela (`mi_escuela()`); escribe solo `admin-features`.
+
+### docente_acceso *(server-only)*
+`perfil_id` (PK → perfil) · `estado` (`activo|suspendido`) · `trial_inicio` · `trial_fin`. Vive fuera de `perfil` porque `perfil_update` permite self-update. Sin fila = activa sin trial propio.
+
+### uso_api *(server-only, insert-only)*
+`id` · `escuela_id` · `perfil_id` · `funcion` · `modelo` · `tokens_entrada` · `tokens_salida` · `costo_usd` · `ok` · `latencia_ms` · `error_codigo` · `created_at`. Un INSERT por llamada a Claude; agregados on-demand; topes mensuales por colegio = `count()` del mes vs. `escuela.limites`.
+
+### RPCs de acceso (0018)
+`mi_acceso()` (authenticated) y `acceso_de(uuid)` (solo service_role) devuelven `{estado: activo|solo_lectura|bloqueado, motivo, trial_fin, features}` — única fuente de verdad del corte (suspendido → bloqueado; trial vencido → solo lectura). `admin_nivel()` devuelve el nivel del admin logueado (null si no lo es). Defaults de `flags` en `features_default()` (solo SQL). Vistas `escuela_publica`/`aula_publica` reemplazan el listado anon de 0004.
+
+> Tablas de otras etapas no detalladas acá: `aula`, `aula_secreto`, `alumno_cred`, `intento_login` (login endurecido, 0003/0011/0015), `evaluacion_sesion` (0009), `boletin`, `luna_mensaje`, `luna_uso` (LUNA, 0016), `luna_alerta_atendida` (0017). Ver las migraciones y los specs correspondientes.

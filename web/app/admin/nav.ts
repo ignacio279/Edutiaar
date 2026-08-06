@@ -1,0 +1,32 @@
+// Navegación del panel admin — CONGELADA en Fase 0 (Dashboard admin v3).
+// Ningún work-package edita este archivo: es la clave anti-conflictos del
+// trabajo en paralelo. Cada sección reemplaza SU page.tsx stub, nada más.
+export type AdminNavItem = {
+  key: string;
+  label: string;
+  ruta: string;
+  icono: string; // clave de uiIcon (web/lib/art.ts)
+  soloSuper?: boolean;
+};
+
+export const ADMIN_NAV: readonly AdminNavItem[] = [
+  { key: 'inicio', label: 'Inicio', ruta: '/admin', icono: 'sunI' },
+  { key: 'colegios', label: 'Colegios', ruta: '/admin/colegios', icono: 'mapI' },
+  { key: 'maestras', label: 'Maestras', ruta: '/admin/maestras', icono: 'people' },
+  { key: 'metricas', label: 'Métricas', ruta: '/admin/metricas', icono: 'chart' },
+  { key: 'costos', label: 'Costos y salud', ruta: '/admin/costos', icono: 'coin' },
+  { key: 'alertas', label: 'Alertas', ruta: '/admin/alertas', icono: 'bell' },
+  { key: 'anuncios', label: 'Anuncios', ruta: '/admin/anuncios', icono: 'megaphone' },
+  { key: 'auditoria', label: 'Auditoría', ruta: '/admin/auditoria', icono: 'book' },
+  { key: 'config', label: 'Administradores', ruta: '/admin/config', icono: 'gear', soloSuper: true },
+] as const;
+
+// Resuelve el ítem activo por prefijo de ruta (la ficha de colegio marca
+// "Colegios", ver-como marca "Maestras").
+export function navActivo(pathname: string): string {
+  if (pathname.startsWith('/admin/ver-como')) return 'maestras';
+  const hit = [...ADMIN_NAV]
+    .filter((it) => pathname === it.ruta || pathname.startsWith(`${it.ruta}/`))
+    .sort((a, b) => b.ruta.length - a.ruta.length)[0];
+  return hit?.key ?? 'inicio';
+}

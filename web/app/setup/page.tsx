@@ -40,8 +40,9 @@ export default function Setup() {
   const [busy, setBusy] = useState(false);
 
   async function loadAulas(eid: string) {
+    // Vista pública (0018): columnas mínimas, sin el resto de la fila de aula.
     const { data } = await supabase
-      .from('aula')
+      .from('aula_publica')
       .select('id,nombre,codigo')
       .eq('escuela_id', eid)
       .order('nombre');
@@ -52,8 +53,10 @@ export default function Setup() {
 
   useEffect(() => {
     (async () => {
+      // Vista pública (0018): solo id/nombre/zona y solo colegios trial/activos
+      // (un colegio archivado o suspendido desaparece del setup).
       const { data } = await supabase
-        .from('escuela')
+        .from('escuela_publica')
         .select('id,nombre')
         .order('nombre');
       const list = (data as Escuela[]) || [];

@@ -34,3 +34,39 @@ verify_jwt = true
 
 [functions.luna-chat]
 verify_jwt = true
+
+# Dashboard admin v3 (ADR-009): todas las fns admin-* exigen JWT y re-chequean
+# adentro la fila activa en plataforma_admin (guard _shared/admin.ts). El front
+# les pega con el access token del admin (web/lib/admin/api.ts).
+[functions.admin-colegios]
+verify_jwt = true
+
+[functions.admin-maestras]
+verify_jwt = true
+
+[functions.admin-accesos]
+verify_jwt = true
+
+[functions.admin-features]
+verify_jwt = true
+
+[functions.admin-metricas]
+verify_jwt = true
+
+[functions.admin-costos]
+verify_jwt = true
+
+[functions.admin-crm]
+verify_jwt = true
+
+[functions.admin-anuncios]
+verify_jwt = true
+
+[functions.admin-auditoria]
+verify_jwt = true
+
+[functions.admin-plataforma]
+verify_jwt = true
+
+[functions.admin-impersonar]
+verify_jwt = true

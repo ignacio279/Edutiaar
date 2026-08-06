@@ -42,6 +42,15 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // /admin (salvo su login) también exige sesión; el chequeo de rol admin lo
+  // hacen el layout (RPC admin_nivel) y cada Edge Function admin-* (fuente de
+  // verdad). Redirige a su propio login, nunca al de la app.
+  if (path.startsWith('/admin') && path !== '/admin/login' && !user) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/admin/login';
+    return NextResponse.redirect(url);
+  }
+
   return response;
 }
 
