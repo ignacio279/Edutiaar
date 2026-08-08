@@ -262,6 +262,9 @@ Deno.serve(async (req) => {
       // Home del admin: todo lo que necesitan resumenAdopcion (últimos 7 días)
       // y metricasUso (mes en curso). El front arma el Rango con `mes`.
       case 'resumen': {
+        // El "mes en curso" se calcula con el reloj del server (UTC) y se
+        // manda al front en ISO: los dos lados usan exactamente los mismos
+        // bordes, así que no hay corrimiento de husos en el conteo.
         const now = new Date();
         const inicioMes = new Date(now.getFullYear(), now.getMonth(), 1);
         const finMes = new Date(now.getFullYear(), now.getMonth() + 1, 1);
@@ -422,7 +425,8 @@ Deno.serve(async (req) => {
       case 'feed': {
         const limite = limiteValido(body?.limite);
         const escuelas = await traerEscuelas();
-        const nombreEscuela = new Map(escuelas.map((e) => [e.id, e.nombre ?? '']));
+        const nombreEscuela = new Map<string, string>();
+        for (const e of escuelas) nombreEscuela.set(e.id, e.nombre ?? '');
 
         const eventos = await traerEventos(limite, nombreEscuela);
         for (const e of escuelas.slice(0, limite)) {
@@ -467,7 +471,8 @@ Deno.serve(async (req) => {
           (b) => b.estado === 'aprobado' && enRango(b.aprobado_at),
         ).length;
 
-        const nombreEscuela = new Map([[escuela.id, escuela.nombre ?? '']]);
+        const nombreEscuela = new Map<string, string>();
+        nombreEscuela.set(escuela.id, escuela.nombre ?? '');
         const eventos = await traerEventos(12, nombreEscuela, alumnos);
 
         return json({
