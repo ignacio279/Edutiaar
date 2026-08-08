@@ -11,6 +11,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import DocenteSidebar from '@/components/DocenteSidebar';
+import GateFeature from '@/components/GateFeature';
 import { toast } from '@/lib/toast';
 import { fetchConTimeout } from '@/lib/edge';
 import { animal, uiIcon } from '@/lib/art';
@@ -422,8 +423,10 @@ function ConAula() {
 
 export default function Page() {
   return (
-    <Suspense fallback={<p style={{ padding: 40, color: VIOLETA.tinta2, fontWeight: 600 }}>Cargando…</p>}>
-      <ConAula />
-    </Suspense>
+    <GateFeature feature="luna.boletines">
+      <Suspense fallback={<p style={{ padding: 40, color: VIOLETA.tinta2, fontWeight: 600 }}>Cargando…</p>}>
+        <ConAula />
+      </Suspense>
+    </GateFeature>
   );
 }

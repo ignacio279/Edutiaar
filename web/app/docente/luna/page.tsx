@@ -10,6 +10,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import DocenteSidebar from '@/components/DocenteSidebar';
+import GateFeature from '@/components/GateFeature';
 import { animal, uiIcon } from '@/lib/art';
 import {
   alertasAula, claveAlerta, filtrarAtendidas, metricasAula, resumenAula, periodoActual,
@@ -352,9 +353,13 @@ function ConAula() {
 }
 
 export default function Page() {
+  // Gate de feature (Dashboard admin v3): si la administración apagó LUNA para
+  // este colegio, la sección no se muestra (el server igual la corta).
   return (
-    <Suspense fallback={<p style={{ padding: 40, color: VIOLETA.tinta2, fontWeight: 600 }}>Cargando…</p>}>
-      <ConAula />
-    </Suspense>
+    <GateFeature feature="luna">
+      <Suspense fallback={<p style={{ padding: 40, color: VIOLETA.tinta2, fontWeight: 600 }}>Cargando…</p>}>
+        <ConAula />
+      </Suspense>
+    </GateFeature>
   );
 }

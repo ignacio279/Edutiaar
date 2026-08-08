@@ -1,10 +1,12 @@
 'use client';
 // Sidebar compartido del panel docente (antes duplicado inline en cada página).
 // El ítem activo se pinta como pill fija; el resto navega con router.push.
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { sol, uiIcon } from '@/lib/art';
 import { VIOLETA } from '@/lib/luna-tema';
+import { featureActiva, type Acceso } from '@/lib/acceso';
 
 const QUICK = 'var(--font-quicksand), sans-serif';
 const BALOO = 'var(--font-baloo), cursive';
@@ -33,6 +35,26 @@ const ITEMS: { key: 'alumnos' | 'clase' | 'materias' | 'luna'; label: string; ru
 export default function DocenteSidebar({ activo }: { activo: 'alumnos' | 'clase' | 'materias' | 'luna' }) {
   const router = useRouter();
   const supabase = createClient();
+  // Features del colegio (Dashboard admin v3): si LUNA está apagada, su ítem
+  // NI aparece. Arranca en null = todavía no sabemos; mostramos todo para no
+  // parpadear, y el server igual corta si alguien entra a mano.
+  const [features, setFeatures] = useState<unknown>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await supabase.rpc('mi_acceso');
+        if (data) setFeatures((data as Acceso).features);
+      } catch {
+        /* sin datos de acceso dejamos el menú como está */
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const items = ITEMS.filter((it) =>
+    it.key !== 'luna' || features === null || featureActiva(features, 'luna'),
+  );
 
   async function signOut() {
     await supabase.auth.signOut();
@@ -46,7 +68,7 @@ export default function DocenteSidebar({ activo }: { activo: 'alumnos' | 'clase'
         <div style={{ width: 36, height: 36, background: solHappy }} />
         <span style={{ fontFamily: BALOO, fontWeight: 800, fontSize: 22, color: '#3A332A', letterSpacing: '-.5px' }}>EDUTIA</span>
       </div>
-      {ITEMS.map((it) =>
+      {items.map((it) =>
         it.key === activo ? (
           <div key={it.key} style={it.key === 'luna' ? lunaActive : sideActive}>
             <span style={{ width: 22, height: 22, background: `${uiIcon(it.icono)} center/contain no-repeat` }} />{it.label}

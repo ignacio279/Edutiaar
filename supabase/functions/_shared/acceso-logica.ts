@@ -60,6 +60,10 @@ export function featureActiva(features: any, feature?: string): boolean {
     if (!luna || luna.activa !== true) return false;
     return luna[feature.slice('luna.'.length)] === true;
   }
+  // 'luna' pelado = la sección entera (lo usa el gate del front para decidir si
+  // el ítem del menú aparece); acá se define para que front y server no
+  // diverjan (tests/unit/acceso-front.test.mjs compara las dos implementaciones).
+  if (feature === 'luna') return features?.luna?.activa === true;
   return false;
 }
 
