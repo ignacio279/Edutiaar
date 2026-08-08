@@ -7,6 +7,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { cors, json } from '../_shared/cors.ts';
 import { runToolLoop } from '../_shared/loop.ts';
 import type { Bloque, LlamarClaude } from '../_shared/loop.ts';
+import { verificarAcceso } from '../_shared/acceso.ts';
+import { registrarUso } from '../_shared/uso.ts';
 import { construirPromptDivision, parseDivision, TOOL_GUARDAR_DIVISION } from './dividir.ts';
 
 const MODELO = 'claude-sonnet-4-6'; // división corre raro; calidad/costo OK (Rule 4)
@@ -30,6 +32,12 @@ Deno.serve(async (req) => {
     const { data: perfil } = await sb.from('perfil').select('rol, escuela_id').eq('id', user.id).single();
     if (!perfil || perfil.rol !== 'docente') return json({ error: 'solo_docente' }, 403);
     if (!perfil.escuela_id) return json({ error: 'docente_sin_escuela' }, 400);
+
+    // Acceso de plataforma (Dashboard admin v3): la autoría GENERA contenido
+    // con IA → estado del colegio, trial, toggle de SOL y tope mensual.
+    // Va antes de tocar la DB (mismo criterio que el chequeo de la key).
+    const acc = await verificarAcceso(sb, user.id, { genera: true, feature: 'sol' });
+    if (!acc.permitido) return json({ error: acc.motivo }, acc.status);
 
     // 2. Entrada. La key se chequea acá, ANTES de escribir nada en la DB
     // (así un error de config no deja programas huérfanos).
@@ -55,13 +63,25 @@ Deno.serve(async (req) => {
     // 4. Generar la división con Claude (texto o PDF nativo).
     const { system, user: userMsg } = construirPromptDivision(materia_nombre, grado, contenido ?? '');
     const callClaude: LlamarClaude = async ({ system, messages, tools }) => {
+      const t0 = Date.now();
       const r = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
         body: JSON.stringify({ model: MODELO, max_tokens: MAX_TOKENS, system, messages, tools }),
       });
-      if (!r.ok) throw new Error(`claude_${r.status}: ${await r.text()}`);
-      return await r.json();
+      if (!r.ok) {
+        registrarUso(sb, {
+          escuela_id: perfil.escuela_id, perfil_id: user.id, funcion: 'dividir-nodos', modelo: MODELO,
+          latencia_ms: Date.now() - t0, ok: false, error_codigo: `claude_${r.status}`,
+        });
+        throw new Error(`claude_${r.status}: ${await r.text()}`);
+      }
+      const data = await r.json();
+      registrarUso(sb, {
+        escuela_id: perfil.escuela_id, perfil_id: user.id, funcion: 'dividir-nodos', modelo: MODELO,
+        usage: data.usage, latencia_ms: Date.now() - t0, ok: true,
+      });
+      return data;
     };
     let capturado: unknown = null;
     const userMessage: string | Bloque[] = pdf_base64

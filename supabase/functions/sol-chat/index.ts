@@ -10,6 +10,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { cors, json } from '../_shared/cors.ts';
 import { extraerTexto } from '../_shared/loop.ts';
+import { verificarAcceso } from '../_shared/acceso.ts';
+import { registrarUso } from '../_shared/uso.ts';
 import { recortarHistorial, aMensajesClaude, construirSystem, aBurbujas, type ChatMsg } from './chat.ts';
 
 const MODELO = 'claude-haiku-4-5'; // barato; corre seguido (Rule 4)
@@ -32,10 +34,18 @@ Deno.serve(async (req) => {
 
     const recortados = recortarHistorial(mensajes as ChatMsg[]);
 
+    // Acceso de plataforma (Dashboard admin v3): el chat de práctica gasta IA,
+    // así que cuelga del toggle de SOL, del estado del colegio y del tope
+    // mensual. Se necesita service_role (acceso_de y uso_api son server-only).
+    const sb = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+    const acc = await verificarAcceso(sb, user.id, { genera: true, feature: 'sol' });
+    if (!acc.permitido) return json({ error: acc.motivo }, acc.status);
+
     const key = Deno.env.get('ANTHROPIC_API_KEY');
     if (!key) return json({ error: 'falta_anthropic_api_key' }, 500);
 
     // Real: UNA sola llamada a la Messages API (sin tools; el contexto va inline).
+    const t0 = Date.now();
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
@@ -46,10 +56,21 @@ Deno.serve(async (req) => {
         messages: aMensajesClaude(recortados),
       }),
     });
-    if (!r.ok) throw new Error(`claude_${r.status}: ${await r.text()}`);
+    if (!r.ok) {
+      registrarUso(sb, {
+        escuela_id: acc.escuelaId, perfil_id: user.id, funcion: 'sol-chat', modelo: MODELO,
+        latencia_ms: Date.now() - t0, ok: false, error_codigo: `claude_${r.status}`,
+      });
+      throw new Error(`claude_${r.status}: ${await r.text()}`);
+    }
+    const data = await r.json();
+    registrarUso(sb, {
+      escuela_id: acc.escuelaId, perfil_id: user.id, funcion: 'sol-chat', modelo: MODELO,
+      usage: data.usage, latencia_ms: Date.now() - t0, ok: true,
+    });
     // Sin markdown y en burbujas separadas (respuesta / "¿Te quedó claro?");
     // `texto` queda como fallback para fronts viejos.
-    const burbujas = aBurbujas(extraerTexto(await r.json()));
+    const burbujas = aBurbujas(extraerTexto(data));
 
     return json({ texto: burbujas.join('\n\n'), burbujas });
   } catch (e) {

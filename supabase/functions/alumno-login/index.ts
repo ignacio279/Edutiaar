@@ -4,6 +4,7 @@
 //   devuelve la sesión para que el front haga setSession.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { cors, json } from '../_shared/cors.ts';
+import { colegioOperativoPorAula } from '../_shared/acceso.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
@@ -14,6 +15,12 @@ Deno.serve(async (req) => {
     const url = Deno.env.get('SUPABASE_URL')!;
     const anon = Deno.env.get('SUPABASE_ANON_KEY')!;
     const sb = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+
+    // Colegio suspendido o archivado (Dashboard admin v3): los chicos no entran.
+    // Se chequea ANTES del RPC para no gastar un intento del lockout.
+    if (!(await colegioOperativoPorAula(sb, codigo))) {
+      return json({ error: 'colegio_suspendido' }, 403);
+    }
 
     const { data, error } = await sb.rpc('alumno_login', {
       p_codigo: codigo, p_secreto: secreto, p_perfil: perfilId, p_pin: pin,

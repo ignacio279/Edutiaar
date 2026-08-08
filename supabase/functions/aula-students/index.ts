@@ -2,6 +2,7 @@
 // El listado no es público: sin secreto válido → 401.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { cors, json } from '../_shared/cors.ts';
+import { colegioOperativoPorAula } from '../_shared/acceso.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
@@ -13,6 +14,11 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
+    // Colegio suspendido o archivado (Dashboard admin v3): ni se listan los avatares.
+    if (!(await colegioOperativoPorAula(sb, codigo))) {
+      return json({ error: 'colegio_suspendido' }, 403);
+    }
+
     const { data, error } = await sb.rpc('aula_students', { p_codigo: codigo, p_secreto: secreto });
     if (error) throw error;
     if (!data || data.length === 0) return json({ error: 'aula_invalida' }, 401);

@@ -6,6 +6,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { cors, json } from '../_shared/cors.ts';
 import { runToolLoop } from '../_shared/loop.ts';
+import { verificarAcceso } from '../_shared/acceso.ts';
+import { registrarUso } from '../_shared/uso.ts';
 import type { LlamarClaude } from '../_shared/loop.ts';
 import { construirPromptEval, parseEval, TOOL_ESCRIBIR_EVALUACION, type RespuestaDiag } from './diagnostico.ts';
 
@@ -33,6 +35,11 @@ Deno.serve(async (req) => {
     if (!ses) return json({ error: 'sesion_inexistente' }, 404);
     if (ses.alumno_id !== user.id) return json({ error: 'sesion_ajena' }, 403);
 
+    // Acceso de plataforma (Dashboard admin v3): el diagnóstico gasta IA →
+    // cuelga de SOL, del estado del colegio de su docente y del tope mensual.
+    const acc = await verificarAcceso(sb, user.id, { genera: true, feature: 'sol' });
+    if (!acc.permitido) return json({ error: acc.motivo }, acc.status);
+
     const { data: nodo } = await sb.from('nodo').select('nombre').eq('id', ses.nodo_id).single();
     const nodoNombre = (nodo as { nombre?: string } | null)?.nombre ?? 'el nodo';
 
@@ -50,14 +57,27 @@ Deno.serve(async (req) => {
     if (!key) return json({ error: 'falta_anthropic_api_key' }, 500);
 
     const { system, user: userMsg } = construirPromptEval(nodoNombre, rs);
+    // Un evento de uso_api por vuelta del loop (el loop puede iterar).
     const callClaude: LlamarClaude = async ({ system, messages, tools }) => {
+      const t0 = Date.now();
       const r = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
         body: JSON.stringify({ model: MODELO, max_tokens: MAX_TOKENS, system, messages, tools }),
       });
-      if (!r.ok) throw new Error(`claude_${r.status}: ${await r.text()}`);
-      return await r.json();
+      if (!r.ok) {
+        registrarUso(sb, {
+          escuela_id: acc.escuelaId, perfil_id: user.id, funcion: 'evaluar-sesion', modelo: MODELO,
+          latencia_ms: Date.now() - t0, ok: false, error_codigo: `claude_${r.status}`,
+        });
+        throw new Error(`claude_${r.status}: ${await r.text()}`);
+      }
+      const data = await r.json();
+      registrarUso(sb, {
+        escuela_id: acc.escuelaId, perfil_id: user.id, funcion: 'evaluar-sesion', modelo: MODELO,
+        usage: data.usage, latencia_ms: Date.now() - t0, ok: true,
+      });
+      return data;
     };
     let cap: unknown = null;
     await runToolLoop({

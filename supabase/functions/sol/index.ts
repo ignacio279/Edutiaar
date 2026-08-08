@@ -7,6 +7,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { cors, json } from '../_shared/cors.ts';
 import { runToolLoop } from '../_shared/loop.ts';
 import type { ImplTools, LlamarClaude } from '../_shared/loop.ts';
+import { verificarAcceso } from '../_shared/acceso.ts';
+import { registrarUso } from '../_shared/uso.ts';
 import { TOOLS } from './tools.ts';
 
 const MODELO = 'claude-haiku-4-5'; // barato; pensado para correr seguido (Rule 4)
@@ -38,8 +40,14 @@ Deno.serve(async (req) => {
     if (!key) return json({ error: 'falta_anthropic_api_key' }, 500);
     const sb = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
+    // Acceso de plataforma (Dashboard admin v3): SOL gasta IA → estado del
+    // colegio, trial vencido, toggle de SOL y tope mensual.
+    const acc = await verificarAcceso(sb, user.id, { genera: true, feature: 'sol' });
+    if (!acc.permitido) return json({ error: acc.motivo }, acc.status);
+
     // callClaude real: fetch a la Messages API. La key nunca sale de esta función.
     const callClaude: LlamarClaude = async ({ system, messages, tools }) => {
+      const t0 = Date.now();
       const r = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -49,8 +57,19 @@ Deno.serve(async (req) => {
         },
         body: JSON.stringify({ model: MODELO, max_tokens: MAX_TOKENS, system, messages, tools }),
       });
-      if (!r.ok) throw new Error(`claude_${r.status}: ${await r.text()}`);
-      return await r.json();
+      if (!r.ok) {
+        registrarUso(sb, {
+          escuela_id: acc.escuelaId, perfil_id: user.id, funcion: 'sol', modelo: MODELO,
+          latencia_ms: Date.now() - t0, ok: false, error_codigo: `claude_${r.status}`,
+        });
+        throw new Error(`claude_${r.status}: ${await r.text()}`);
+      }
+      const data = await r.json();
+      registrarUso(sb, {
+        escuela_id: acc.escuelaId, perfil_id: user.id, funcion: 'sol', modelo: MODELO,
+        usage: data.usage, latencia_ms: Date.now() - t0, ok: true,
+      });
+      return data;
     };
 
     // Las MANOS sobre Supabase: leer el programa (contenido compartido, sin PII).

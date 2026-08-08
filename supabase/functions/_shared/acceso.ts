@@ -36,6 +36,24 @@ import {
 
 export type VeredictoConEscuela = Veredicto & { escuelaId: string | null };
 
+// Caso especial del login del alumno (alumno-login / aula-students): todavía no
+// hay usuario logueado, así que el estado se evalúa por el CÓDIGO DE AULA.
+// Solo corta por colegio suspendido/archivado — un trial vencido deja entrar
+// (el corte es suave: leen lo suyo, no generan). Ante la duda, deja pasar: el
+// resto de la cadena de auth del alumno sigue intacta.
+export async function colegioOperativoPorAula(
+  sb: SupabaseClient,
+  codigo: string,
+): Promise<boolean> {
+  const { data } = await sb
+    .from('aula')
+    .select('escuela:escuela_id(estado)')
+    .eq('codigo', codigo)
+    .maybeSingle();
+  const estado = (data as { escuela?: { estado?: string } | null } | null)?.escuela?.estado;
+  return estado !== 'suspendido' && estado !== 'archivado';
+}
+
 export async function verificarAcceso(
   sb: SupabaseClient,
   perfilId: string,

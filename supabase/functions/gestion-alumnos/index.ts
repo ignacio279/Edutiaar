@@ -4,6 +4,7 @@
 // front no es fuente de verdad. verify_jwt=true; el caller tiene que ser rol 'docente'.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { cors, json } from '../_shared/cors.ts';
+import { verificarAcceso } from '../_shared/acceso.ts';
 import { codigoNormalizado, pinValido, avatarValido, validarCrearAula, validarCrearAlumno, nombreDeGrado, gradoValido } from './validar.ts';
 
 const randHex = (n: number) => Array.from(crypto.getRandomValues(new Uint8Array(n))).map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -26,6 +27,12 @@ Deno.serve(async (req) => {
     const { data: perfil } = await sb.from('perfil').select('rol, escuela_id').eq('id', user.id).single();
     const caller = perfil as { rol?: string; escuela_id?: string } | null;
     if (caller?.rol !== 'docente') return json({ error: 'no_docente' }, 403);
+
+    // Acceso de plataforma (Dashboard admin v3): dar de alta aulas y alumnos es
+    // crear cosas nuevas → con el trial vencido queda en solo lectura, y con el
+    // colegio suspendido no pasa nada. No cuelga de ningún toggle de feature.
+    const acc = await verificarAcceso(sb, user.id, { genera: true });
+    if (!acc.permitido) return json({ error: acc.motivo }, acc.status);
 
     const body = await req.json();
     const { accion } = body;

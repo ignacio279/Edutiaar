@@ -9,6 +9,8 @@
 // llama (Regla 5).
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { cors, json } from '../_shared/cors.ts';
+import { verificarAcceso } from '../_shared/acceso.ts';
+import { registrarUso } from '../_shared/uso.ts';
 import {
   aMensajesClaude, aParrafos, construirSystemLuna, fechaLarga, haceCuanto, momentoDelAnio,
   recortarHistorial, sanearAlertas, sanearAulaId, type AlumnoCtx, type LunaMsg, type MateriaCtx,
@@ -51,6 +53,12 @@ Deno.serve(async (req) => {
     const { data: yo } = await sb.from('perfil').select('rol, nombre, escuela_id').eq('id', user.id).single();
     if ((yo as { rol?: string } | null)?.rol !== 'docente') return json({ error: 'no_docente' }, 403);
     const escuelaId = (yo as { escuela_id?: string }).escuela_id ?? '';
+
+    // Acceso de plataforma (Dashboard admin v3): colegio suspendido, cuenta
+    // suspendida, trial vencido (corte suave: el chat GENERA), toggle de LUNA
+    // apagado o tope mensual del colegio.
+    const acc = await verificarAcceso(sb, user.id, { genera: true, feature: 'luna.chat' });
+    if (!acc.permitido) return json({ error: acc.motivo }, acc.status);
 
     // Tope diario (Regla 4), contado en luna_uso (inmune a "Limpiar conversación").
     const dia = new Date().toISOString().slice(0, 10);
@@ -199,13 +207,24 @@ Deno.serve(async (req) => {
       ...aMensajesClaude(recortarHistorial(historial)),
       { role: 'user' as const, content: mensaje },
     ];
+    const t0 = Date.now();
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
       body: JSON.stringify({ model: MODELO, max_tokens: MAX_TOKENS, temperature: TEMPERATURA, system, messages }),
     });
-    if (!r.ok) throw new Error(`claude_${r.status}: ${await r.text()}`);
+    if (!r.ok) {
+      registrarUso(sb, {
+        escuela_id: acc.escuelaId, perfil_id: user.id, funcion: 'luna-chat', modelo: MODELO,
+        latencia_ms: Date.now() - t0, ok: false, error_codigo: `claude_${r.status}`,
+      });
+      throw new Error(`claude_${r.status}: ${await r.text()}`);
+    }
     const data = await r.json();
+    registrarUso(sb, {
+      escuela_id: acc.escuelaId, perfil_id: user.id, funcion: 'luna-chat', modelo: MODELO,
+      usage: data.usage, latencia_ms: Date.now() - t0, ok: true,
+    });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const texto = ((data.content ?? []) as any[])
       .filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();

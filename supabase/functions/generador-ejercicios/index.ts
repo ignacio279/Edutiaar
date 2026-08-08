@@ -3,6 +3,8 @@
 // Claude real siempre (sin mock: si falta la key, error explícito). Key SOLO server-side.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { cors, json } from '../_shared/cors.ts';
+import { verificarAcceso } from '../_shared/acceso.ts';
+import { registrarUso } from '../_shared/uso.ts';
 import {
   celdasIniciales, celdasParaLote, claveCelda,
   construirPromptEjercicios, parseEjercicios, LOTE_REPOSICION,
@@ -37,6 +39,12 @@ Deno.serve(async (req) => {
     const { programa_id, nodo_id } = await req.json();
     if (!programa_id && !nodo_id) return json({ error: 'datos_faltantes' }, 400);
 
+    // Acceso de plataforma (Dashboard admin v3): generar el pool GASTA IA →
+    // estado del colegio, trial vencido, toggle de SOL y tope MENSUAL por
+    // colegio (capa nueva, además del tope diario global de abajo).
+    const acc = await verificarAcceso(sb, user.id, { genera: true, feature: 'sol' });
+    if (!acc.permitido) return json({ error: acc.motivo }, acc.status);
+
     // Tope diario (Regla 4): contamos lo generado hoy (UTC) UNA vez acá, y cada
     // modo chequea POR LOTE antes de generar, para que ningún lote cruce el tope.
     const hoy = new Date(); hoy.setUTCHours(0, 0, 0, 0);
@@ -48,13 +56,24 @@ Deno.serve(async (req) => {
     // Generación de un lote para un nodo con Claude, validado.
     async function generarLote(nodo: { id: string; nombre: string; descripcion: string | null }, materia: string, grado: number, celdas: Array<Celda & { n: number }>, desde: number): Promise<EjercicioGen[]> {
       const { system, user: userMsg } = construirPromptEjercicios(materia, grado, nodo.nombre, nodo.descripcion ?? '', 0, celdas);
+      const t0 = Date.now();
       const r = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { 'x-api-key': key!, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
         body: JSON.stringify({ model: MODELO, max_tokens: MAX_TOKENS, system, messages: [{ role: 'user', content: userMsg }] }),
       });
-      if (!r.ok) throw new Error(`claude_${r.status}: ${await r.text()}`);
+      if (!r.ok) {
+        registrarUso(sb, {
+          escuela_id: acc.escuelaId, perfil_id: user.id, funcion: 'generador-ejercicios', modelo: MODELO,
+          latencia_ms: Date.now() - t0, ok: false, error_codigo: `claude_${r.status}`,
+        });
+        throw new Error(`claude_${r.status}: ${await r.text()}`);
+      }
       const data = await r.json();
+      registrarUso(sb, {
+        escuela_id: acc.escuelaId, perfil_id: user.id, funcion: 'generador-ejercicios', modelo: MODELO,
+        usage: data.usage, latencia_ms: Date.now() - t0, ok: true,
+      });
       const texto = (data.content ?? []).filter((b: { type: string }) => b.type === 'text').map((b: { text: string }) => b.text).join('');
       return parseEjercicios(JSON.parse(texto.slice(texto.indexOf('['), texto.lastIndexOf(']') + 1)), nodo.id);
     }

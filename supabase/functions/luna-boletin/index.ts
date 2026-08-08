@@ -9,6 +9,8 @@
 // (service_role saltea la RLS → el chequeo va a mano, Regla 5).
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { cors, json } from '../_shared/cors.ts';
+import { verificarAcceso } from '../_shared/acceso.ts';
+import { registrarUso } from '../_shared/uso.ts';
 import {
   claveAnterior, construirPromptBoletin, esBoletinValido, extraerJson, parseBoletin,
   periodoActual, periodoDesdeClave, PROMPT_REINTENTO_JSON, resumirActividad,
@@ -40,6 +42,11 @@ Deno.serve(async (req) => {
     const sb = createClient(url, srKey);
     const { data: yo } = await sb.from('perfil').select('rol').eq('id', user.id).single();
     if ((yo as { rol?: string } | null)?.rol !== 'docente') return json({ error: 'no_docente' }, 403);
+
+    // Acceso de plataforma (Dashboard admin v3): estado del colegio, trial
+    // vencido (el boletín GENERA), toggle de boletines y tope mensual.
+    const acc = await verificarAcceso(sb, user.id, { genera: true, feature: 'luna.boletines' });
+    if (!acc.permitido) return json({ error: acc.motivo }, acc.status);
 
     const { data: alumno } = await sb.from('perfil')
       .select('nombre, grado, docente_id, escuela_id').eq('id', alumno_id).single();
@@ -114,13 +121,25 @@ Deno.serve(async (req) => {
     const { system, user: userMsg } = construirPromptBoletin(datos);
 
     const llamar = async (messages: { role: string; content: string }[]) => {
+      const t0 = Date.now();
       const r = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
         body: JSON.stringify({ model: MODELO, max_tokens: MAX_TOKENS, temperature: TEMPERATURA, system, messages }),
       });
-      if (!r.ok) throw new Error(`claude_${r.status}: ${await r.text()}`);
+      // Un evento de uso_api por llamada: el retry de JSON cuenta aparte.
+      if (!r.ok) {
+        registrarUso(sb, {
+          escuela_id: acc.escuelaId, perfil_id: user.id, funcion: 'luna-boletin', modelo: MODELO,
+          latencia_ms: Date.now() - t0, ok: false, error_codigo: `claude_${r.status}`,
+        });
+        throw new Error(`claude_${r.status}: ${await r.text()}`);
+      }
       const data = await r.json();
+      registrarUso(sb, {
+        escuela_id: acc.escuelaId, perfil_id: user.id, funcion: 'luna-boletin', modelo: MODELO,
+        usage: data.usage, latencia_ms: Date.now() - t0, ok: true,
+      });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return ((data.content ?? []) as any[])
         .filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
