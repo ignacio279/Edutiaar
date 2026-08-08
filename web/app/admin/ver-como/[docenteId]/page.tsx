@@ -151,8 +151,9 @@ export default function VerComoPage() {
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 22 }}>
             <Numerito valor={String(snap.alumnos.filter((a) => a.sesionesHoy > 0).length)} label="practicaron hoy" />
             <Numerito valor={String(snap.materias.length)} label={snap.materias.length === 1 ? 'materia' : 'materias'} />
-            <Numerito valor={String(snap.boletines.aprobados)} label="boletines aprobados" />
-            <Numerito valor={String(snap.boletines.borradores)} label="boletines en borrador" />
+            {/* La fn cuenta solo el período actual (periodo = YYYY-MM de hoy). */}
+            <Numerito valor={String(snap.boletines.aprobados)} label="boletines aprobados (este mes)" />
+            <Numerito valor={String(snap.boletines.borradores)} label="boletines en borrador (este mes)" />
           </div>
 
           {/* Aulas */}
