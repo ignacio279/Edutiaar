@@ -127,19 +127,22 @@ test('colegio archivado no aparece en escuela_publica', { skip }, async () => {
 });
 
 // Happy path por la Edge Function real (necesita deploy): un admin efímero
-// crea un colegio → trial de 30 días, fila en escuela_feature plan docente,
-// auditoría escrita; el operativo NO puede archivar (requiere_super).
-test('crear vía la fn: trial+30, escuela_feature docente, auditoría; archivar exige super', { skip }, async () => {
+// crea un colegio con provincia → trial de 30 días, fila en escuela_feature
+// plan docente, auditoría escrita; listar/detalle devuelven la provincia,
+// provincia inventada → 400, editar a null la limpia; el operativo NO puede
+// archivar (requiere_super).
+test('crear vía la fn: trial+30, escuela_feature docente, auditoría, provincia; archivar exige super', { skip }, async () => {
   let admin, colegioId;
   try {
     admin = await nuevoUsuario(null, 'admin');
     await insSR('plataforma_admin', { perfil_id: admin.id, nivel: 'operativo', nombre: 'Efimero' });
 
-    const r = await callFn('crear', { nombre: `EfimeroFn-${rnd()}`, zona: 'test', tipo: 'plurigrado' }, admin.access_token);
+    const r = await callFn('crear', { nombre: `EfimeroFn-${rnd()}`, zona: 'test', tipo: 'plurigrado', provincia: 'Neuquén' }, admin.access_token);
     await esperarStatus(r, 200, 'crear vía fn (¿está deployada admin-colegios?)');
     const { colegio } = await r.json();
     colegioId = colegio.id;
     assert.equal(colegio.estado, 'trial');
+    assert.equal(colegio.provincia, 'Neuquén', 'crear guarda la provincia');
     assert.ok(colegio.trial_inicio && colegio.trial_fin, 'trial con fechas');
     const dias = Math.round((new Date(colegio.trial_fin) - new Date(colegio.trial_inicio)) / 86400000);
     assert.equal(dias, 30, 'trial de 30 días');
@@ -164,6 +167,25 @@ test('crear vía la fn: trial+30, escuela_feature docente, auditoría; archivar 
     )).json();
     assert.equal(aud.length, 1, 'auditoría de crear_colegio escrita');
     assert.equal(aud[0].actor_id, admin.id);
+
+    // Listar y detalle devuelven la provincia.
+    const rl = await callFn('listar', {}, admin.access_token);
+    await esperarStatus(rl, 200, 'listar');
+    const fila = ((await rl.json()).colegios ?? []).find((c) => c.id === colegioId);
+    assert.equal(fila?.provincia, 'Neuquén', 'listar devuelve la provincia');
+    const rd = await callFn('detalle', { escuela_id: colegioId }, admin.access_token);
+    await esperarStatus(rd, 200, 'detalle');
+    assert.equal((await rd.json()).colegio.provincia, 'Neuquén', 'detalle devuelve la provincia');
+
+    // Provincia inventada → 400 provincia_invalida (no toca la DB).
+    const rm = await callFn('crear', { nombre: `EfimeroMarte-${rnd()}`, tipo: 'rural', provincia: 'Marte' }, admin.access_token);
+    await esperarStatus(rm, 400, 'crear con provincia inválida');
+    assert.deepEqual(await rm.json(), { error: 'provincia_invalida' });
+
+    // Editar a null limpia la columna.
+    const re = await callFn('editar', { escuela_id: colegioId, provincia: null }, admin.access_token);
+    await esperarStatus(re, 200, 'editar provincia a null');
+    assert.equal((await re.json()).colegio.provincia, null, 'null explícito limpia la provincia');
 
     // Operativo intentando archivar → 403 requiere_super.
     const rx = await callFn('cambiar_estado', { escuela_id: colegioId, estado: 'archivado' }, admin.access_token);

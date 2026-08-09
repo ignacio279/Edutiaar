@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ADMIN, ESTADO_COLEGIO, TIPO_COLEGIO } from '@/lib/admin/tema';
+import { PROVINCIAS } from '@/lib/admin/provincias';
 import { ERRS_ADMIN, llamarAdmin } from '@/lib/admin/api';
 import Pill from '@/components/admin/Pill';
 import Stat from '@/components/admin/Stat';
@@ -20,7 +21,8 @@ const NUNITO = 'var(--font-nunito)';
 
 type Detalle = {
   colegio: {
-    id: string; nombre: string; zona: string | null; tipo: string | null;
+    id: string; nombre: string; zona: string | null; provincia: string | null;
+    tipo: string | null;
     estado: string; trial_inicio: string | null; trial_fin: string | null; created_at: string;
   };
   counts: { maestras: number; aulas: number; alumnos: number };
@@ -41,6 +43,7 @@ const ERRS: Record<string, string> = {
   nombre_vacio: 'Poné el nombre del colegio.',
   tipo_invalido: 'Elegí un tipo válido.',
   zona_invalida: 'La zona no es válida.',
+  provincia_invalida: 'Esa provincia no es válida.',
   estado_invalido: 'Ese estado no existe.',
   transicion_invalida: 'Esa transición de estado no está permitida.',
   falta_escuela_id: 'Falta el colegio.',
@@ -73,9 +76,10 @@ export default function FichaColegio() {
   const [confirmando, setConfirmando] = useState<'suspendido' | 'archivado' | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // Form chico de datos (nombre/zona/tipo).
+  // Form chico de datos (nombre/provincia/zona/tipo).
   const [editando, setEditando] = useState(false);
   const [fNombre, setFNombre] = useState('');
+  const [fProvincia, setFProvincia] = useState('');
   const [fZona, setFZona] = useState('');
   const [fTipo, setFTipo] = useState('');
 
@@ -88,6 +92,7 @@ export default function FichaColegio() {
     }
     setDet(r.data);
     setFNombre(r.data.colegio.nombre);
+    setFProvincia(r.data.colegio.provincia ?? '');
     setFZona(r.data.colegio.zona ?? '');
     setFTipo(r.data.colegio.tipo ?? '');
   }
@@ -117,7 +122,8 @@ export default function FichaColegio() {
     if (!fNombre.trim()) { toast(ERRS.nombre_vacio); return; }
     setBusy(true);
     const r = await llamarAdmin('admin-colegios', 'editar', {
-      escuela_id: id, nombre: fNombre.trim(), zona: fZona.trim() || null, tipo: fTipo || undefined,
+      escuela_id: id, nombre: fNombre.trim(), zona: fZona.trim() || null,
+      provincia: fProvincia || null, tipo: fTipo || undefined,
     });
     setBusy(false);
     if (!r.ok) { toast(errCopy(r.data.error)); return; }
@@ -199,7 +205,14 @@ export default function FichaColegio() {
           <div style={{ maxWidth: 460 }}>
             <label style={label}>Nombre</label>
             <input value={fNombre} onChange={(e) => setFNombre(e.target.value)} style={{ ...input, width: '100%', marginBottom: 12 }} />
-            <label style={label}>Zona</label>
+            <label style={label}>Provincia</label>
+            <select value={fProvincia} onChange={(e) => setFProvincia(e.target.value)} style={{ ...input, width: '100%', marginBottom: 12, cursor: 'pointer' }}>
+              <option value="">Sin asignar</option>
+              {PROVINCIAS.map((p) => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+            <label style={label}>Zona (detalle libre)</label>
             <input value={fZona} onChange={(e) => setFZona(e.target.value)} placeholder="Sin zona" style={{ ...input, width: '100%', marginBottom: 12 }} />
             <label style={label}>Tipo</label>
             <select value={fTipo} onChange={(e) => setFTipo(e.target.value)} style={{ ...input, width: '100%', marginBottom: 16, cursor: 'pointer' }}>
@@ -217,7 +230,7 @@ export default function FichaColegio() {
                 {busy ? 'Guardando…' : 'Guardar'}
               </button>
               <button
-                onClick={() => { setEditando(false); setFNombre(c.nombre); setFZona(c.zona ?? ''); setFTipo(c.tipo ?? ''); }}
+                onClick={() => { setEditando(false); setFNombre(c.nombre); setFProvincia(c.provincia ?? ''); setFZona(c.zona ?? ''); setFTipo(c.tipo ?? ''); }}
                 disabled={busy}
                 style={btn}
               >
@@ -227,6 +240,11 @@ export default function FichaColegio() {
           </div>
         ) : (
           <div style={{ fontFamily: NUNITO, fontSize: 15, color: ADMIN.ink, fontWeight: 600, lineHeight: 1.9 }}>
+            <div>
+              <span style={{ color: ADMIN.tinta2 }}>Provincia: </span>
+              {c.provincia || 'Sin asignar'}
+              <span style={{ color: ADMIN.tinta2, fontSize: 12.5 }}> (la necesita el Observatorio)</span>
+            </div>
             <div><span style={{ color: ADMIN.tinta2 }}>Zona: </span>{c.zona || 'Sin zona'}</div>
             <div><span style={{ color: ADMIN.tinta2 }}>Tipo: </span>{c.tipo ? TIPO_COLEGIO[c.tipo] ?? c.tipo : 'Sin tipo'}</div>
             <div><span style={{ color: ADMIN.tinta2 }}>Alta: </span>{c.created_at?.slice(0, 10) ?? '—'}</div>

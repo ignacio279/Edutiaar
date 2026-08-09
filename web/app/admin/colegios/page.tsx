@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ADMIN, ESTADO_COLEGIO, TIPO_COLEGIO } from '@/lib/admin/tema';
+import { PROVINCIAS } from '@/lib/admin/provincias';
 import { ERRS_ADMIN, llamarAdmin } from '@/lib/admin/api';
 import Pill from '@/components/admin/Pill';
 import { toast } from '@/lib/toast';
@@ -15,8 +16,8 @@ const QUICK = 'var(--font-quicksand), sans-serif';
 const NUNITO = 'var(--font-nunito)';
 
 type ColegioFila = {
-  id: string; nombre: string; zona: string | null; tipo: string | null;
-  estado: string; trial_fin: string | null; plan: string;
+  id: string; nombre: string; zona: string | null; provincia: string | null;
+  tipo: string | null; estado: string; trial_fin: string | null; plan: string;
   maestras: number; aulas: number; alumnos: number; created_at: string;
 };
 
@@ -25,6 +26,7 @@ const ERRS: Record<string, string> = {
   nombre_vacio: 'Poné el nombre del colegio.',
   tipo_invalido: 'Elegí el tipo de colegio.',
   zona_invalida: 'La zona no es válida.',
+  provincia_invalida: 'Esa provincia no es válida.',
 };
 const errCopy = (code?: string) => (code && ERRS[code]) || 'Algo salió mal. Probá de nuevo.';
 
@@ -45,6 +47,7 @@ export default function ColegiosPage() {
 
   const [modal, setModal] = useState(false);
   const [nombre, setNombre] = useState('');
+  const [provincia, setProvincia] = useState('');
   const [zona, setZona] = useState('');
   const [tipo, setTipo] = useState('');
   const [busy, setBusy] = useState(false);
@@ -69,13 +72,13 @@ export default function ColegiosPage() {
     if (!tipo) { toast(ERRS.tipo_invalido); return; }
     setBusy(true);
     const r = await llamarAdmin<{ colegio: { id: string } }>('admin-colegios', 'crear', {
-      nombre: nombre.trim(), zona: zona.trim() || null, tipo,
+      nombre: nombre.trim(), zona: zona.trim() || null, provincia: provincia || null, tipo,
     });
     setBusy(false);
     if (!r.ok) { toast(errCopy(r.data.error)); return; }
     toast('¡Colegio creado! Arranca con 30 días de prueba.');
     setModal(false);
-    setNombre(''); setZona(''); setTipo('');
+    setNombre(''); setProvincia(''); setZona(''); setTipo('');
     router.push(`/admin/colegios/${r.data.colegio.id}`);
   }
 
@@ -140,6 +143,7 @@ export default function ColegiosPage() {
                 )}
               </div>
               <div style={{ fontFamily: NUNITO, fontSize: 14, color: ADMIN.tinta2, fontWeight: 600, marginTop: 6 }}>
+                {c.provincia ? `${c.provincia} · ` : ''}
                 {c.zona ? `${c.zona} · ` : ''}
                 {c.maestras} {c.maestras === 1 ? 'maestra' : 'maestras'} · {c.aulas} {c.aulas === 1 ? 'aula' : 'aulas'} · {c.alumnos} {c.alumnos === 1 ? 'alumno' : 'alumnos'}
                 {c.estado === 'trial' && c.trial_fin ? ` · Prueba hasta ${c.trial_fin}` : ''}
@@ -158,7 +162,14 @@ export default function ColegiosPage() {
             </p>
             <label style={label}>Nombre del colegio</label>
             <input value={nombre} onChange={(e) => setNombre(e.target.value)} autoFocus placeholder="Escuela N° 12 Los Aromos" style={{ ...input, width: '100%', marginBottom: 14 }} />
-            <label style={label}>Zona</label>
+            <label style={label}>Provincia</label>
+            <select value={provincia} onChange={(e) => setProvincia(e.target.value)} style={{ ...input, width: '100%', marginBottom: 14, cursor: 'pointer' }}>
+              <option value="">Elegí la provincia…</option>
+              {PROVINCIAS.map((p) => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+            <label style={label}>Zona (detalle libre)</label>
             <input value={zona} onChange={(e) => setZona(e.target.value)} placeholder="Traslasierra, Córdoba" style={{ ...input, width: '100%', marginBottom: 14 }} />
             <label style={label}>Tipo</label>
             <select value={tipo} onChange={(e) => setTipo(e.target.value)} style={{ ...input, width: '100%', marginBottom: 20, cursor: 'pointer' }}>

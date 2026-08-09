@@ -67,6 +67,30 @@ test('armarPatchEditar: trimea, zona vacía → null, ignora lo que no vino', ()
   );
 });
 
+test('provincia: opcional en crear/editar, exacta contra la lista espejada', () => {
+  // Crear: válida, ausente y null son legales; fuera de lista rebota.
+  assert.deepEqual(validarCrear({ nombre: 'Esc. 12', tipo: 'rural', provincia: 'Neuquén' }), { ok: true });
+  assert.deepEqual(validarCrear({ nombre: 'Esc. 12', tipo: 'rural' }), { ok: true });
+  assert.deepEqual(validarCrear({ nombre: 'Esc. 12', tipo: 'rural', provincia: null }), { ok: true });
+  assert.deepEqual(validarCrear({ nombre: 'Esc. 12', tipo: 'rural', provincia: 'Marte' }), { ok: false, error: 'provincia_invalida' });
+  // Editar: mismas reglas, parcial.
+  assert.deepEqual(validarEditar({ provincia: 'Neuquén' }), { ok: true });
+  assert.deepEqual(validarEditar({}), { ok: true });
+  assert.deepEqual(validarEditar({ provincia: null }), { ok: true });
+  assert.deepEqual(validarEditar({ provincia: 'Marte' }), { ok: false, error: 'provincia_invalida' });
+  assert.deepEqual(validarEditar({ provincia: 42 }), { ok: false, error: 'provincia_invalida' });
+});
+
+test('armarPatchEditar: la provincia entra al patch y el null explícito la limpia', () => {
+  assert.deepEqual(armarPatchEditar({ provincia: 'Neuquén' }), { provincia: 'Neuquén' });
+  assert.deepEqual(armarPatchEditar({ provincia: null }), { provincia: null });
+  assert.deepEqual(armarPatchEditar({}), {});
+  assert.deepEqual(
+    armarPatchEditar({ nombre: 'Esc. 5', provincia: 'Chubut' }),
+    { nombre: 'Esc. 5', provincia: 'Chubut' },
+  );
+});
+
 test('puedeTransicionar: matriz de estados', () => {
   // Válidas.
   assert.equal(puedeTransicionar('trial', 'activo'), true);

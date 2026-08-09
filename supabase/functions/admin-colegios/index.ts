@@ -20,7 +20,7 @@ import {
 
 const noVacio = (s: unknown): s is string => typeof s === 'string' && s.trim().length > 0;
 
-const COLS = 'id, nombre, zona, tipo, estado, trial_inicio, trial_fin, created_at';
+const COLS = 'id, nombre, zona, provincia, tipo, estado, trial_inicio, trial_fin, created_at';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
@@ -61,8 +61,8 @@ Deno.serve(async (req) => {
         const { data, error } = await q;
         if (error) throw error;
         const filas = (data ?? []) as {
-          id: string; nombre: string; zona: string | null; tipo: string | null;
-          estado: string; trial_fin: string | null; created_at: string;
+          id: string; nombre: string; zona: string | null; provincia: string | null;
+          tipo: string | null; estado: string; trial_fin: string | null; created_at: string;
         }[];
 
         // Plan por colegio en UNA query. Sin fila en escuela_feature rige
@@ -82,7 +82,8 @@ Deno.serve(async (req) => {
         for (const c of filas) {
           const counts = await countsDe(c.id);
           colegios.push({
-            id: c.id, nombre: c.nombre, zona: c.zona, tipo: c.tipo, estado: c.estado,
+            id: c.id, nombre: c.nombre, zona: c.zona, provincia: c.provincia,
+            tipo: c.tipo, estado: c.estado,
             trial_fin: c.trial_fin, plan: planes.get(c.id) ?? 'docente',
             ...counts, created_at: c.created_at,
           });
@@ -91,8 +92,8 @@ Deno.serve(async (req) => {
       }
 
       case 'crear': {
-        const { nombre, zona, tipo } = body;
-        const v = validarCrear({ nombre, zona, tipo });
+        const { nombre, zona, tipo, provincia } = body;
+        const v = validarCrear({ nombre, zona, tipo, provincia });
         if (!v.ok) return json({ error: v.error }, 400);
 
         const { trial_inicio, trial_fin } = fechasTrial(new Date());
@@ -101,6 +102,7 @@ Deno.serve(async (req) => {
           .insert({
             nombre: String(nombre).trim(),
             zona: noVacio(zona) ? zona.trim() : null,
+            provincia: provincia ?? null,
             tipo,
             estado: 'trial',
             trial_inicio,
@@ -131,11 +133,11 @@ Deno.serve(async (req) => {
       }
 
       case 'editar': {
-        const { escuela_id, nombre, zona, tipo } = body;
+        const { escuela_id, nombre, zona, tipo, provincia } = body;
         if (!noVacio(escuela_id)) return json({ error: 'falta_escuela_id' }, 400);
-        const v = validarEditar({ nombre, zona, tipo });
+        const v = validarEditar({ nombre, zona, tipo, provincia });
         if (!v.ok) return json({ error: v.error }, 400);
-        const patch = armarPatchEditar({ nombre, zona, tipo });
+        const patch = armarPatchEditar({ nombre, zona, tipo, provincia });
         if (!Object.keys(patch).length) return json({ ok: true });
 
         const { data, error } = await sb
