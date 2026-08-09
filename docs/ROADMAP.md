@@ -75,6 +75,8 @@ Diseño en `docs/superpowers/specs/`. Roto en slices verticales (cada uno spec �
 
 **Modo mock vs real — único blocker grande restante:** generación y diagnóstico corren con flag `mock` porque falta la **API key de Anthropic** (Messages API necesita key con billing; la suscripción de Claude no sirve para el backend). Con la key (+ quitar el flag) pasan a Claude real. Pool de ejercicios de Lengua sembrado a mano (`scripts/seed-demo-lengua.mjs`) para el contenido semilla original; los pools nuevos por nodo los siembra `generador-ejercicios` al publicar. Migraciones hasta `0012`.
 
-**Otros pendientes de Fase 2:** decaimiento temporal / repaso espaciado (spec escrita), roles director/familia, copiloto TERRA (entrega de boletines a familias), job nocturno de alertas de LUNA, offline/satelital/multilingüe.
+- [x] **Fase "Observatorio y avisos" (2026-08-09).** Spec `2026-08-09-observatorio-y-avisos-design.md` + ADR-010. Observatorio educativo funcional en `/admin/observatorio` (agregados SIEMPRE anónimos por provincia y materia×grado con k-anonimato k=5; temas "aproximados"; migración `0021` con `escuela.provincia`), alertas del operador persistidas con el **primer cron del repo** (pg_cron + pg_net + Vault → `admin-jobs`, botón "Recalcular ahora"), actividad docente real (`last_sign_in_at` vía `_shared/auth-users.ts`) y pantallas de visión de Capacitación y Exportaciones.
+
+**Otros pendientes de Fase 2:** decaimiento temporal / repaso espaciado (spec escrita), roles director/familia, copiloto TERRA (entrega de boletines a familias), job nocturno de alertas de LUNA (**el mecanismo ya está**: se agenda con `llamar_admin_jobs` y una acción `luna_nocturno` en `admin-jobs` — el slot quedó documentado en el switch), offline/satelital/multilingüe.
 
 **Demo del loop completo:** seño (`ana@edutia.ar` / `edutia123`) autora+publica un plan → alumno (aula `CERRO-3A`, PIN de seed) practica → el mapa cambia solo → la seño ve el análisis en el detalle del alumno.
