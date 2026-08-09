@@ -70,3 +70,12 @@ verify_jwt = true
 
 [functions.admin-impersonar]
 verify_jwt = true
+
+# Fase Observatorio y avisos (ADR-010). admin-jobs tiene guard DUAL adentro:
+# el cron de pg_net manda el service key como Bearer (verify_jwt lo acepta
+# porque el service key ES un JWT); un admin humano pasa por verificarAdmin.
+[functions.admin-jobs]
+verify_jwt = true
+
+[functions.admin-observatorio]
+verify_jwt = true

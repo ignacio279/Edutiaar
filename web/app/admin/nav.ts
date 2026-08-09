@@ -1,6 +1,9 @@
-// Navegación del panel admin — CONGELADA en Fase 0 (Dashboard admin v3).
-// Ningún work-package edita este archivo: es la clave anti-conflictos del
-// trabajo en paralelo. Cada sección reemplaza SU page.tsx stub, nada más.
+// Navegación del panel admin — CONGELADA para los work-packages (la clave
+// anti-conflictos del trabajo en paralelo: cada sección reemplaza SU page.tsx
+// stub, nada más). Solo se edita en las fases secuenciales de fundaciones
+// (Fase 0 la creó; la fase "Observatorio y avisos" sumó Observatorio).
+// Capacitación y Exportaciones NO van acá a propósito: son pantallas de
+// visión linkeadas desde el Observatorio — el nav es operativo, no aspiracional.
 export type AdminNavItem = {
   key: string;
   label: string;
@@ -15,6 +18,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
   { key: 'maestras', label: 'Maestras', ruta: '/admin/maestras', icono: 'people' },
   { key: 'metricas', label: 'Métricas', ruta: '/admin/metricas', icono: 'chart' },
   { key: 'costos', label: 'Costos y salud', ruta: '/admin/costos', icono: 'coin' },
+  { key: 'observatorio', label: 'Observatorio', ruta: '/admin/observatorio', icono: 'globe' },
   { key: 'alertas', label: 'Alertas', ruta: '/admin/alertas', icono: 'bell' },
   { key: 'anuncios', label: 'Anuncios', ruta: '/admin/anuncios', icono: 'megaphone' },
   { key: 'auditoria', label: 'Auditoría', ruta: '/admin/auditoria', icono: 'book' },

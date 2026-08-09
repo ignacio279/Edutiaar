@@ -1,4 +1,5 @@
-// Lógica PURA de las alertas del operador (Dashboard admin v3 / WP7-CRM).
+// Lógica PURA de las alertas del operador (Dashboard admin v3; desde la fase
+// Observatorio y avisos vive en _shared: la comparten admin-crm y admin-jobs).
 // Sin imports de Deno ni supabase: la testea Node directo
 // (tests/unit/admin-alertas.test.mjs). Toma `now: Date` por parámetro (nada de
 // new Date() adentro) — mismo patrón de detectores que web/lib/luna.ts.

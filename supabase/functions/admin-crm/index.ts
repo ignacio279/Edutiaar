@@ -6,7 +6,7 @@
 import { cors, json } from '../_shared/cors.ts';
 import { verificarAdmin } from '../_shared/admin.ts';
 import { registrarAuditoria } from '../_shared/auditoria.ts';
-import { costosPorMes, evaluarAlertas, validarContacto, validarNota, type EscuelaAlerta } from './alertas-logica.ts';
+import { costosPorMes, evaluarAlertas, validarContacto, validarNota, type EscuelaAlerta } from '../_shared/alertas-logica.ts';
 
 const noVacio = (s: unknown) => typeof s === 'string' && s.trim().length > 0;
 

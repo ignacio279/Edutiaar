@@ -1,5 +1,5 @@
 // Unit — alertas del operador (Dashboard admin v3 / WP7): lógica pura de
-// supabase/functions/admin-crm/alertas-logica.ts. Cada detector se prueba en
+// supabase/functions/_shared/alertas-logica.ts. Cada detector se prueba en
 // su borde EXACTO con `now` fijo (nada de new Date() en la lógica).
 // Umbrales: trial ≤7 días (alta si ≤3, incluido vencido) · inactivo ≥14 días
 // (null = nunca → alerta) · costo > 2× mes anterior o > 50 USD absolutos.
@@ -11,7 +11,7 @@ import {
   claveMes,
   validarNota,
   validarContacto,
-} from '../../supabase/functions/admin-crm/alertas-logica.ts';
+} from '../../supabase/functions/_shared/alertas-logica.ts';
 
 // Jueves 6 de agosto de 2026, media mañana (hora local).
 const NOW = new Date(2026, 7, 6, 10, 30);

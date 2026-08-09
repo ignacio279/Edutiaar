@@ -174,3 +174,14 @@ El **especialista de SOL** para un programa: lo crea la autoría docente (la se�
 `mi_acceso()` (authenticated) y `acceso_de(uuid)` (solo service_role) devuelven `{estado: activo|solo_lectura|bloqueado, motivo, trial_fin, features}` — única fuente de verdad del corte (suspendido → bloqueado; trial vencido → solo lectura). `admin_nivel()` devuelve el nivel del admin logueado (null si no lo es). Defaults de `flags` en `features_default()` (solo SQL). Vistas `escuela_publica`/`aula_publica` reemplazan el listado anon de 0004.
 
 > Tablas de otras etapas no detalladas acá: `aula`, `aula_secreto`, `alumno_cred`, `intento_login` (login endurecido, 0003/0011/0015), `evaluacion_sesion` (0009), `boletin`, `luna_mensaje`, `luna_uso` (LUNA, 0016), `luna_alerta_atendida` (0017). Ver las migraciones y los specs correspondientes.
+
+## Fase "Observatorio y avisos" *(mig. 0021 — ADR-010)*
+
+### escuela (columna nueva)
+`provincia` text nullable con check de las 24 jurisdicciones argentinas (espejo en `_shared/provincias.ts` / `web/lib/admin/provincias.ts` + test de paridad). Es el eje normalizado del observatorio; `zona` sigue como detalle libre. Índice por provincia. **No** se expone en `escuela_publica`.
+
+### admin_alerta *(server-only)*
+Snapshot nocturno de las alertas del operador. `clave` (PK — la clave determinística de `_shared/alertas-logica.ts`, upsert natural) · `tipo` (sin check: detector nuevo ≠ migración) · `prioridad` check (`alta|media`) · `escuela_id` (FK cascade) · `escuela_nombre` · `titulo` · `detalle` · `generada_at`. La escribe `admin-jobs` (cron nocturno o "Recalcular ahora"); la lee `admin-crm alertas_listar`; `alerta_atender` la borra best-effort (la fuente de verdad de "atendida" sigue siendo `admin_alerta_atendida`).
+
+### Cron (primer job del repo)
+Extensiones `pg_cron` + `pg_net`. Helper `llamar_admin_jobs(accion)` (SECURITY DEFINER, EXECUTE revocado): lee `project_url`/`service_role_key` de **Vault** (se siembran a mano en el deploy; si faltan degrada con notice) y hace `net.http_post` a la Edge Function `admin-jobs`. Schedule `admin-jobs-nocturno` a las 06:00 UTC (03:00 AR). El futuro job de LUNA se cuelga del mismo helper con otra acción.

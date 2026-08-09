@@ -230,6 +230,7 @@ export function uiIcon(key: string) {
     megaphone: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" stroke="#7A6F5F" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><path d="M22 44 v14 l14 2 6 20 h10 l-5 -19 L76 70 V26 Z"/><path d="M84 40 q6 8 0 16"/></svg>`,
     book: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" stroke="#7A6F5F" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><path d="M50 26 q-12 -8 -28 -6 v56 q16 -2 28 6 q12 -8 28 -6 V20 q-16 -2 -28 6 Z"/><path d="M50 26 V82"/></svg>`,
     gear: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" stroke="#7A6F5F" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><circle cx="50" cy="50" r="12"/><path d="M50 22 V12 M50 88 V78 M78 50 H88 M12 50 H22 M70 30 L77 23 M23 77 L30 70 M70 70 L77 77 M23 23 L30 30"/></svg>`,
+    globe: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" stroke="#7A6F5F" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><circle cx="50" cy="50" r="32"/><ellipse cx="50" cy="50" rx="14" ry="32"/><path d="M20 38 H80 M20 62 H80"/></svg>`,
   };
   return uri(k[key] || k.chevron);
 }
