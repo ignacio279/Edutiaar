@@ -66,6 +66,29 @@ async function nuevoDocente(escuelaId) {
   return { id, access_token };
 }
 
+// Admin de plataforma efímero: auth user SIN perfil + fila en plataforma_admin
+// (ADR-009: la identidad admin es solo esa tabla; patrón de admin-maestras).
+async function nuevoAdmin(nivel = 'super') {
+  const email = `admin-${rnd()}@efimeros.edutia.local`;
+  const password = rnd();
+  const { id } = await (await fetch(`${URL}/auth/v1/admin/users`, {
+    method: 'POST',
+    headers: sr(),
+    body: JSON.stringify({ email, password, email_confirm: true }),
+  })).json();
+  await fetch(`${URL}/rest/v1/plataforma_admin`, {
+    method: 'POST',
+    headers: sr(),
+    body: JSON.stringify({ perfil_id: id, nivel, nombre: 'Admin Efimero' }),
+  });
+  const { access_token } = await (await fetch(`${URL}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: { apikey: ANON, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  })).json();
+  return { id, access_token };
+}
+
 test('admin-metricas: un token de DOCENTE recibe 403 no_admin en TODAS las acciones', { skip }, async () => {
   let esc, doc;
   try {
@@ -103,6 +126,32 @@ test('admin-metricas: token basura → 401, nunca datos', { skip }, async () => 
   assert.ok(r.status === 401 || r.status === 403, `status ${r.status} (esperado 401 o 403)`);
   const body = await r.json().catch(() => ({}));
   assert.ok(!body.adopcion && !body.uso, 'no filtra métricas a un token inválido');
+});
+
+// Contrato de `resumen` (WP-C actividad docente real): el array
+// `adopcion.docentes` trae `last_sign_in_at` en cada fila (real de Auth,
+// null si nunca entró) para que el front cuente "maestra activa" por login,
+// no solo por rastros de trabajo.
+test('admin-metricas: resumen devuelve docentes con la clave last_sign_in_at', { skip }, async () => {
+  let esc, doc, admin;
+  try {
+    esc = await insSR('escuela', { nombre: `Efimera-${rnd()}`, zona: 'test', estado: 'activo' });
+    doc = await nuevoDocente(esc.id);
+    admin = await nuevoAdmin('super');
+
+    const r = await callFn('resumen', {}, admin.access_token);
+    await esperarStatus(r, 200, 'resumen con admin');
+    const j = await r.json();
+    const docentes = j.adopcion?.docentes;
+    assert.ok(Array.isArray(docentes), 'adopcion.docentes es un array');
+    const fila = docentes.find((d) => d.id === doc.id);
+    assert.ok(fila, 'el docente efímero aparece en docentes');
+    assert.ok('last_sign_in_at' in fila, 'cada docente trae la clave last_sign_in_at (aunque sea null)');
+  } finally {
+    if (admin) { await borrarSR('plataforma_admin', `perfil_id=eq.${admin.id}`); await borrarUser(admin.id); }
+    if (doc) await borrarUser(doc.id);
+    if (esc) await borrarSR('escuela', `id=eq.${esc.id}`);
+  }
 });
 
 // El guard corre ANTES de validar el body: un docente no llega ni a

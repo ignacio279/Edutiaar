@@ -7,6 +7,7 @@
 import { cors, json } from '../_shared/cors.ts';
 import { verificarAdmin } from '../_shared/admin.ts';
 import { registrarAuditoria } from '../_shared/auditoria.ts';
+import { listarUsuariosAuth } from '../_shared/auth-users.ts';
 import { validarCrearMaestra, generarPasswordTemporal, emailNormalizado } from './validar.ts';
 
 type Acceso = { perfil_id: string; estado: string; trial_inicio: string | null; trial_fin: string | null };
@@ -76,18 +77,20 @@ Deno.serve(async (req) => {
           alumnos = (rAlu.data ?? []) as { docente_id: string }[];
         }
 
-        // Emails: perfil no los guarda; una sola página de Auth alcanza para
-        // la escala del MVP (pocas maestras, todas dadas de alta acá).
-        const { data: lista } = await sb.auth.admin.listUsers({ page: 1, perPage: 1000 });
-        const emailDe = new Map((lista?.users ?? []).map((u) => [u.id, u.email ?? null]));
+        // Emails y último login: perfil no los guarda, salen de Auth PAGINADO
+        // (los alumnos también son auth users: con >1000 las maestras se caían
+        // de la página 1 del listUsers inline que había acá).
+        const usuariosAuth = await listarUsuariosAuth(sb);
 
         const maestras = filas.map((d) => {
           const acc = accesos.find((a) => a.perfil_id === d.id);
           const mias = aulas.filter((a) => a.docente_id === d.id);
+          const u = usuariosAuth.get(d.id);
           return {
             id: d.id,
             nombre: d.nombre,
-            email: emailDe.get(d.id) ?? null,
+            email: u?.email ?? null,
+            ultimo_acceso: u?.last_sign_in_at ?? null,
             escuela_id: d.escuela_id,
             escuela_nombre: d.escuela?.nombre ?? null,
             estado: acc?.estado ?? 'activo', // sin fila = activa (0018)

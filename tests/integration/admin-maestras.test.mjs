@@ -195,6 +195,16 @@ test('crear_maestra vía la fn: alta completa, password una vez, email duplicado
     );
     await esperarStatus(r2, 409, 'crear_maestra duplicada');
     assert.equal((await r2.json()).error, 'email_en_uso');
+
+    // listar trae `ultimo_acceso` (last_sign_in_at real de Auth): la maestra
+    // recién creada nunca entró → null, no undefined ni ausente.
+    const rl = await callFn({ accion: 'listar', escuela_id: esc.id }, admin.access_token);
+    await esperarStatus(rl, 200, 'listar maestras del colegio efímero');
+    const filaListada = ((await rl.json()).maestras ?? []).find((m) => m.id === maestraId);
+    assert.ok(filaListada, 'la maestra recién creada aparece en listar');
+    assert.ok('ultimo_acceso' in filaListada, 'listar devuelve la clave ultimo_acceso');
+    assert.equal(filaListada.ultimo_acceso, null, 'nunca entró → ultimo_acceso null');
+    assert.equal(filaListada.email, emailMaestra, 'el email sigue viniendo de Auth');
   } finally {
     if (maestraId) { await borrarSR('docente_acceso', `perfil_id=eq.${maestraId}`); await borrarUser(maestraId); }
     if (admin) { await borrarSR('plataforma_admin', `perfil_id=eq.${admin.id}`); await borrarUser(admin.id); }

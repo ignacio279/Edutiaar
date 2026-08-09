@@ -68,6 +68,57 @@ test('resumenAdopcion: maestra INACTIVA si su rastro quedó fuera de los 7 días
   assert.equal(r.maestrasActivas7d, 0);
 });
 
+test('resumenAdopcion: login real (last_sign_in_at) hace 2 días y CERO rastros → activa', () => {
+  const r = resumenAdopcion({
+    escuelas: [],
+    docentes: [{ id: 'd1', last_sign_in_at: dias(2) }],
+    sesiones: [], boletines: [], mensajes: [],
+  }, AHORA);
+  assert.equal(r.maestrasActivas7d, 1, 'el login solo alcanza, sin rastros de trabajo');
+});
+
+test('resumenAdopcion: login hace 20 días sin rastros → NO activa', () => {
+  const r = resumenAdopcion({
+    escuelas: [],
+    docentes: [{ id: 'd1', last_sign_in_at: dias(20) }],
+    sesiones: [], boletines: [], mensajes: [],
+  }, AHORA);
+  assert.equal(r.maestrasActivas7d, 0);
+});
+
+test('resumenAdopcion: rastro de trabajo SIN login sigue contando (regresión)', () => {
+  // Sesión larga sin re-login: last_sign_in_at viejo pero boletín tocado ayer.
+  const r = resumenAdopcion({
+    escuelas: [],
+    docentes: [{ id: 'd1', last_sign_in_at: dias(30) }],
+    sesiones: [],
+    boletines: [{ docente_id: 'd1', created_at: dias(40), updated_at: dias(1) }],
+    mensajes: [],
+  }, AHORA);
+  assert.equal(r.maestrasActivas7d, 1, 'los rastros cubren sesiones largas sin re-login');
+});
+
+test('resumenAdopcion: last_sign_in_at ausente / undefined / null no rompe', () => {
+  const r = resumenAdopcion({
+    escuelas: [],
+    docentes: [{ id: 'd1' }, { id: 'd2', last_sign_in_at: null }, { id: 'd3', last_sign_in_at: undefined }],
+    sesiones: [], boletines: [], mensajes: [],
+  }, AHORA);
+  assert.equal(r.maestrasActivas7d, 0, 'sin login ni rastros, nadie es activa');
+});
+
+test('resumenAdopcion: borde EXACTO de 7 días de login → todavía activa; un minuto más allá, no', () => {
+  const r = resumenAdopcion({
+    escuelas: [],
+    docentes: [
+      { id: 'justa', last_sign_in_at: dias(7) }, // exactamente en el corte: entra
+      { id: 'pasada', last_sign_in_at: hace(7 * DIA + 60_000) }, // 7 días y 1 min: afuera
+    ],
+    sesiones: [], boletines: [], mensajes: [],
+  }, AHORA);
+  assert.equal(r.maestrasActivas7d, 1, 'solo la del borde exacto');
+});
+
 test('resumenAdopcion: alumnos activos 7d sin repetir y sesiones de hoy', () => {
   const r = resumenAdopcion({
     escuelas: [],

@@ -9,6 +9,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { llamarAdmin, ERRS_ADMIN } from '@/lib/admin/api';
 import { ADMIN, ESTADO_MAESTRA } from '@/lib/admin/tema';
+import { fechaRelativa } from '@/lib/admin/metricas';
 import { useAdmin } from '../../../admin-context';
 import Pill from '@/components/admin/Pill';
 import Confirmar from '@/components/admin/Confirmar';
@@ -23,6 +24,7 @@ type Maestra = {
   id: string;
   nombre: string;
   email: string | null;
+  ultimo_acceso: string | null; // last_sign_in_at real de Auth
   escuela_id: string | null;
   escuela_nombre: string | null;
   estado: string;
@@ -216,6 +218,7 @@ function FilaMaestra({ m, busy, esSuper, onReset, onEstado, onVerComo, onBorrar 
           <div style={{ fontFamily: NUNITO, fontSize: 13.5, color: ADMIN.tinta2, fontWeight: 600, marginTop: 3 }}>
             {m.email ?? 'sin email'}
             {' · '}{m.aulas.length} {m.aulas.length === 1 ? 'aula' : 'aulas'} · {m.alumnos} {m.alumnos === 1 ? 'alumno' : 'alumnos'}
+            {' · '}Último acceso: {m.ultimo_acceso ? fechaRelativa(m.ultimo_acceso, new Date()) : 'Nunca entró'}
           </div>
         </div>
       </div>

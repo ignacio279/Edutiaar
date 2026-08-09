@@ -24,13 +24,17 @@
 //   hecha pero sin fecha.
 // - `uso_api` se llena recién en la Fase final → todo lo que dependa de ella
 //   degrada a 0 con copy honesto ("sin datos todavía"), nunca a NaN.
-// - "Maestra activa" se aproxima por rastros de trabajo (boletín tocado, chat
-//   de LUNA, uso_api): no hay tracking de login en la plataforma.
+// - "Maestra activa" ya NO es solo aproximación: `resumen` trae el
+//   `last_sign_in_at` real de Supabase Auth (listarUsuariosAuth) y el front
+//   cuenta activa a quien se logueó en los últimos 7 días. Los rastros de
+//   trabajo (boletín tocado, chat de LUNA, uso_api) se mantienen como señal
+//   complementaria: cubren sesiones largas sin re-login.
 // - Los rangos SIEMPRE se acotan (default 30 días, máximo 90) y las consultas
 //   llevan tope de filas, para no acercarse al límite de ~150 s de las Edge
 //   Functions.
 import { cors, json } from '../_shared/cors.ts';
 import { verificarAdmin } from '../_shared/admin.ts';
+import { listarUsuariosAuth } from '../_shared/auth-users.ts';
 
 const DIA_MS = 86_400_000;
 
@@ -272,7 +276,10 @@ Deno.serve(async (req) => {
         // el navegador en SU huso horario y el server puede estar en otro.
         const piso = new Date(Math.min(inicioMes.getTime(), ahora - 8 * DIA_MS)).toISOString();
 
-        const [escuelas, perfiles, sesiones, boletines, mensajes, usoApi, respuestas, ejercicios] =
+        // listarUsuariosAuth es una llamada extra a Auth (paginada), aceptable
+        // solo acá en `resumen`: trae el last_sign_in_at REAL de cada docente
+        // para que "maestra activa" no dependa solo de rastros de trabajo.
+        const [escuelas, perfiles, sesiones, boletines, mensajes, usoApi, respuestas, ejercicios, usuariosAuth] =
           await Promise.all([
             traerEscuelas(),
             traerPerfiles(),
@@ -282,9 +289,13 @@ Deno.serve(async (req) => {
             traerUsoApi(piso),
             traerCreatedAt('respuesta', inicioMes.toISOString()),
             traerCreatedAt('ejercicio', inicioMes.toISOString()),
+            listarUsuariosAuth(sb),
           ]);
 
-        const docentes = perfiles.filter((p) => p.rol === 'docente').map((p) => ({ id: p.id }));
+        const docentes = perfiles.filter((p) => p.rol === 'docente').map((p) => ({
+          id: p.id,
+          last_sign_in_at: usuariosAuth.get(p.id)?.last_sign_in_at ?? null,
+        }));
 
         return json({
           mes: { desde: inicioMes.toISOString(), hasta: finMes.toISOString() },

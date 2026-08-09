@@ -8,11 +8,12 @@
 // página; acá NUNCA se toca la red.
 //
 // APROXIMACIONES DOCUMENTADAS:
-// - "Maestra activa (7 días)": NO hay tracking de login en la plataforma, así
-//   que se aproxima por rastros de trabajo: un boletín tocado (creado, editado
-//   o aprobado), un mensaje propio en el chat de LUNA o —cuando exista— una
-//   llamada registrada en uso_api. Una maestra que solo miró su panel no
-//   cuenta como activa.
+// - "Maestra activa (7 días)": activa = login en los últimos 7 días
+//   (`last_sign_in_at` real de Supabase Auth, lo trae admin-metricas) O rastro
+//   de trabajo: un boletín tocado (creado, editado o aprobado), un mensaje
+//   propio en el chat de LUNA o una llamada registrada en uso_api. Los rastros
+//   se mantienen porque cubren sesiones largas sin re-login (el
+//   last_sign_in_at no se refresca mientras la sesión sigue viva).
 // - `perfil` no tiene created_at (0001): la etapa "maestras invitadas" del
 //   funnel puede quedar hecha pero SIN fecha, y el feed no puede mostrar altas
 //   de maestra hasta que exista ese timestamp.
@@ -34,7 +35,7 @@ function ts(iso: string | null | undefined): number {
 // ── Tipos de las filas que llegan (subconjuntos de las tablas) ──────────────
 
 export type EscuelaFila = { id: string; nombre?: string | null; estado?: string | null; created_at?: string | null };
-export type DocenteFila = { id: string; created_at?: string | null };
+export type DocenteFila = { id: string; created_at?: string | null; last_sign_in_at?: string | null };
 export type SesionFila = { alumno_id: string; fecha: string; aciertos?: number | null; total?: number | null };
 export type BoletinFila = {
   docente_id?: string | null;
@@ -81,9 +82,13 @@ export function resumenAdopcion(datos: DatosAdopcion, now: Date): ResumenAdopcio
   const colegiosActivos = (datos.escuelas ?? [])
     .filter((e) => e.estado === 'activo' || e.estado === 'trial').length;
 
-  // Aproximación documentada arriba: activa = boletín tocado, chat o uso_api.
+  // Documentado arriba: activa = login real en los últimos 7 días
+  // (last_sign_in_at) O rastro de trabajo (boletín tocado, chat, uso_api).
   const docIds = new Set((datos.docentes ?? []).map((d) => d.id));
   const activas = new Set<string>();
+  for (const d of datos.docentes ?? []) {
+    if (en7(d.last_sign_in_at)) activas.add(d.id);
+  }
   for (const b of datos.boletines ?? []) {
     if (b.docente_id && docIds.has(b.docente_id)
       && (en7(b.updated_at) || en7(b.created_at) || en7(b.aprobado_at))) activas.add(b.docente_id);
