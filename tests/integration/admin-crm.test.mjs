@@ -57,13 +57,16 @@ async function nuevoUsuario(escuelaId, rol) {
     headers: sr(),
     body: JSON.stringify({ email, password, email_confirm: true }),
   })).json();
-  const perfilData = { id, rol, nombre: `Test ${rol}`, escuela_id: escuelaId };
-  if (rol === 'alumno') perfilData.grado = 3;
-  await fetch(`${URL}/rest/v1/perfil`, {
-    method: 'POST',
-    headers: { ...sr(), Prefer: 'resolution=merge-duplicates' },
-    body: JSON.stringify([perfilData]),
-  });
+  if (rol !== 'admin') {
+    // El admin de plataforma NO tiene fila en perfil (ADR-009).
+    const perfilData = { id, rol, nombre: `Test ${rol}`, escuela_id: escuelaId };
+    if (rol === 'alumno') perfilData.grado = 3;
+    await fetch(`${URL}/rest/v1/perfil`, {
+      method: 'POST',
+      headers: { ...sr(), Prefer: 'resolution=merge-duplicates' },
+      body: JSON.stringify([perfilData]),
+    });
+  }
   const { access_token } = await (await fetch(`${URL}/auth/v1/token?grant_type=password`, {
     method: 'POST',
     headers: { apikey: ANON, 'Content-Type': 'application/json' },
@@ -130,6 +133,53 @@ test('admin-crm: un token de DOCENTE recibe 403 no_admin', { skip }, async () =>
     assert.deepEqual(await r.json(), { error: 'no_admin' });
   } finally {
     if (doc) await borrarUser(doc.id);
+    if (esc) await borrarSR('escuela', `id=eq.${esc.id}`);
+  }
+});
+
+// Desde la fase Observatorio y avisos, alertas_listar YA NO calcula nada:
+// lee el snapshot precalculado de admin_alerta (lo escribe admin-jobs) y lo
+// mapea al shape camelCase de siempre (contrato con la home) + generada_at.
+test('alertas_listar lee el snapshot de admin_alerta sin recalcular', { skip }, async () => {
+  let esc, admin, clave;
+  try {
+    // Escuela efímera SOLO para la fk de la fila sembrada; archivada, así
+    // ningún recálculo la mira — si la fila vuelve, salió de la tabla.
+    esc = await insSR('escuela', { nombre: `EfimeraSnap-${rnd()}`, zona: 'test', estado: 'archivado' });
+    clave = `costo:${esc.id}:1999-01`; // clave imposible de recalcular hoy
+    const fila = await insSR('admin_alerta', {
+      clave, tipo: 'costo_disparado', prioridad: 'alta',
+      escuela_id: esc.id, escuela_nombre: esc.nombre,
+      titulo: 'Costo efímero de test', detalle: 'Sembrada a mano: solo puede venir del snapshot.',
+    });
+    assert.ok(fila?.clave, 'fila sembrada en admin_alerta');
+
+    admin = await nuevoUsuario(null, 'admin');
+    await insSR('plataforma_admin', { perfil_id: admin.id, nivel: 'operativo', nombre: 'Efimero' });
+
+    const r = await callFn('alertas_listar', {}, admin.access_token);
+    await esperarStatus(r, 200, 'alertas_listar (¿está deployada admin-crm?)');
+    const body = await r.json();
+    assert.ok(Array.isArray(body.alertas), 'shape {alertas}');
+    assert.ok(typeof body.generada_at === 'string' && body.generada_at.length > 0, 'generada_at presente (hay filas en el snapshot)');
+    const a = body.alertas.find((x) => x.clave === clave);
+    assert.ok(a, 'la fila sembrada vuelve tal cual (nadie recalculó: su hecho no existe hoy)');
+    // Shape camelCase = contrato con la home del admin.
+    assert.deepEqual(a, {
+      clave,
+      tipo: 'costo_disparado',
+      prioridad: 'alta',
+      escuelaId: esc.id,
+      escuelaNombre: esc.nombre,
+      titulo: 'Costo efímero de test',
+      detalle: 'Sembrada a mano: solo puede venir del snapshot.',
+    });
+  } finally {
+    if (clave) await borrarSR('admin_alerta', `clave=eq.${encodeURIComponent(clave)}`);
+    if (admin) {
+      await borrarSR('plataforma_admin', `perfil_id=eq.${admin.id}`);
+      await borrarUser(admin.id);
+    }
     if (esc) await borrarSR('escuela', `id=eq.${esc.id}`);
   }
 });

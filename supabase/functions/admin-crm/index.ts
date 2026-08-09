@@ -1,12 +1,14 @@
 // admin-crm (Dashboard admin v3 / WP7): CRM-lite del operador — notas por
 // colegio, contacto de la escuela y alertas del operador. Guard compartido
 // verificarAdmin (fila activa en plataforma_admin) + service_role; toda
-// mutación audita (patrón D2: una fn por dominio, index fino + módulo puro
-// hermano alertas-logica.ts testeable desde Node).
+// mutación audita (patrón D2: una fn por dominio, index fino + lógica pura en
+// _shared/alertas-logica.ts testeable desde Node). Desde la fase Observatorio
+// y avisos las alertas se PRECALCULAN en admin_alerta (job admin-jobs,
+// migración 0021): alertas_listar solo lee el snapshot.
 import { cors, json } from '../_shared/cors.ts';
 import { verificarAdmin } from '../_shared/admin.ts';
 import { registrarAuditoria } from '../_shared/auditoria.ts';
-import { costosPorMes, evaluarAlertas, validarContacto, validarNota, type EscuelaAlerta } from '../_shared/alertas-logica.ts';
+import { validarContacto, validarNota, type AlertaAdmin } from '../_shared/alertas-logica.ts';
 
 const noVacio = (s: unknown) => typeof s === 'string' && s.trim().length > 0;
 
@@ -99,52 +101,46 @@ Deno.serve(async (req) => {
         return json({ ok: true, contacto: v.contacto });
       }
 
-      // Junta los insumos, corre la lógica pura y devuelve {alertas}. OJO: la
-      // home del admin (WP5) también llama esta acción — el shape {alertas} es
-      // contrato.
+      // Lee el snapshot precalculado de admin_alerta (lo escribe admin-jobs
+      // cada noche o "Recalcular ahora" — fase Observatorio y avisos): ya no
+      // calcula nada on-demand. OJO: la home del admin (WP5) también llama
+      // esta acción — el shape de cada alerta en {alertas} es contrato (solo
+      // se AGREGÓ la clave generada_at al tope de la respuesta).
       case 'alertas_listar': {
-        const now = new Date();
-        const { data: escData, error: escErr } = await sb
-          .from('escuela')
-          .select('id, nombre, estado, trial_fin, limites');
-        if (escErr) throw escErr;
-        const escuelas = (escData ?? []) as EscuelaAlerta[];
+        // 'alta' < 'media' alfabético → el orden alta→media sale del índice
+        // admin_alerta_orden_idx (prioridad asc, generada_at desc).
+        const { data, error } = await sb
+          .from('admin_alerta')
+          .select('clave, tipo, prioridad, escuela_id, escuela_nombre, titulo, detalle, generada_at')
+          .order('prioridad', { ascending: true })
+          .order('generada_at', { ascending: false });
+        if (error) throw error;
+        const filas = (data ?? []) as {
+          clave: string; tipo: string; prioridad: string; escuela_id: string | null;
+          escuela_nombre: string; titulo: string; detalle: string; generada_at: string;
+        }[];
 
-        // Última sesión por escuela: max(fecha) de sesion → perfil del alumno.
-        // Iterar escuelas está bien para el volumen del MVP (pocas decenas).
-        const ultimaSesionPorEscuela: Record<string, string | null> = {};
-        for (const e of escuelas) {
-          const { data: s } = await sb
-            .from('sesion')
-            .select('fecha, alumno:alumno_id!inner(escuela_id)')
-            .eq('alumno.escuela_id', e.id)
-            .order('fecha', { ascending: false })
-            .limit(1);
-          ultimaSesionPorEscuela[e.id] = (s?.[0] as { fecha?: string } | undefined)?.fecha ?? null;
-        }
-
-        // Costos del mes actual y el anterior desde uso_api (vacía → todo 0).
-        const inicioMesAnterior = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
-        const { data: usos } = await sb
-          .from('uso_api')
-          .select('escuela_id, costo_usd, created_at')
-          .gte('created_at', inicioMesAnterior);
-        const { mesActual, mesAnterior } = costosPorMes(
-          (usos ?? []) as { escuela_id: string | null; costo_usd: number; created_at: string }[],
-          now,
-        );
-
+        // Filtro defensivo: una atendida entre corrida y corrida no debe
+        // asomar aunque el job todavía no haya borrado la fila.
         const { data: at } = await sb.from('admin_alerta_atendida').select('clave');
-        const atendidas = ((at ?? []) as { clave: string }[]).map((a) => a.clave);
+        const atendidas = new Set(((at ?? []) as { clave: string }[]).map((a) => a.clave));
 
-        const alertas = evaluarAlertas({
-          escuelas,
-          ultimaSesionPorEscuela,
-          costoMesPorEscuela: mesActual,
-          costoMesAnteriorPorEscuela: mesAnterior,
-          atendidas,
-        }, now);
-        return json({ alertas });
+        const vigentes = filas.filter((f) => !atendidas.has(f.clave));
+        const alertas: AlertaAdmin[] = vigentes.map((f) => ({
+          clave: f.clave,
+          tipo: f.tipo as AlertaAdmin['tipo'],
+          prioridad: f.prioridad as AlertaAdmin['prioridad'],
+          escuelaId: f.escuela_id ?? '',
+          escuelaNombre: f.escuela_nombre,
+          titulo: f.titulo,
+          detalle: f.detalle,
+        }));
+        // Cuándo se recalculó por última vez: max(generada_at) del snapshot
+        // completo (null = nunca corrió el job todavía).
+        const generada_at = filas.length > 0
+          ? filas.map((f) => f.generada_at).reduce((a, b) => (a > b ? a : b))
+          : null;
+        return json({ alertas, generada_at });
       }
 
       case 'alerta_atender': {
@@ -159,6 +155,14 @@ Deno.serve(async (req) => {
           entidad: 'admin_alerta_atendida',
           detalle: { clave: String(clave).trim() },
         });
+        // D-OA5: la fuente de verdad es admin_alerta_atendida (arriba); sacar
+        // la fila del snapshot es best-effort — si falla, el filtro defensivo
+        // de alertas_listar y la corrida nocturna la limpian igual.
+        try {
+          await sb.from('admin_alerta').delete().eq('clave', String(clave).trim());
+        } catch (e) {
+          console.error('alerta_atender: no se pudo borrar del snapshot', String((e as Error)?.message ?? e));
+        }
         return json({ ok: true });
       }
 
