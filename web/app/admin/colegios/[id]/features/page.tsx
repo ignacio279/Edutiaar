@@ -16,9 +16,9 @@ const NUNITO = 'var(--font-nunito)';
 const QUICK = 'var(--font-quicksand), sans-serif';
 
 const PRESET_INFO: readonly { plan: Plan; label: string; desc: string }[] = [
-  { plan: 'basico', label: 'Básico', desc: 'Solo SOL: los chicos practican, sin copiloto docente.' },
-  { plan: 'docente', label: 'Docente', desc: 'SOL + LUNA completa: alertas, boletines y chat.' },
-  { plan: 'completo', label: 'Completo', desc: 'SOL + LUNA + TERRA (familias, próximamente).' },
+  { plan: 'basico', label: 'Básico', desc: 'Solo SOL: práctica de los chicos.' },
+  { plan: 'docente', label: 'Docente', desc: 'SOL + LUNA completa para la maestra.' },
+  { plan: 'completo', label: 'Completo', desc: 'Todo, incluido TERRA cuando llegue.' },
 ];
 
 const ERRS: Record<string, string> = {
@@ -28,6 +28,8 @@ const ERRS: Record<string, string> = {
   plan_invalido: 'Ese plan no existe.',
 };
 
+// Switch del mock: track 46×26, knob 20 que viaja de 3 a 23; prendido pero
+// deshabilitado (hijos de LUNA) queda en petróleo lavado.
 function Switch({ on, deshabilitado, onToggle, etiqueta }: {
   on: boolean;
   deshabilitado?: boolean;
@@ -46,18 +48,15 @@ function Switch({ on, deshabilitado, onToggle, etiqueta }: {
         height: 26,
         borderRadius: 999,
         border: 'none',
-        padding: 3,
-        flex: 'none',
-        background: on ? ADMIN.base : ADMIN.bordeCalido,
-        opacity: deshabilitado ? 0.45 : 1,
+        padding: 0,
+        flexShrink: 0,
+        position: 'relative',
+        background: on ? (deshabilitado ? ADMIN.switchOnDim : ADMIN.base) : ADMIN.switchOff,
         cursor: deshabilitado ? 'not-allowed' : 'pointer',
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: on ? 'flex-end' : 'flex-start',
         transition: 'background .15s ease',
       }}
     >
-      <span style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,.25)' }} />
+      <span style={{ position: 'absolute', top: 3, left: on ? 23 : 3, width: 20, height: 20, borderRadius: '50%', background: ADMIN.carta, transition: 'left .15s ease', boxShadow: '0 1px 4px rgba(58,51,42,.25)' }} />
     </button>
   );
 }
@@ -72,17 +71,17 @@ function FilaToggle({ titulo, detalle, chip, sub, ...sw }: {
   onToggle: () => void;
 }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '10px 0', marginLeft: sub ? 26 : 0, opacity: sw.deshabilitado ? 0.55 : 1 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 0', paddingLeft: sub ? 28 : 0, borderBottom: `1px solid ${ADMIN.divisor}`, opacity: sw.deshabilitado && !chip ? 0.45 : 1 }}>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontFamily: QUICK, fontWeight: 700, fontSize: sub ? 14 : 15.5, color: ADMIN.ink, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 15, color: ADMIN.ink, display: 'flex', alignItems: 'center' }}>
           {titulo}
           {chip && (
-            <span style={{ background: ADMIN.warnFondo, color: ADMIN.warnTexto, border: `1px solid ${ADMIN.warnBorde}`, borderRadius: 999, padding: '2px 10px', fontSize: 11.5, fontWeight: 700 }}>
+            <span style={{ background: ADMIN.burbuja, border: `1px solid ${ADMIN.borde}`, color: ADMIN.base, borderRadius: 999, padding: '2px 9px', fontSize: 10.5, fontWeight: 800, marginLeft: 8 }}>
               {chip}
             </span>
           )}
         </div>
-        <div style={{ fontFamily: NUNITO, fontSize: 13, color: ADMIN.tinta2, lineHeight: 1.4 }}>{detalle}</div>
+        <div style={{ fontFamily: NUNITO, fontSize: 12.5, color: ADMIN.tinta2, fontWeight: 600 }}>{detalle}</div>
       </div>
       <Switch on={sw.on} deshabilitado={sw.deshabilitado} onToggle={sw.onToggle} etiqueta={titulo} />
     </div>
@@ -149,12 +148,8 @@ export default function Page() {
   const planActivo = flags ? detectarPlan(flags) : null;
 
   return (
-    <div style={{ maxWidth: 860 }}>
+    <div>
       <FichaTabs colegioId={colegioId} />
-      <h1 style={{ fontFamily: BALOO, fontWeight: 800, fontSize: 26, color: ADMIN.ink, margin: '0 0 6px' }}>Features del colegio</h1>
-      <p style={{ fontFamily: NUNITO, fontSize: 14.5, color: ADMIN.tinta2, margin: '0 0 20px', lineHeight: 1.5 }}>
-        Qué copilotos ve este colegio. Los cambios aplican al instante para todas sus maestras.
-      </p>
 
       {cargando && (
         <div style={{ background: ADMIN.burbuja, border: `2px solid ${ADMIN.borde}`, borderRadius: 22, padding: '22px 24px', color: ADMIN.medio, fontFamily: QUICK, fontWeight: 700 }}>
@@ -171,8 +166,7 @@ export default function Page() {
       {!cargando && !errorCarga && flags && (
         <>
           {/* Planes preset */}
-          <h2 style={{ fontFamily: BALOO, fontWeight: 800, fontSize: 19, color: ADMIN.oscuro, margin: '0 0 10px' }}>Planes</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 26 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginBottom: 18 }}>
             {PRESET_INFO.map((p) => {
               const activo = planActivo === p.plan;
               return (
@@ -181,55 +175,53 @@ export default function Page() {
                   onClick={() => aplicarPreset(p.plan, p.label)}
                   style={{
                     textAlign: 'left',
-                    background: activo ? ADMIN.claro : ADMIN.carta,
-                    border: `2px solid ${activo ? ADMIN.base : ADMIN.borde}`,
-                    borderRadius: 22,
-                    padding: '16px 18px',
+                    background: activo ? ADMIN.burbuja : ADMIN.carta,
+                    border: `2px solid ${activo ? ADMIN.base : ADMIN.bordeCalido}`,
+                    borderRadius: 20,
+                    padding: '18px 20px',
                     cursor: activo ? 'default' : 'pointer',
-                    boxShadow: `0 4px 14px ${ADMIN.sombra}`,
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
-                    <span style={{ fontFamily: BALOO, fontWeight: 800, fontSize: 17, color: activo ? ADMIN.oscuro : ADMIN.ink }}>{p.label}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <span style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 18, color: ADMIN.ink }}>{p.label}</span>
                     {activo && (
-                      <span style={{ background: ADMIN.okFondo, color: ADMIN.okTexto, borderRadius: 999, padding: '2px 10px', fontFamily: QUICK, fontWeight: 700, fontSize: 11.5 }}>
+                      <span style={{ background: ADMIN.base, color: '#fff', borderRadius: 999, padding: '3px 11px', fontSize: 11.5, fontWeight: 800 }}>
                         Activo
                       </span>
                     )}
                   </div>
-                  <div style={{ fontFamily: NUNITO, fontSize: 13, color: ADMIN.tinta2, lineHeight: 1.45 }}>{p.desc}</div>
+                  <div style={{ fontFamily: NUNITO, fontSize: 13.5, color: ADMIN.tinta2, fontWeight: 600, marginTop: 5 }}>{p.desc}</div>
                 </button>
               );
             })}
           </div>
 
           {/* Personalizado */}
-          <h2 style={{ fontFamily: BALOO, fontWeight: 800, fontSize: 19, color: ADMIN.oscuro, margin: '0 0 10px', display: 'flex', alignItems: 'center', gap: 10 }}>
-            Personalizado
-            {planActivo === 'custom' && (
-              <span style={{ background: ADMIN.claro, color: ADMIN.oscuro, borderRadius: 999, padding: '3px 12px', fontFamily: QUICK, fontWeight: 700, fontSize: 12 }}>
-                Plan custom
-              </span>
-            )}
-          </h2>
-          <div style={{ background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 22, padding: '14px 22px', boxShadow: `0 4px 14px ${ADMIN.sombraCalida}` }}>
+          <div style={{ background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 22, padding: 22, maxWidth: 640 }}>
+            <h2 style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 17, color: ADMIN.oscuro, margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
+              Personalizado
+              {planActivo === 'custom' && (
+                <span style={{ background: ADMIN.claro, color: ADMIN.oscuro, borderRadius: 999, padding: '3px 12px', fontSize: 12, fontWeight: 700 }}>
+                  Plan custom
+                </span>
+              )}
+            </h2>
             <FilaToggle
               titulo="SOL"
-              detalle="El copiloto de los chicos: práctica, mapa y ejercicios adaptados."
+              detalle="Ejercicios y práctica de los chicos"
               on={flags.sol}
               onToggle={() => guardarFlags({ ...flags, sol: !flags.sol })}
             />
-            <div style={{ borderTop: `1px solid ${ADMIN.bordeCalido}` }} />
             <FilaToggle
               titulo="LUNA"
-              detalle="El copiloto de la maestra: dashboard, alertas, boletines y chat."
+              detalle="Copiloto de la maestra (switch maestro)"
               on={flags.luna.activa}
               onToggle={() => guardarFlags({ ...flags, luna: { ...flags.luna, activa: !flags.luna.activa } })}
             />
             <FilaToggle
               sub
               titulo="Alertas"
-              detalle="Alertas de rendimiento priorizadas en el dashboard."
+              detalle="Señales de rendimiento del aula"
               on={flags.luna.alertas}
               deshabilitado={!flags.luna.activa}
               onToggle={() => guardarFlags({ ...flags, luna: { ...flags.luna, alertas: !flags.luna.alertas } })}
@@ -237,7 +229,7 @@ export default function Page() {
             <FilaToggle
               sub
               titulo="Boletines"
-              detalle="Boletines mensuales por alumno (LUNA propone, la maestra decide)."
+              detalle="Borradores para revisar y aprobar"
               on={flags.luna.boletines}
               deshabilitado={!flags.luna.activa}
               onToggle={() => guardarFlags({ ...flags, luna: { ...flags.luna, boletines: !flags.luna.boletines } })}
@@ -245,19 +237,21 @@ export default function Page() {
             <FilaToggle
               sub
               titulo="Chat"
-              detalle="Chat 24/7 con contexto real del aula."
+              detalle="Consultas pedagógicas 24/7"
               on={flags.luna.chat}
               deshabilitado={!flags.luna.activa}
               onToggle={() => guardarFlags({ ...flags, luna: { ...flags.luna, chat: !flags.luna.chat } })}
             />
-            <div style={{ borderTop: `1px solid ${ADMIN.bordeCalido}` }} />
             <FilaToggle
               titulo="TERRA"
-              detalle="El copiloto de las familias. El flag ya funciona; el copiloto todavía no existe."
+              detalle="Copiloto para las familias"
               chip="próximamente"
               on={flags.terra}
               onToggle={() => guardarFlags({ ...flags, terra: !flags.terra })}
             />
+            <p style={{ fontFamily: NUNITO, fontSize: 12.5, color: ADMIN.tinta2, fontWeight: 600, margin: '14px 0 0' }}>
+              Los cambios aplican al instante en la app de la maestra.
+            </p>
           </div>
         </>
       )}

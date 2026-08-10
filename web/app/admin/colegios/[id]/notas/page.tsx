@@ -7,7 +7,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import FichaTabs from '@/components/admin/FichaTabs';
-import Pill from '@/components/admin/Pill';
 import { ADMIN } from '@/lib/admin/tema';
 import { ERRS_ADMIN, llamarAdmin } from '@/lib/admin/api';
 
@@ -26,10 +25,10 @@ type Nota = {
 
 type Contacto = { director?: string; telefono?: string; email?: string; notas?: string };
 
-// Pills por tipo de nota como tuplas [bg, color, label] (patrón del tema).
+// Pills por tipo de nota como tuplas [bg, color, label] (colores del mock).
 const TIPO_NOTA: Record<string, readonly [string, string, string]> = {
-  nota: [ADMIN.burbuja, ADMIN.medio, 'Nota'],
-  contacto: [ADMIN.warnFondo, ADMIN.warnTexto, 'Contacto'],
+  nota: [ADMIN.hover, ADMIN.tinta2, 'Nota'],
+  contacto: [ADMIN.claro, ADMIN.oscuro, 'Contacto'],
   acuerdo: [ADMIN.okFondo, ADMIN.okTexto, 'Acuerdo'],
 };
 
@@ -43,13 +42,12 @@ const CAMPOS_CONTACTO: { clave: keyof Contacto; label: string }[] = [
 ];
 
 const inputStyle: React.CSSProperties = {
-  width: '100%', padding: '10px 13px', border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 12,
-  fontFamily: NUNITO, fontSize: 14.5, color: ADMIN.ink, background: ADMIN.suave, outline: 'none',
+  width: '100%', padding: '11px 12px', border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 12,
+  fontFamily: NUNITO, fontSize: 14, color: ADMIN.ink, background: ADMIN.suave, outline: 'none',
 };
 
 const card: React.CSSProperties = {
-  background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 22,
-  padding: '20px 22px', boxShadow: `0 3px 10px ${ADMIN.sombraCalida}`,
+  background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 22, padding: 22,
 };
 
 function fechaLinda(iso: string): string {
@@ -124,8 +122,8 @@ export default function Page() {
   };
 
   return (
-    <div style={{ maxWidth: 860 }}>
-      <h1 style={{ fontFamily: BALOO, fontWeight: 800, fontSize: 26, color: ADMIN.ink, margin: '0 0 14px' }}>
+    <div>
+      <h1 style={{ fontFamily: BALOO, fontWeight: 700, fontSize: 'clamp(24px, 3.2vw, 32px)', color: ADMIN.ink, margin: '0 0 14px' }}>
         {nombre || 'Colegio'}
       </h1>
       <FichaTabs colegioId={id} />
@@ -139,50 +137,50 @@ export default function Page() {
       {cargando ? (
         <p style={{ fontFamily: QUICK, fontWeight: 700, color: ADMIN.tinta2 }}>Cargando…</p>
       ) : (
-        <>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 18, alignItems: 'start' }}>
           {/* Contacto del colegio (escuela.contacto) */}
           <div style={card}>
-            <h2 style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 17, color: ADMIN.oscuro, margin: '0 0 14px' }}>Contacto</h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
-              {CAMPOS_CONTACTO.map(({ clave, label }) => (
-                <label key={clave} style={{ display: 'block' }}>
-                  <span style={{ display: 'block', fontFamily: QUICK, fontWeight: 700, fontSize: 12.5, color: ADMIN.tinta2, marginBottom: 5 }}>{label}</span>
-                  <input
-                    value={contacto[clave] ?? ''}
-                    onChange={(e) => setContacto((prev) => ({ ...prev, [clave]: e.target.value }))}
-                    style={inputStyle}
-                  />
-                </label>
-              ))}
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14 }}>
+            <h2 style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 17, color: ADMIN.oscuro, margin: '0 0 16px' }}>Contacto</h2>
+            {CAMPOS_CONTACTO.map(({ clave, label }) => (
+              <div key={clave} style={{ marginBottom: 12 }}>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: ADMIN.tinta2, marginBottom: 6 }}>{label}</label>
+                <input
+                  value={contacto[clave] ?? ''}
+                  onChange={(e) => setContacto((prev) => ({ ...prev, [clave]: e.target.value }))}
+                  style={inputStyle}
+                />
+              </div>
+            ))}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
               <button
                 onClick={guardarContacto}
                 disabled={guardando}
-                style={{ background: guardando ? ADMIN.borde : ADMIN.base, border: 'none', borderRadius: 12, padding: '10px 20px', fontFamily: QUICK, fontWeight: 700, fontSize: 14.5, color: '#fff', cursor: guardando ? 'wait' : 'pointer' }}
+                className="ed-primary"
+                style={{ background: guardando ? ADMIN.borde : ADMIN.base, border: 'none', borderRadius: 999, padding: '11px 26px', fontFamily: QUICK, fontWeight: 700, fontSize: 14, color: '#fff', cursor: guardando ? 'wait' : 'pointer' }}
               >
-                {guardando ? 'Guardando…' : 'Guardar contacto'}
+                {guardando ? 'Guardando…' : 'Guardar'}
               </button>
               {guardado && <span style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 14, color: ADMIN.okTexto }}>Guardado ✓</span>}
             </div>
           </div>
 
-          {/* Alta de nota */}
-          <div style={{ ...card, marginTop: 16 }}>
-            <h2 style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 17, color: ADMIN.oscuro, margin: '0 0 12px' }}>Nueva nota</h2>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+          {/* Notas internas: alta + timeline */}
+          <div style={card}>
+            <h2 style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 17, color: ADMIN.oscuro, margin: '0 0 12px' }}>Notas internas</h2>
+            <div style={{ display: 'flex', gap: 7, marginBottom: 10 }}>
               {TIPOS.map((t) => {
                 const activo = t === tipo;
-                const [bg, co, label] = TIPO_NOTA[t];
+                const [, , label] = TIPO_NOTA[t];
                 return (
                   <button
                     key={t}
                     onClick={() => setTipo(t)}
+                    className={activo ? undefined : 'ad-ghost-warm'}
                     style={{
-                      background: activo ? bg : 'none',
-                      color: activo ? co : ADMIN.tinta2,
-                      border: `2px solid ${activo ? bg : ADMIN.bordeCalido}`,
-                      borderRadius: 999, padding: '6px 15px', fontFamily: QUICK, fontWeight: 700, fontSize: 13.5, cursor: 'pointer',
+                      background: activo ? ADMIN.base : ADMIN.carta,
+                      color: activo ? '#fff' : ADMIN.tinta2,
+                      border: activo ? 'none' : `1.5px solid ${ADMIN.bordeCalido}`,
+                      borderRadius: 999, padding: '7px 15px', fontFamily: QUICK, fontWeight: 700, fontSize: 12.5, cursor: 'pointer',
                     }}
                   >
                     {label}
@@ -193,53 +191,53 @@ export default function Page() {
             <textarea
               value={cuerpo}
               onChange={(e) => setCuerpo(e.target.value)}
-              rows={3}
-              placeholder="¿Qué pasó con este colegio? (llamados, acuerdos, próximos pasos…)"
-              style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.5 }}
+              placeholder="Escribí la nota..."
+              style={{ ...inputStyle, minHeight: 80, padding: '12px 14px', resize: 'vertical', lineHeight: 1.5, marginBottom: 10 }}
             />
             <button
               onClick={agregarNota}
               disabled={!cuerpo.trim() || agregando}
+              className="ed-primary"
               style={{
-                marginTop: 10, background: cuerpo.trim() && !agregando ? ADMIN.oscuro : ADMIN.borde,
-                border: 'none', borderRadius: 12, padding: '10px 20px', fontFamily: QUICK, fontWeight: 700,
-                fontSize: 14.5, color: '#fff', cursor: cuerpo.trim() && !agregando ? 'pointer' : 'not-allowed',
+                background: cuerpo.trim() && !agregando ? ADMIN.base : ADMIN.borde,
+                border: 'none', borderRadius: 999, padding: '10px 24px', fontFamily: QUICK, fontWeight: 700,
+                fontSize: 14, color: '#fff', cursor: cuerpo.trim() && !agregando ? 'pointer' : 'not-allowed',
               }}
             >
               {agregando ? 'Agregando…' : 'Agregar'}
             </button>
-          </div>
 
-          {/* Timeline (descendente, ya viene ordenado del server) */}
-          <h2 style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 17, color: ADMIN.oscuro, margin: '24px 0 12px' }}>Historial</h2>
-          {notas.length === 0 ? (
-            <div style={{ background: ADMIN.burbuja, border: `2px solid ${ADMIN.borde}`, borderRadius: 22, padding: '18px 22px', fontFamily: NUNITO, fontWeight: 600, fontSize: 14.5, color: ADMIN.medio }}>
-              Todavía no hay notas de este colegio. La primera llamada, el primer acuerdo… todo queda acá.
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {notas.map((n) => (
-                <div key={n.id} style={{ ...card, padding: '14px 18px', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                      <span style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 13.5, color: ADMIN.ink }}>{fechaLinda(n.created_at)}</span>
-                      <Pill tupla={TIPO_NOTA[n.tipo]} />
-                      {n.autor_email && <span style={{ fontFamily: NUNITO, fontSize: 12.5, color: ADMIN.tinta2, fontWeight: 600 }}>{n.autor_email}</span>}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 18 }}>
+              {notas.length === 0 ? (
+                <p style={{ fontFamily: NUNITO, fontWeight: 600, fontSize: 14, color: ADMIN.tinta2, margin: 0 }}>
+                  Todavía no hay notas de este colegio. La primera llamada, el primer acuerdo… todo queda acá.
+                </p>
+              ) : (
+                notas.map((n) => {
+                  const [bg, co, label] = TIPO_NOTA[n.tipo];
+                  return (
+                    <div key={n.id} style={{ background: ADMIN.suave, borderRadius: 14, padding: '13px 16px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
+                        <span style={{ background: bg, color: co, borderRadius: 999, padding: '3px 11px', fontSize: 11, fontWeight: 800 }}>{label}</span>
+                        <span style={{ fontSize: 12, color: ADMIN.tinta2, fontWeight: 700 }}>
+                          {fechaLinda(n.created_at)}{n.autor_email ? ` · ${n.autor_email}` : ''}
+                        </span>
+                        <button
+                          onClick={() => borrarNota(n)}
+                          disabled={borrando === n.id}
+                          style={{ marginLeft: 'auto', background: 'none', border: 'none', color: ADMIN.danger, fontFamily: QUICK, fontWeight: 700, fontSize: 12, cursor: borrando === n.id ? 'wait' : 'pointer', padding: 0 }}
+                        >
+                          {borrando === n.id ? 'Borrando…' : 'Borrar'}
+                        </button>
+                      </div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: ADMIN.ink, marginTop: 6, lineHeight: 1.4, whiteSpace: 'pre-wrap' }}>{n.cuerpo}</div>
                     </div>
-                    <p style={{ margin: '6px 0 0', fontFamily: NUNITO, fontSize: 14.5, color: ADMIN.ink, fontWeight: 600, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{n.cuerpo}</p>
-                  </div>
-                  <button
-                    onClick={() => borrarNota(n)}
-                    disabled={borrando === n.id}
-                    style={{ alignSelf: 'flex-start', flexShrink: 0, background: 'none', border: `1.5px solid ${ADMIN.dangerBorde}`, borderRadius: 999, padding: '6px 14px', fontFamily: QUICK, fontWeight: 700, fontSize: 13, color: ADMIN.danger, cursor: borrando === n.id ? 'wait' : 'pointer' }}
-                  >
-                    {borrando === n.id ? 'Borrando…' : 'Borrar'}
-                  </button>
-                </div>
-              ))}
+                  );
+                })
+              )}
             </div>
-          )}
-        </>
+          </div>
+        </div>
       )}
     </div>
   );

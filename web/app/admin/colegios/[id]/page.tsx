@@ -30,11 +30,11 @@ type Detalle = {
   feature: { plan: string; flags: { sol?: boolean; luna?: { activa?: boolean }; terra?: boolean } };
 };
 
-const PLAN_PILL: Record<string, readonly [string, string, string]> = {
-  basico: [ADMIN.claro, ADMIN.oscuro, 'Plan Básico'],
-  docente: [ADMIN.claro, ADMIN.oscuro, 'Plan Docente'],
-  completo: [ADMIN.okFondo, ADMIN.okTexto, 'Plan Completo'],
-  custom: [ADMIN.bordeCalido, ADMIN.tinta2, 'Plan Custom'],
+const PLAN_LABEL: Record<string, string> = {
+  basico: 'Básico',
+  docente: 'Docente',
+  completo: 'Completo',
+  custom: 'Personalizado',
 };
 
 const ERRS: Record<string, string> = {
@@ -51,15 +51,15 @@ const ERRS: Record<string, string> = {
 const errCopy = (code?: string) => (code && ERRS[code]) || 'Algo salió mal. Probá de nuevo.';
 
 const input: React.CSSProperties = {
-  padding: '11px 14px', border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 12,
+  padding: '12px 14px', border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 12,
   fontFamily: NUNITO, fontSize: 15, color: ADMIN.ink, background: ADMIN.suave, outline: 'none',
 };
 const label: React.CSSProperties = {
-  display: 'block', fontFamily: QUICK, fontWeight: 700, fontSize: 13.5, color: ADMIN.tinta2, margin: '0 0 6px',
+  display: 'block', fontSize: 13, fontWeight: 700, color: ADMIN.tinta2, marginBottom: 6,
 };
 const btn: React.CSSProperties = {
-  background: ADMIN.carta, color: ADMIN.tinta2, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 12,
-  padding: '9px 16px', fontFamily: QUICK, fontWeight: 700, fontSize: 14, cursor: 'pointer',
+  background: ADMIN.carta, color: ADMIN.tinta2, border: `1.5px solid ${ADMIN.bordeCalido}`, borderRadius: 999,
+  padding: '11px 20px', fontFamily: QUICK, fontWeight: 700, fontSize: 14, cursor: 'pointer',
 };
 
 function diasHasta(fecha: string): number {
@@ -76,8 +76,7 @@ export default function FichaColegio() {
   const [confirmando, setConfirmando] = useState<'suspendido' | 'archivado' | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // Form chico de datos (nombre/provincia/zona/tipo).
-  const [editando, setEditando] = useState(false);
+  // Form de datos (nombre/provincia/zona/tipo), siempre editable como en el mock.
   const [fNombre, setFNombre] = useState('');
   const [fProvincia, setFProvincia] = useState('');
   const [fZona, setFZona] = useState('');
@@ -128,7 +127,6 @@ export default function FichaColegio() {
     setBusy(false);
     if (!r.ok) { toast(errCopy(r.data.error)); return; }
     toast('Datos guardados.');
-    setEditando(false);
     cargar();
   }
 
@@ -152,119 +150,99 @@ export default function FichaColegio() {
   const puedeActivar = c.estado !== 'activo'; // trial/suspendido/archivado → activo
   const puedeSuspender = c.estado === 'trial' || c.estado === 'activo';
   const puedeArchivar = esSuper && c.estado !== 'archivado';
+  const dias = c.trial_fin ? diasHasta(c.trial_fin) : null;
 
   return (
-    <div style={{ maxWidth: 860 }}>
-      <button onClick={() => router.push('/admin/colegios')} style={{ background: 'none', border: 'none', color: ADMIN.medio, fontFamily: QUICK, fontWeight: 700, fontSize: 14, cursor: 'pointer', padding: 0, marginBottom: 10 }}>
-        ← Colegios
+    <div>
+      <button onClick={() => router.push('/admin/colegios')} style={{ background: 'none', border: 'none', color: ADMIN.tinta2, fontWeight: 700, fontSize: 14.5, cursor: 'pointer', padding: 0, marginBottom: 14, fontFamily: NUNITO }}>
+        ‹ Colegios
       </button>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 4 }}>
-        <h1 style={{ fontFamily: BALOO, fontWeight: 800, fontSize: 'clamp(24px,4vw,30px)', color: ADMIN.ink, margin: 0 }}>{c.nombre}</h1>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', marginBottom: 18 }}>
+        <h1 style={{ fontFamily: BALOO, fontWeight: 700, fontSize: 'clamp(24px, 3.2vw, 32px)', color: ADMIN.ink, margin: 0 }}>{c.nombre}</h1>
         <Pill tupla={ESTADO_COLEGIO[c.estado]} />
-        <Pill tupla={PLAN_PILL[det.feature.plan] ?? PLAN_PILL.custom} />
-      </div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '10px 0 20px' }}>
+        <span style={{ background: ADMIN.burbuja, border: `1px solid ${ADMIN.borde}`, color: ADMIN.oscuro, borderRadius: 999, padding: '5px 13px', fontFamily: QUICK, fontWeight: 700, fontSize: 13 }}>
+          Plan {PLAN_LABEL[det.feature.plan] ?? PLAN_LABEL.custom}
+        </span>
+        <div style={{ flex: 1 }} />
         {puedeActivar && (
-          <button onClick={() => cambiarEstado('activo')} disabled={busy} style={{ ...btn, background: ADMIN.okFondo, color: ADMIN.okTexto, borderColor: ADMIN.okBorde }}>
+          <button onClick={() => cambiarEstado('activo')} disabled={busy} className="ed-primary" style={{ background: ADMIN.base, color: '#fff', border: 'none', borderRadius: 999, padding: '11px 22px', fontFamily: QUICK, fontWeight: 700, fontSize: 14, cursor: 'pointer', boxShadow: `0 6px 16px ${ADMIN.sombraCTA}` }}>
             Activar
           </button>
         )}
         {puedeSuspender && (
-          <button onClick={() => setConfirmando('suspendido')} disabled={busy} style={{ ...btn, color: ADMIN.danger, borderColor: ADMIN.dangerBorde }}>
-            Suspender…
+          <button onClick={() => setConfirmando('suspendido')} disabled={busy} className="ad-ghost-danger" style={{ ...btn, color: ADMIN.danger, borderColor: ADMIN.dangerBorde }}>
+            Suspender
           </button>
         )}
         {puedeArchivar && (
-          <button onClick={() => setConfirmando('archivado')} disabled={busy} style={{ ...btn, color: ADMIN.danger, borderColor: ADMIN.dangerBorde }}>
-            Archivar…
+          <button onClick={() => setConfirmando('archivado')} disabled={busy} className="ad-ghost-danger" style={{ ...btn, color: ADMIN.danger, borderColor: ADMIN.dangerBorde }}>
+            Archivar
           </button>
         )}
       </div>
 
       <FichaTabs colegioId={id} />
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 22 }}>
-        <Stat valor={det.counts.maestras} label={det.counts.maestras === 1 ? 'Maestra' : 'Maestras'} />
-        <Stat valor={det.counts.aulas} label={det.counts.aulas === 1 ? 'Aula' : 'Aulas'} />
-        <Stat valor={det.counts.alumnos} label={det.counts.alumnos === 1 ? 'Alumno' : 'Alumnos'} />
-        <Stat
-          valor={det.stats.sesiones_30d}
-          label="Sesiones (30 días)"
-          detalle={`${det.stats.respuestas_30d} ejercicios respondidos`}
-        />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 14, marginBottom: 18 }}>
+        <Stat chico valor={det.counts.maestras} label={det.counts.maestras === 1 ? 'maestra' : 'maestras'} />
+        <Stat chico valor={det.counts.aulas} label={det.counts.aulas === 1 ? 'aula' : 'aulas'} />
+        <Stat chico valor={det.counts.alumnos} label={det.counts.alumnos === 1 ? 'alumno' : 'alumnos'} />
+        <Stat chico valor={det.stats.sesiones_30d} label="sesiones · 30 días" detalle={`${det.stats.respuestas_30d} ejercicios respondidos`} />
       </div>
 
-      <div style={{ background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 22, padding: '20px 22px', boxShadow: `0 3px 10px ${ADMIN.sombraCalida}`, marginBottom: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
-          <h2 style={{ fontFamily: BALOO, fontWeight: 800, fontSize: 19, color: ADMIN.oscuro, margin: 0 }}>Datos del colegio</h2>
-          {!editando && <button onClick={() => setEditando(true)} style={btn}>Editar</button>}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 18, alignItems: 'start' }}>
+        <div style={{ background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 22, padding: 22 }}>
+          <h2 style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 17, color: ADMIN.oscuro, margin: '0 0 16px' }}>Datos del colegio</h2>
+          <label style={label}>Nombre</label>
+          <input value={fNombre} onChange={(e) => setFNombre(e.target.value)} style={{ ...input, width: '100%', marginBottom: 14 }} />
+          <label style={label}>Provincia</label>
+          <select value={fProvincia} onChange={(e) => setFProvincia(e.target.value)} style={{ ...input, width: '100%', marginBottom: 14, fontWeight: 700, cursor: 'pointer' }}>
+            <option value="">Sin asignar (la necesita el Observatorio)</option>
+            {PROVINCIAS.map((p) => (
+              <option key={p} value={p}>{p}</option>
+            ))}
+          </select>
+          <label style={label}>Zona</label>
+          <input value={fZona} onChange={(e) => setFZona(e.target.value)} placeholder="Sin zona" style={{ ...input, width: '100%', marginBottom: 14 }} />
+          <label style={label}>Tipo</label>
+          <select value={fTipo} onChange={(e) => setFTipo(e.target.value)} style={{ ...input, width: '100%', marginBottom: 18, fontWeight: 700, cursor: 'pointer' }}>
+            <option value="">Sin tipo</option>
+            {Object.entries(TIPO_COLEGIO).map(([k, lbl]) => (
+              <option key={k} value={k}>{lbl}</option>
+            ))}
+          </select>
+          <button
+            onClick={guardarDatos}
+            disabled={busy}
+            className="ed-primary"
+            style={{ background: ADMIN.base, color: '#fff', border: 'none', borderRadius: 999, padding: '11px 26px', fontFamily: QUICK, fontWeight: 700, fontSize: 14, cursor: busy ? 'not-allowed' : 'pointer' }}
+          >
+            {busy ? 'Guardando…' : 'Guardar'}
+          </button>
         </div>
 
-        {editando ? (
-          <div style={{ maxWidth: 460 }}>
-            <label style={label}>Nombre</label>
-            <input value={fNombre} onChange={(e) => setFNombre(e.target.value)} style={{ ...input, width: '100%', marginBottom: 12 }} />
-            <label style={label}>Provincia</label>
-            <select value={fProvincia} onChange={(e) => setFProvincia(e.target.value)} style={{ ...input, width: '100%', marginBottom: 12, cursor: 'pointer' }}>
-              <option value="">Sin asignar</option>
-              {PROVINCIAS.map((p) => (
-                <option key={p} value={p}>{p}</option>
-              ))}
-            </select>
-            <label style={label}>Zona (detalle libre)</label>
-            <input value={fZona} onChange={(e) => setFZona(e.target.value)} placeholder="Sin zona" style={{ ...input, width: '100%', marginBottom: 12 }} />
-            <label style={label}>Tipo</label>
-            <select value={fTipo} onChange={(e) => setFTipo(e.target.value)} style={{ ...input, width: '100%', marginBottom: 16, cursor: 'pointer' }}>
-              <option value="">Sin tipo</option>
-              {Object.entries(TIPO_COLEGIO).map(([k, lbl]) => (
-                <option key={k} value={k}>{lbl}</option>
-              ))}
-            </select>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button
-                onClick={guardarDatos}
-                disabled={busy}
-                style={{ ...btn, background: ADMIN.base, color: '#fff', border: 'none' }}
-              >
-                {busy ? 'Guardando…' : 'Guardar'}
-              </button>
-              <button
-                onClick={() => { setEditando(false); setFNombre(c.nombre); setFProvincia(c.provincia ?? ''); setFZona(c.zona ?? ''); setFTipo(c.tipo ?? ''); }}
-                disabled={busy}
-                style={btn}
-              >
-                Cancelar
-              </button>
+        {c.estado === 'trial' && c.trial_fin && dias !== null && (
+          <div style={{ background: ADMIN.warnFondo, border: `1.5px solid ${ADMIN.warnBorde}`, borderRadius: 22, padding: 22 }}>
+            <h2 style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 17, color: ADMIN.warnTexto, margin: '0 0 6px' }}>Período de prueba</h2>
+            <div style={{ fontFamily: BALOO, fontWeight: 700, fontSize: 28, color: ADMIN.warnTexto }}>
+              {dias >= 0 ? `Vence en ${dias} ${dias === 1 ? 'día' : 'días'}` : `Venció hace ${-dias} ${dias === -1 ? 'día' : 'días'}`}
             </div>
-          </div>
-        ) : (
-          <div style={{ fontFamily: NUNITO, fontSize: 15, color: ADMIN.ink, fontWeight: 600, lineHeight: 1.9 }}>
-            <div>
-              <span style={{ color: ADMIN.tinta2 }}>Provincia: </span>
-              {c.provincia || 'Sin asignar'}
-              <span style={{ color: ADMIN.tinta2, fontSize: 12.5 }}> (la necesita el Observatorio)</span>
+            <div style={{ fontSize: 14, color: ADMIN.tinta2, fontWeight: 600, marginTop: 4 }}>
+              {c.trial_inicio ? `Del ${c.trial_inicio} al ${c.trial_fin}` : `Hasta el ${c.trial_fin}`}
             </div>
-            <div><span style={{ color: ADMIN.tinta2 }}>Zona: </span>{c.zona || 'Sin zona'}</div>
-            <div><span style={{ color: ADMIN.tinta2 }}>Tipo: </span>{c.tipo ? TIPO_COLEGIO[c.tipo] ?? c.tipo : 'Sin tipo'}</div>
-            <div><span style={{ color: ADMIN.tinta2 }}>Alta: </span>{c.created_at?.slice(0, 10) ?? '—'}</div>
-            <div>
-              <span style={{ color: ADMIN.tinta2 }}>Features: </span>
-              SOL {det.feature.flags?.sol ? '✓' : '✗'} · LUNA {det.feature.flags?.luna?.activa ? '✓' : '✗'} · TERRA {det.feature.flags?.terra ? '✓' : '✗'}
-              <span style={{ color: ADMIN.tinta2 }}> (se manejan en la tab Features)</span>
-            </div>
+            <p style={{ fontSize: 13.5, color: ADMIN.tinta2, fontWeight: 600, margin: '12px 0 14px', lineHeight: 1.45 }}>
+              Al vencer, el colegio pasa a solo-lectura: ven todo lo suyo pero no generan nada nuevo.
+            </p>
+            <button
+              onClick={() => router.push(`/admin/colegios/${id}/accesos`)}
+              style={{ background: ADMIN.carta, border: `1.5px solid ${ADMIN.chipBorde}`, color: ADMIN.warnTexto, borderRadius: 999, padding: '10px 18px', fontFamily: QUICK, fontWeight: 700, fontSize: 13.5, cursor: 'pointer' }}
+            >
+              Gestionar accesos ›
+            </button>
           </div>
         )}
       </div>
-
-      {c.estado === 'trial' && c.trial_fin && (
-        <div style={{ background: ADMIN.warnFondo, border: `2px solid ${ADMIN.warnBorde}`, borderRadius: 22, padding: '16px 20px', fontFamily: NUNITO, fontSize: 14.5, color: ADMIN.warnTexto, fontWeight: 700 }}>
-          Período de prueba: {c.trial_inicio ? `del ${c.trial_inicio} ` : ''}al {c.trial_fin}.{' '}
-          {diasHasta(c.trial_fin) >= 0
-            ? `Le quedan ${diasHasta(c.trial_fin)} días.`
-            : `Venció hace ${-diasHasta(c.trial_fin)} días: el colegio quedó en solo lectura. La extensión vive en la tab Accesos.`}
-        </div>
-      )}
 
       {confirmando === 'suspendido' && (
         <Confirmar

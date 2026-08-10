@@ -9,19 +9,15 @@ import { ADMIN } from '@/lib/admin/tema';
 import Stat from '@/components/admin/Stat';
 import FichaTabs from '@/components/admin/FichaTabs';
 import {
-  fmtTokens, fmtUsd, porcentaje, RANGOS, SIN_DATOS_COPY,
+  fmtTokens, fmtUsd, porcentaje, RANGOS,
   type GrupoCosto, type SemanaCosto, type TotalCosto,
 } from '@/lib/admin/costos';
 
 const BALOO = 'var(--font-baloo), cursive';
 const QUICK = 'var(--font-quicksand), sans-serif';
 
-const h2: React.CSSProperties = { fontFamily: BALOO, fontWeight: 800, fontSize: 19, color: ADMIN.oscuro, margin: '26px 0 10px' };
-const carta: React.CSSProperties = { background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 22, boxShadow: `0 3px 10px ${ADMIN.sombraCalida}`, overflow: 'hidden' };
-const th: React.CSSProperties = { fontFamily: QUICK, fontWeight: 700, fontSize: 12.5, color: ADMIN.tinta2, textAlign: 'left', padding: '10px 16px', borderBottom: `2px solid ${ADMIN.bordeCalido}` };
-const thNum: React.CSSProperties = { ...th, textAlign: 'right' };
-const td: React.CSSProperties = { padding: '10px 16px', fontSize: 14, color: ADMIN.ink, borderBottom: `1px solid ${ADMIN.bordeCalido}` };
-const tdNum: React.CSSProperties = { ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' };
+const h2: React.CSSProperties = { fontFamily: QUICK, fontWeight: 700, fontSize: 17, color: ADMIN.oscuro, margin: '0 0 12px' };
+const carta: React.CSSProperties = { background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 22, padding: 22 };
 
 type Detalle = {
   nombre: string | null;
@@ -69,21 +65,19 @@ export default function Page() {
       <FichaTabs colegioId={colegioId} />
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-        <h1 style={{ fontFamily: BALOO, fontWeight: 800, fontSize: 26, color: ADMIN.ink, margin: 0 }}>
+        <h1 style={{ fontFamily: BALOO, fontWeight: 700, fontSize: 'clamp(24px, 3.2vw, 32px)', color: ADMIN.ink, margin: 0 }}>
           Costos{detalle?.nombre ? ` — ${detalle.nombre}` : ''}
         </h1>
-        <div style={{ display: 'flex', gap: 6 }}>
-          {RANGOS.map((r) =>
-            r === rango ? (
-              <div key={r} style={{ background: ADMIN.claro, color: ADMIN.oscuro, borderRadius: 999, padding: '6px 14px', fontFamily: QUICK, fontWeight: 700, fontSize: 13.5 }}>
-                {r} días
-              </div>
-            ) : (
-              <button key={r} onClick={() => setRango(r)} className="ed-side" style={{ background: 'none', border: `2px solid ${ADMIN.borde}`, color: ADMIN.tinta2, borderRadius: 999, padding: '4px 12px', fontFamily: QUICK, fontWeight: 700, fontSize: 13.5, cursor: 'pointer' }}>
-                {r} días
-              </button>
-            ),
-          )}
+        <div style={{ display: 'flex', gap: 5, background: ADMIN.carta, border: `1.5px solid ${ADMIN.bordeCalido}`, borderRadius: 999, padding: 4 }}>
+          {RANGOS.map((r) => (
+            <button
+              key={r}
+              onClick={() => r !== rango && setRango(r)}
+              style={{ background: r === rango ? ADMIN.base : 'transparent', color: r === rango ? '#fff' : ADMIN.tinta2, border: 'none', borderRadius: 999, padding: '8px 16px', fontFamily: QUICK, fontWeight: 700, fontSize: 13, cursor: r === rango ? 'default' : 'pointer' }}
+            >
+              {r} días
+            </button>
+          ))}
         </div>
       </div>
 
@@ -99,57 +93,47 @@ export default function Page() {
 
       {!cargando && !error && (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginTop: 18 }}>
-            <Stat valor={fmtUsd(total?.costo_usd ?? 0)} label="Costo del período" detalle={`últimos ${rango} días`} />
-            <Stat valor={total?.llamadas ?? 0} label="Llamadas a la API" />
-            <Stat valor={fmtTokens((total?.tokens_entrada ?? 0) + (total?.tokens_salida ?? 0))} label="Tokens usados" detalle={`${fmtTokens(total?.tokens_entrada ?? 0)} entrada · ${fmtTokens(total?.tokens_salida ?? 0)} salida`} />
-            <Stat valor={`${porcentaje(total?.errores ?? 0, total?.llamadas ?? 0)}%`} label="Tasa de error" detalle={`${total?.errores ?? 0} con error`} />
-          </div>
-
           {sinDatos ? (
-            <div style={{ marginTop: 22, background: ADMIN.burbuja, border: `2px solid ${ADMIN.borde}`, borderRadius: 22, padding: '22px 24px', color: ADMIN.medio, fontWeight: 700, fontSize: 14.5, lineHeight: 1.5 }}>
-              {SIN_DATOS_COPY}
+            <div style={{ marginTop: 18, textAlign: 'center', background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 22, padding: '48px 24px', maxWidth: 640 }}>
+              <div style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 19, color: ADMIN.ink }}>Sin datos de uso todavía</div>
+              <div style={{ fontSize: 14.5, color: ADMIN.tinta2, fontWeight: 600, marginTop: 4 }}>
+                Cuando el colegio empiece a usar la IA, acá vas a ver el costo.
+              </div>
             </div>
           ) : (
             <>
-              <h2 style={h2}>Por función</h2>
-              <div style={carta}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr>
-                      <th style={th}>Función</th>
-                      <th style={thNum}>Costo</th>
-                      <th style={thNum}>Llamadas</th>
-                      <th style={thNum}>Tokens</th>
-                      <th style={thNum}>Errores</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(detalle?.por_funcion ?? []).map((g, i, arr) => (
-                      <tr key={g.clave}>
-                        <td style={{ ...td, fontWeight: 700, ...(i === arr.length - 1 ? { borderBottom: 'none' } : {}) }}>{g.clave}</td>
-                        <td style={{ ...tdNum, ...(i === arr.length - 1 ? { borderBottom: 'none' } : {}) }}>{fmtUsd(g.costo_usd)}</td>
-                        <td style={{ ...tdNum, ...(i === arr.length - 1 ? { borderBottom: 'none' } : {}) }}>{g.llamadas}</td>
-                        <td style={{ ...tdNum, ...(i === arr.length - 1 ? { borderBottom: 'none' } : {}) }}>{fmtTokens(g.tokens_entrada + g.tokens_salida)}</td>
-                        <td style={{ ...tdNum, color: g.errores > 0 ? ADMIN.danger : ADMIN.tinta2, ...(i === arr.length - 1 ? { borderBottom: 'none' } : {}) }}>{g.errores}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 14, marginTop: 18, marginBottom: 18 }}>
+                <Stat chico valor={fmtUsd(total?.costo_usd ?? 0)} label="costo del período" detalle={`últimos ${rango} días`} />
+                <Stat chico valor={total?.llamadas ?? 0} label="llamadas a la IA" />
+                <Stat chico valor={fmtTokens((total?.tokens_entrada ?? 0) + (total?.tokens_salida ?? 0))} label="tokens" detalle={`${fmtTokens(total?.tokens_entrada ?? 0)} entrada · ${fmtTokens(total?.tokens_salida ?? 0)} salida`} />
+                <Stat chico valor={`${porcentaje(total?.errores ?? 0, total?.llamadas ?? 0)}%`} label="tasa de error" detalle={`${total?.errores ?? 0} con error`} />
               </div>
 
-              <h2 style={h2}>Semana a semana</h2>
-              <div style={{ ...carta, padding: '10px 0' }}>
+              <div style={{ ...carta, maxWidth: 640, marginBottom: 18 }}>
+                <h2 style={h2}>Desglose por función</h2>
+                {(detalle?.por_funcion ?? []).map((g, i, arr) => (
+                  <div key={g.clave} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '11px 0', borderBottom: i === arr.length - 1 ? 'none' : `1px solid ${ADMIN.divisor}`, fontSize: 14.5, fontWeight: 700 }}>
+                    <span style={{ color: ADMIN.ink }}>{g.clave}</span>
+                    <span style={{ color: g.errores > 0 ? ADMIN.danger : ADMIN.tinta2 }}>
+                      {g.llamadas} llamadas · {fmtTokens(g.tokens_entrada + g.tokens_salida)}{g.errores > 0 ? ` · ${g.errores} con error` : ''}
+                    </span>
+                    <span style={{ color: ADMIN.oscuro }}>{fmtUsd(g.costo_usd)}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ ...carta, maxWidth: 640 }}>
+                <h2 style={h2}>Semana a semana</h2>
                 {(detalle?.serie ?? []).map((s, i, arr) => (
-                  <div key={s.desde} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '9px 16px', borderBottom: i === arr.length - 1 ? 'none' : `1px solid ${ADMIN.bordeCalido}` }}>
-                    <div style={{ width: 110, fontSize: 13, fontWeight: 700, color: ADMIN.tinta2, fontVariantNumeric: 'tabular-nums' }}>
+                  <div key={s.desde} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '9px 0', borderBottom: i === arr.length - 1 ? 'none' : `1px solid ${ADMIN.divisor}` }}>
+                    <div style={{ width: 100, fontSize: 13, fontWeight: 700, color: ADMIN.tinta2, fontVariantNumeric: 'tabular-nums' }}>
                       {fechaCorta(s.desde)} – {fechaCorta(s.hasta)}
                     </div>
-                    <div style={{ flex: 1, height: 14, borderRadius: 999, background: ADMIN.burbuja, overflow: 'hidden' }}>
+                    <div style={{ flex: 1, height: 12, borderRadius: 999, background: ADMIN.divisor, overflow: 'hidden' }}>
                       <div style={{ width: `${Math.min(100, (s.costo_usd / maxSemana) * 100)}%`, height: '100%', background: ADMIN.base, borderRadius: 999 }} />
                     </div>
-                    <div style={{ width: 90, textAlign: 'right', fontWeight: 800, fontSize: 13.5, color: ADMIN.ink, fontVariantNumeric: 'tabular-nums' }}>{fmtUsd(s.costo_usd)}</div>
-                    <div style={{ width: 90, textAlign: 'right', fontSize: 12.5, color: ADMIN.tinta2 }}>{s.llamadas} llamadas</div>
+                    <div style={{ width: 90, textAlign: 'right', fontWeight: 800, fontSize: 13.5, color: ADMIN.oscuro, fontVariantNumeric: 'tabular-nums' }}>{fmtUsd(s.costo_usd)}</div>
+                    <div style={{ width: 90, textAlign: 'right', fontSize: 12.5, fontWeight: 600, color: ADMIN.tinta2 }}>{s.llamadas} llamadas</div>
                   </div>
                 ))}
               </div>

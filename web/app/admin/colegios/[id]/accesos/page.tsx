@@ -40,22 +40,22 @@ const FEATURES_UI: readonly { feature: string; clave: 'sol_mes' | 'boletines_mes
 ];
 
 const card: React.CSSProperties = {
-  background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 22,
-  padding: '22px 24px', boxShadow: `0 3px 10px ${ADMIN.sombraCalida}`, marginBottom: 18,
+  background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 22, padding: 22,
 };
-const h2: React.CSSProperties = { fontFamily: BALOO, fontWeight: 800, fontSize: 19, color: ADMIN.oscuro, margin: '0 0 14px' };
-const labelSt: React.CSSProperties = { fontFamily: QUICK, fontWeight: 700, fontSize: 13.5, color: ADMIN.tinta2, display: 'block', marginBottom: 4 };
+const h2: React.CSSProperties = { fontFamily: QUICK, fontWeight: 700, fontSize: 17, color: ADMIN.oscuro, margin: '0 0 12px' };
+const labelSt: React.CSSProperties = { display: 'block', fontSize: 13, fontWeight: 700, color: ADMIN.tinta2, marginBottom: 6 };
 const inputSt: React.CSSProperties = {
-  width: '100%', padding: '10px 12px', border: `2px solid ${ADMIN.borde}`, borderRadius: 12,
-  fontFamily: NUNITO, fontSize: 15, color: ADMIN.ink, background: '#fff', outline: 'none',
+  width: '100%', padding: '11px 12px', border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 12,
+  fontFamily: NUNITO, fontSize: 14, color: ADMIN.ink, background: ADMIN.suave, outline: 'none',
 };
 const btnPrimario: React.CSSProperties = {
-  background: ADMIN.base, border: 'none', borderRadius: 12, padding: '10px 18px',
-  fontFamily: QUICK, fontWeight: 700, fontSize: 14.5, color: '#fff', cursor: 'pointer',
+  background: ADMIN.base, border: 'none', borderRadius: 999, padding: '11px 22px',
+  fontFamily: QUICK, fontWeight: 700, fontSize: 14, color: '#fff', cursor: 'pointer',
+  boxShadow: `0 6px 16px ${ADMIN.sombraCTA}`,
 };
 const btnBorde: React.CSSProperties = {
-  background: 'none', border: `2px solid ${ADMIN.borde}`, borderRadius: 12, padding: '10px 18px',
-  fontFamily: QUICK, fontWeight: 700, fontSize: 14.5, color: ADMIN.medio, cursor: 'pointer',
+  background: ADMIN.carta, border: `1.5px solid ${ADMIN.borde}`, borderRadius: 999, padding: '11px 18px',
+  fontFamily: QUICK, fontWeight: 700, fontSize: 14, color: ADMIN.oscuro, cursor: 'pointer',
 };
 
 // Días (enteros) desde hoy hasta `fecha` (YYYY-MM-DD). Negativo = ya pasó.
@@ -64,20 +64,25 @@ function diasHasta(fecha: string): number {
   return Math.round((Date.parse(`${fecha}T00:00:00Z`) - Date.parse(`${hoy}T00:00:00Z`)) / 86400000);
 }
 
-function CountdownTrial({ fin }: { fin: string | null }) {
-  if (!fin) {
-    return <span style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 14, color: ADMIN.tinta2 }}>Sin fecha de vencimiento.</span>;
-  }
-  const d = diasHasta(fin);
-  const [bg, color, texto] = d < 0
-    ? [ADMIN.dangerBorde, '#8A3D30', `Vencido hace ${-d} ${-d === 1 ? 'día' : 'días'}`]
-    : d === 0
-      ? [ADMIN.warnFondo, ADMIN.warnTexto, 'Vence hoy']
-      : [ADMIN.warnFondo, ADMIN.warnTexto, `Vence en ${d} ${d === 1 ? 'día' : 'días'}`];
+// Caja de countdown del mock: warn si quedan ≤5 días (o venció), petróleo si no.
+function CajaTrial({ estado, fin }: { estado: string; fin: string | null }) {
+  const d = estado === 'trial' && fin ? diasHasta(fin) : null;
+  const urgente = d !== null && d <= 5;
+  const texto = estado !== 'trial'
+    ? 'Sin prueba activa'
+    : d === null ? 'Sin fecha de vencimiento'
+    : d < 0 ? `Venció hace ${-d} ${-d === 1 ? 'día' : 'días'}`
+    : d === 0 ? 'Vence hoy'
+    : `Vence en ${d} ${d === 1 ? 'día' : 'días'}`;
   return (
-    <span style={{ background: bg, color, borderRadius: 999, padding: '5px 14px', fontFamily: QUICK, fontWeight: 700, fontSize: 13.5, whiteSpace: 'nowrap' }}>
+    <div style={{
+      fontFamily: BALOO, fontWeight: 700, fontSize: 26, display: 'inline-block', borderRadius: 16, padding: '14px 20px',
+      color: urgente ? ADMIN.warnTexto : ADMIN.oscuro,
+      background: urgente ? ADMIN.warnFondo : ADMIN.burbuja,
+      border: `1.5px solid ${urgente ? ADMIN.warnBorde : ADMIN.borde}`,
+    }}>
       {texto}
-    </span>
+    </div>
   );
 }
 
@@ -85,14 +90,12 @@ function BarraConsumo({ label, uso, tope }: { label: string; uso: number; tope: 
   const pct = tope > 0 ? Math.min(100, (uso / tope) * 100) : 0;
   const color = pct > 90 ? ADMIN.danger : ADMIN.base;
   return (
-    <div style={{ marginBottom: 14 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 5 }}>
-        <span style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 13.5, color: ADMIN.ink }}>{label}</span>
-        <span style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 13, color: pct > 90 ? ADMIN.danger : ADMIN.tinta2 }}>
-          {uso} / {tope}
-        </span>
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13.5, fontWeight: 700, color: ADMIN.ink, marginBottom: 6 }}>
+        <span>{label}</span>
+        <span style={{ color: pct > 90 ? ADMIN.danger : ADMIN.tinta2 }}>{uso} / {tope}</span>
       </div>
-      <div style={{ background: ADMIN.claro, borderRadius: 999, height: 12, overflow: 'hidden' }}>
+      <div style={{ height: 12, background: ADMIN.divisor, borderRadius: 999, overflow: 'hidden' }}>
         <div style={{ width: `${pct}%`, minWidth: uso > 0 ? 6 : 0, height: '100%', background: color, borderRadius: 999, transition: 'width .3s ease' }} />
       </div>
     </div>
@@ -156,12 +159,8 @@ export default function Page() {
   };
 
   return (
-    <div style={{ maxWidth: 860 }}>
+    <div>
       <FichaTabs colegioId={id} />
-      <h1 style={{ fontFamily: BALOO, fontWeight: 800, fontSize: 26, color: ADMIN.ink, margin: '0 0 4px' }}>Accesos y límites</h1>
-      <p style={{ fontFamily: NUNITO, fontSize: 14.5, color: ADMIN.tinta2, margin: '0 0 20px' }}>
-        Trial con corte suave (al vencer, el colegio queda en solo lectura) y topes mensuales de IA.
-      </p>
 
       {cargando && (
         <div style={{ ...card, color: ADMIN.tinta2, fontFamily: QUICK, fontWeight: 700 }}>Cargando…</div>
@@ -173,74 +172,72 @@ export default function Page() {
       )}
 
       {!cargando && data && (
-        <>
-          {/* ── Trial ─────────────────────────────────────────────────── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 18, alignItems: 'start' }}>
+          {/* ── Período de prueba ─────────────────────────────────────── */}
           <section style={card}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
-              <h2 style={{ ...h2, margin: 0 }}>Trial</h2>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+              <h2 style={{ ...h2, margin: 0 }}>Período de prueba</h2>
               <Pill tupla={ESTADO_COLEGIO[data.colegio.estado]} />
-              {data.colegio.estado === 'trial' && <CountdownTrial fin={data.colegio.trial_fin} />}
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 16 }}>
-              <div>
+            <CajaTrial estado={data.colegio.estado} fin={data.colegio.trial_fin} />
+            <div style={{ display: 'flex', gap: 12, margin: '16px 0' }}>
+              <div style={{ flex: 1 }}>
                 <label style={labelSt}>Inicio</label>
                 <input type="date" value={inicio} onChange={(e) => setInicio(e.target.value)} style={inputSt} />
               </div>
-              <div>
+              <div style={{ flex: 1 }}>
                 <label style={labelSt}>Fin</label>
                 <input type="date" value={fin} onChange={(e) => setFin(e.target.value)} style={inputSt} />
               </div>
             </div>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              <button onClick={guardarFechas} disabled={busy !== null} style={btnPrimario}>
-                {busy === 'set_trial' ? 'Guardando…' : 'Guardar fechas'}
-              </button>
-              <button onClick={extender} disabled={busy !== null} style={btnBorde}>
+              <button onClick={extender} disabled={busy !== null} className="ed-primary" style={btnPrimario}>
                 {busy === 'extender_trial' ? 'Extendiendo…' : '+30 días'}
               </button>
-              <button onClick={finalizar} disabled={busy !== null} style={btnBorde}>
-                {busy === 'finalizar_trial' ? 'Un momento…' : 'Finalizar trial (activar)'}
+              <button onClick={guardarFechas} disabled={busy !== null} className="ad-ghost" style={btnBorde}>
+                {busy === 'set_trial' ? 'Guardando…' : 'Guardar fechas'}
+              </button>
+              <button onClick={finalizar} disabled={busy !== null} className="ad-ghost" style={btnBorde}>
+                {busy === 'finalizar_trial' ? 'Un momento…' : 'Finalizar prueba (activar)'}
               </button>
             </div>
           </section>
 
           {/* ── Topes mensuales ───────────────────────────────────────── */}
           <section style={card}>
-            <h2 style={h2}>Topes mensuales de IA</h2>
-            <p style={{ fontFamily: NUNITO, fontSize: 13.5, color: ADMIN.tinta2, margin: '0 0 14px' }}>
-              Llamadas por mes calendario. Vacío = usar el default de la plataforma.
+            <h2 style={{ ...h2, margin: '0 0 4px' }}>Topes mensuales de IA</h2>
+            <p style={{ fontFamily: NUNITO, fontSize: 13, color: ADMIN.tinta2, fontWeight: 600, margin: '0 0 16px' }}>
+              Vacío = volver al valor por defecto.
             </p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 16 }}>
-              {FEATURES_UI.map(({ clave, label }) => (
-                <div key={clave}>
-                  <label style={labelSt}>{label}</label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={topes[clave]}
-                    placeholder={String(data.limites[clave])}
-                    onChange={(e) => setTopes((t) => ({ ...t, [clave]: e.target.value }))}
-                    style={inputSt}
-                  />
-                </div>
-              ))}
-            </div>
-            <button onClick={guardarTopes} disabled={busy !== null} style={btnPrimario}>
-              {busy === 'set_limites' ? 'Guardando…' : 'Guardar topes'}
+            {FEATURES_UI.map(({ clave, label }) => (
+              <div key={clave} style={{ marginBottom: 12 }}>
+                <label style={labelSt}>{label}</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={topes[clave]}
+                  placeholder={String(data.limites[clave])}
+                  onChange={(e) => setTopes((t) => ({ ...t, [clave]: e.target.value }))}
+                  style={inputSt}
+                />
+              </div>
+            ))}
+            <button onClick={guardarTopes} disabled={busy !== null} className="ed-primary" style={{ ...btnPrimario, boxShadow: 'none', marginTop: 4 }}>
+              {busy === 'set_limites' ? 'Guardando…' : 'Guardar'}
             </button>
           </section>
 
           {/* ── Consumo del mes ───────────────────────────────────────── */}
-          <section style={{ ...card, marginBottom: 0 }}>
-            <h2 style={h2}>Consumo del mes</h2>
+          <section style={card}>
+            <h2 style={{ ...h2, margin: '0 0 16px' }}>Consumo del mes</h2>
             {FEATURES_UI.map(({ feature, clave, label }) => (
               <BarraConsumo key={feature} label={label} uso={data.uso[feature] ?? 0} tope={data.limites[clave]} />
             ))}
-            <p style={{ fontFamily: NUNITO, fontSize: 12.5, color: ADMIN.tinta2, margin: '4px 0 0', opacity: 0.85 }}>
+            <p style={{ fontFamily: NUNITO, fontSize: 12.5, color: ADMIN.tinta2, fontWeight: 600, margin: '4px 0 0' }}>
               Desde el {new Date(data.desde).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', timeZone: 'UTC' })}. Las alertas de LUNA no gastan IA y no tienen tope.
             </p>
           </section>
-        </>
+        </div>
       )}
     </div>
   );

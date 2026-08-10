@@ -124,31 +124,33 @@ export default function MaestrasDelColegio() {
   }
 
   return (
-    <div style={{ maxWidth: 860 }}>
-      <FichaTabs colegioId={id} />
-
-      <h1 style={{ fontFamily: BALOO, fontWeight: 800, fontSize: 24, color: ADMIN.ink, margin: '0 0 4px' }}>
+    <div>
+      <h1 style={{ fontFamily: BALOO, fontWeight: 700, fontSize: 'clamp(24px, 3.2vw, 32px)', color: ADMIN.ink, margin: '0 0 14px' }}>
         Maestras{colegioNombre ? ` de ${colegioNombre}` : ' del colegio'}
       </h1>
-      <p style={{ fontFamily: NUNITO, fontSize: 15, color: ADMIN.tinta2, fontWeight: 600, margin: '0 0 20px' }}>
-        El alta desde acá crea la cuenta directo en este colegio.
-      </p>
+      <FichaTabs colegioId={id} />
 
-      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 18 }}>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
         <input
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
-          placeholder="Buscar por nombre o email…"
-          style={{ ...campo, flex: 1, minWidth: 220 }}
+          placeholder="Buscar por nombre o email..."
+          style={{ ...campo, flex: 1, minWidth: 200, maxWidth: 340, padding: '11px 16px', background: ADMIN.carta }}
         />
+        <div style={{ flex: 1 }} />
         <button onClick={() => setNueva(true)} className="ed-primary" style={btnPrimario}>+ Nueva maestra</button>
       </div>
 
       {!loaded ? (
         <p style={{ color: ADMIN.tinta2, fontWeight: 700, fontFamily: QUICK }}>Cargando…</p>
       ) : visibles.length === 0 ? (
-        <div style={{ background: ADMIN.burbuja, border: `2px solid ${ADMIN.borde}`, borderRadius: 22, padding: '22px 24px', color: ADMIN.medio, fontWeight: 700, fontFamily: QUICK }}>
-          {maestras.length === 0 ? 'Este colegio todavía no tiene maestras. Creá la primera con "Nueva maestra".' : 'Ninguna maestra coincide con la búsqueda.'}
+        <div style={{ textAlign: 'center', background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 22, padding: '48px 24px' }}>
+          <div style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 19, color: ADMIN.ink }}>
+            {maestras.length === 0 ? 'Este colegio todavía no tiene maestras' : 'Ninguna maestra coincide con la búsqueda'}
+          </div>
+          <div style={{ fontSize: 14.5, color: ADMIN.tinta2, fontWeight: 600, marginTop: 4 }}>
+            {maestras.length === 0 ? 'Creá la primera con «+ Nueva maestra».' : 'Probá con otro nombre u otro email.'}
+          </div>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -203,34 +205,32 @@ function FilaMaestra({ m, busy, esSuper, onReset, onEstado, onVerComo, onBorrar 
 }) {
   const suspendida = m.estado === 'suspendido';
   return (
-    <div style={{ background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 22, padding: '16px 20px', boxShadow: `0 3px 10px ${ADMIN.sombraCalida}`, display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: 180 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <span style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 17, color: ADMIN.ink }}>{m.nombre}</span>
-            <Pill tupla={ESTADO_MAESTRA[m.estado]} />
-            {m.trial_fin && (
-              <span style={{ background: ADMIN.warnFondo, color: ADMIN.warnTexto, borderRadius: 999, padding: '4px 12px', fontFamily: QUICK, fontWeight: 700, fontSize: 12.5 }}>
-                Prueba hasta {m.trial_fin}
-              </span>
-            )}
-          </div>
-          <div style={{ fontFamily: NUNITO, fontSize: 13.5, color: ADMIN.tinta2, fontWeight: 600, marginTop: 3 }}>
-            {m.email ?? 'sin email'}
-            {' · '}{m.aulas.length} {m.aulas.length === 1 ? 'aula' : 'aulas'} · {m.alumnos} {m.alumnos === 1 ? 'alumno' : 'alumnos'}
-            {' · '}Último acceso: {m.ultimo_acceso ? fechaRelativa(m.ultimo_acceso, new Date()) : 'Nunca entró'}
-          </div>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 20, padding: '16px 20px' }}>
+      <div style={{ flex: 1, minWidth: 180 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <span style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 16.5, color: ADMIN.ink }}>{m.nombre}</span>
+          {m.trial_fin && (
+            <span style={{ background: ADMIN.warnFondo, border: `1px solid ${ADMIN.warnBorde}`, color: ADMIN.warnTexto, borderRadius: 999, padding: '3px 10px', fontSize: 11.5, fontWeight: 800 }}>
+              Prueba hasta {m.trial_fin}
+            </span>
+          )}
+        </div>
+        <div style={{ fontFamily: NUNITO, fontSize: 13, color: ADMIN.tinta2, fontWeight: 600 }}>
+          {m.email ?? 'sin email'}
+          {' · '}{m.aulas.length} {m.aulas.length === 1 ? 'aula' : 'aulas'} · {m.alumnos} {m.alumnos === 1 ? 'alumno' : 'alumnos'}
+          {' · '}Último acceso: {m.ultimo_acceso ? fechaRelativa(m.ultimo_acceso, new Date()) : 'Nunca entró'}
         </div>
       </div>
+      <Pill tupla={ESTADO_MAESTRA[m.estado]} />
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <button onClick={onReset} disabled={busy} style={btnGhostSm}>Reset contraseña</button>
-        <button onClick={onEstado} disabled={busy} style={suspendida ? { ...btnGhostSm, color: ADMIN.okTexto, borderColor: ADMIN.okBorde } : { ...btnGhostSm, color: ADMIN.danger, borderColor: ADMIN.dangerBorde }}>
+        <button onClick={onReset} disabled={busy} className="ad-ghost" style={btnGhostSm}>Reset contraseña</button>
+        <button onClick={onEstado} disabled={busy} className="ad-ghost-warm" style={{ ...btnGhostSm, color: ADMIN.tinta2, borderColor: ADMIN.bordeCalido }}>
           {busy ? 'Un momento…' : suspendida ? 'Reactivar' : 'Suspender'}
         </button>
-        <button onClick={onVerComo} disabled={busy} style={btnGhostSm}>Ver como</button>
+        <button onClick={onVerComo} disabled={busy} className="ad-ghost" style={btnGhostSm}>Ver como</button>
         {esSuper && (
-          <button onClick={onBorrar} disabled={busy} style={{ ...btnGhostSm, color: '#fff', background: ADMIN.danger, border: `2px solid ${ADMIN.danger}`, marginLeft: 'auto' }}>
-            Borrar
+          <button onClick={onBorrar} disabled={busy} className="ad-ghost-danger" style={{ ...btnGhostSm, color: ADMIN.danger, borderColor: ADMIN.dangerBorde }}>
+            Eliminar
           </button>
         )}
       </div>
@@ -263,13 +263,13 @@ function ModalNueva({ colegioFijo, onCerrar, onCreada }: {
   return (
     <Overlay onCerrar={onCerrar}>
       <h3 style={tituloModal}>Nueva maestra</h3>
-      <p style={textoModal}>Se crea la cuenta en este colegio y te damos un link de invitación + una contraseña temporal para pasarle.</p>
+      <p style={textoModal}>Se crea la cuenta en este colegio, con link de invitación y contraseña temporal para pasarle.</p>
       <label style={labelStyle}>Nombre</label>
-      <input value={nombre} onChange={(e) => setNombre(e.target.value)} style={{ ...campo, marginBottom: 12 }} placeholder="Seño Marta" />
+      <input value={nombre} onChange={(e) => setNombre(e.target.value)} style={{ ...campo, marginBottom: 12 }} placeholder="Marcela Duarte" />
       <label style={labelStyle}>Email</label>
-      <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={{ ...campo, marginBottom: 12 }} placeholder="marta@escuela.edu.ar" />
-      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
-        <button onClick={onCerrar} style={btnGhost}>Cancelar</button>
+      <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={{ ...campo, marginBottom: 20 }} placeholder="marcela@escuela.edu.ar" />
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+        <button onClick={onCerrar} className="ad-ghost-warm" style={btnGhost}>Cancelar</button>
         <button onClick={crear} className="ed-primary" style={btnPrimario} disabled={busy}>
           {busy ? 'Creando…' : 'Crear cuenta'}
         </button>
@@ -282,18 +282,17 @@ function ModalNueva({ colegioFijo, onCerrar, onCreada }: {
 function ModalInvitacion({ inv, onCerrar }: { inv: Invitacion; onCerrar: () => void }) {
   return (
     <Overlay onCerrar={onCerrar}>
-      <h3 style={tituloModal}>¡Cuenta creada para {inv.nombre}!</h3>
-      <div style={{ background: ADMIN.warnFondo, border: `2px solid ${ADMIN.warnBorde}`, borderRadius: 14, padding: '12px 14px', fontFamily: QUICK, fontWeight: 700, fontSize: 13.5, color: ADMIN.warnTexto, marginBottom: 14 }}>
-        Guardá estos datos ahora: no se vuelven a mostrar.
-      </div>
+      <h3 style={tituloModal}>Cuenta creada</h3>
+      <p style={textoModal}>Pasale estos datos a {inv.nombre} para que entre por primera vez.</p>
+      <div style={avisoSecretos}>Guardá estos datos ahora: no se vuelven a mostrar.</div>
       {inv.link ? (
-        <CampoCopiable label="Link de invitación (elige su contraseña)" valor={inv.link} />
+        <CampoCopiable label="Link de invitación" valor={inv.link} />
       ) : (
         <p style={textoModal}>No se pudo generar el link de invitación. Pasale la contraseña temporal.</p>
       )}
-      {inv.password_temporal && <CampoCopiable label="Contraseña temporal" valor={inv.password_temporal} />}
+      {inv.password_temporal && <CampoCopiable label="Contraseña temporal" valor={inv.password_temporal} destacado />}
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
-        <button onClick={onCerrar} className="ed-primary" style={btnPrimario}>Listo, ya los guardé</button>
+        <button onClick={onCerrar} className="ed-primary" style={{ ...btnPrimario, padding: '11px 26px', boxShadow: 'none' }}>Listo, los guardé</button>
       </div>
     </Overlay>
   );
@@ -303,23 +302,36 @@ function ModalInvitacion({ inv, onCerrar }: { inv: Invitacion; onCerrar: () => v
 function ModalReset({ nombre, link, onCerrar }: { nombre: string; link: string; onCerrar: () => void }) {
   return (
     <Overlay onCerrar={onCerrar}>
-      <h3 style={tituloModal}>Reset de contraseña</h3>
-      <p style={textoModal}>Pasale este link a {nombre} para que elija una contraseña nueva.</p>
+      <h3 style={tituloModal}>Contraseña reseteada</h3>
+      <p style={textoModal}>El link anterior de {nombre} quedó inválido.</p>
+      <div style={avisoSecretos}>Guardá estos datos ahora: no se vuelven a mostrar.</div>
       <CampoCopiable label="Link de recuperación" valor={link} />
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
-        <button onClick={onCerrar} className="ed-primary" style={btnPrimario}>Listo</button>
+        <button onClick={onCerrar} className="ed-primary" style={{ ...btnPrimario, padding: '11px 26px', boxShadow: 'none' }}>Listo, los guardé</button>
       </div>
     </Overlay>
   );
 }
 
-function CampoCopiable({ label, valor }: { label: string; valor: string }) {
+function CampoCopiable({ label, valor, destacado }: { label: string; valor: string; destacado?: boolean }) {
+  const [copiado, setCopiado] = useState(false);
   return (
     <div style={{ marginBottom: 14 }}>
       <label style={labelStyle}>{label}</label>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <input readOnly value={valor} onFocus={(e) => e.currentTarget.select()} style={{ ...campo, flex: 1, minWidth: 0, fontSize: 13.5, background: ADMIN.burbuja }} />
-        <button onClick={() => copiar(valor)} style={btnGhostSm}>Copiar</button>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input
+          readOnly
+          value={valor}
+          onFocus={(e) => e.currentTarget.select()}
+          style={{ ...campo, flex: 1, minWidth: 0, padding: '11px 12px', fontSize: destacado ? 14 : 13, fontWeight: destacado ? 800 : undefined, letterSpacing: destacado ? 1 : undefined }}
+        />
+        <button
+          onClick={() => { copiar(valor); setCopiado(true); setTimeout(() => setCopiado(false), 1400); }}
+          className="ed-primary"
+          style={{ background: ADMIN.base, color: '#fff', border: 'none', borderRadius: 12, padding: '0 18px', fontFamily: QUICK, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
+        >
+          {copiado ? 'Copiado' : 'Copiar'}
+        </button>
       </div>
     </div>
   );
@@ -327,19 +339,20 @@ function CampoCopiable({ label, valor }: { label: string; valor: string }) {
 
 function Overlay({ children, onCerrar }: { children: React.ReactNode; onCerrar: () => void }) {
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(58,51,42,.45)', display: 'grid', placeItems: 'center', zIndex: 60, animation: 'edFade .2s ease', padding: 18 }} onClick={onCerrar}>
-      <div style={{ width: '100%', maxWidth: 480, background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 24, padding: '26px 28px', boxShadow: '0 18px 44px rgba(58,51,42,.3)' }} onClick={(e) => e.stopPropagation()}>
+    <div style={{ position: 'fixed', inset: 0, background: ADMIN.velo, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: 22 }} onClick={onCerrar}>
+      <div style={{ width: '100%', maxWidth: 440, background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 24, padding: 28, boxShadow: '0 20px 50px rgba(58,51,42,.25)', animation: 'adPop .25s ease' }} onClick={(e) => e.stopPropagation()}>
         {children}
       </div>
     </div>
   );
 }
 
-// ---------- estilos ----------
-const tituloModal: React.CSSProperties = { fontFamily: BALOO, fontWeight: 800, fontSize: 21, color: ADMIN.ink, margin: '0 0 8px' };
-const textoModal: React.CSSProperties = { fontFamily: NUNITO, fontSize: 14.5, color: ADMIN.tinta2, margin: '0 0 14px', lineHeight: 1.5 };
-const labelStyle: React.CSSProperties = { display: 'block', fontFamily: QUICK, fontSize: 13, fontWeight: 700, color: ADMIN.tinta2, marginBottom: 5 };
-const campo: React.CSSProperties = { width: '100%', padding: '11px 13px', border: `2px solid ${ADMIN.borde}`, borderRadius: 12, fontFamily: NUNITO, fontSize: 15, color: ADMIN.ink, background: ADMIN.carta, outline: 'none' };
-const btnPrimario: React.CSSProperties = { background: ADMIN.base, color: '#fff', border: 'none', borderRadius: 12, padding: '11px 20px', fontFamily: QUICK, fontWeight: 700, fontSize: 15, cursor: 'pointer' };
-const btnGhost: React.CSSProperties = { background: 'none', border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 12, padding: '10px 18px', fontFamily: QUICK, fontWeight: 700, fontSize: 14.5, color: ADMIN.tinta2, cursor: 'pointer' };
-const btnGhostSm: React.CSSProperties = { background: 'none', border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 10, padding: '7px 13px', fontFamily: QUICK, fontWeight: 700, fontSize: 13.5, color: ADMIN.tinta2, cursor: 'pointer' };
+// ---------- estilos (del mock Admin.dc.html) ----------
+const tituloModal: React.CSSProperties = { fontFamily: QUICK, fontWeight: 700, fontSize: 20, color: ADMIN.ink, margin: '0 0 4px' };
+const textoModal: React.CSSProperties = { fontFamily: NUNITO, fontSize: 13.5, fontWeight: 600, color: ADMIN.tinta2, margin: '0 0 16px', lineHeight: 1.5 };
+const labelStyle: React.CSSProperties = { display: 'block', fontSize: 13, fontWeight: 700, color: ADMIN.tinta2, marginBottom: 6 };
+const campo: React.CSSProperties = { width: '100%', padding: '12px 14px', border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 12, fontFamily: NUNITO, fontSize: 14, color: ADMIN.ink, background: ADMIN.suave, outline: 'none' };
+const btnPrimario: React.CSSProperties = { background: ADMIN.base, color: '#fff', border: 'none', borderRadius: 999, padding: '11px 24px', fontFamily: QUICK, fontWeight: 700, fontSize: 14, cursor: 'pointer', boxShadow: `0 6px 16px ${ADMIN.sombraCTA}` };
+const btnGhost: React.CSSProperties = { background: ADMIN.carta, border: `1.5px solid ${ADMIN.bordeCalido}`, borderRadius: 999, padding: '11px 20px', fontFamily: QUICK, fontWeight: 700, fontSize: 14, color: ADMIN.tinta2, cursor: 'pointer' };
+const btnGhostSm: React.CSSProperties = { background: ADMIN.carta, border: `1.5px solid ${ADMIN.borde}`, borderRadius: 999, padding: '8px 14px', fontFamily: QUICK, fontWeight: 700, fontSize: 12.5, color: ADMIN.oscuro, cursor: 'pointer' };
+const avisoSecretos: React.CSSProperties = { background: ADMIN.warnFondo, border: `1.5px solid ${ADMIN.sol}`, borderRadius: 12, padding: '12px 14px', fontSize: 13.5, fontWeight: 800, color: ADMIN.warnTexto, marginBottom: 16 };
