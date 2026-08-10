@@ -137,7 +137,9 @@ Deno.serve(async (req) => {
           traerAlumnos(),
           traerSesiones(),
         ]);
-        const { filas, sinProvincia } = agregarPorProvincia({ escuelas, alumnos, sesiones });
+        const { filas, sinProvincia } = agregarPorProvincia({
+          escuelas, alumnos, sesiones: soloIncluidos(sesiones, alumnos),
+        });
         return json({
           rango_dias: rango,
           generado_en: new Date().toISOString(),
@@ -161,7 +163,12 @@ Deno.serve(async (req) => {
         ]);
         const provinciaDeAlumno = armarProvinciaDeAlumno(escuelas, alumnos);
         const filas = agregarPorMateria(
-          { sesiones, curriculo, alumnoNodo, provinciaDeAlumno },
+          {
+            sesiones: soloIncluidos(sesiones, alumnos),
+            curriculo,
+            alumnoNodo: soloIncluidos(alumnoNodo, alumnos),
+            provinciaDeAlumno,
+          },
           undefined,
           esProvinciaValida(provincia) ? provincia : undefined,
         );
@@ -190,7 +197,7 @@ Deno.serve(async (req) => {
         ]);
         const provinciaDeAlumno = armarProvinciaDeAlumno(escuelas, alumnos);
         const { temas, aproximado } = topTemasQueCuestan(
-          { sesiones, nodos, curriculo, provinciaDeAlumno },
+          { sesiones: soloIncluidos(sesiones, alumnos), nodos, curriculo, provinciaDeAlumno },
           { materia, grado, provincia: esProvinciaValida(provincia) ? provincia : undefined },
         );
         return json({ rango_dias: rango, temas, aproximado });
