@@ -27,7 +27,7 @@ type AlertaAdmin = {
 
 // Chips por prioridad como tuplas [bg, color, label] (patrón del tema admin).
 const CHIP: Record<'alta' | 'media', readonly [string, string, string]> = {
-  alta: [ADMIN.dangerBorde, '#8A3D30', 'Alta'],
+  alta: [ADMIN.dangerFondo, ADMIN.danger, 'Alta'],
   media: [ADMIN.warnFondo, ADMIN.warnTexto, 'Media'],
 };
 
@@ -95,22 +95,14 @@ export default function Page() {
 
   return (
     <div style={{ maxWidth: 860 }}>
-      <style>{`
-        .ed-adm-listo { transition: background .14s ease, border-color .14s ease; }
-        .ed-adm-listo:hover { background: ${ADMIN.claro}; border-color: ${ADMIN.base}; }
-        .ed-adm-link { transition: color .14s ease; }
-        .ed-adm-link:hover { color: ${ADMIN.oscuro}; }
-        .ed-adm-recalc { transition: background .14s ease, border-color .14s ease; }
-        .ed-adm-recalc:hover:not(:disabled) { background: ${ADMIN.claro}; }
-      `}</style>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, marginBottom: 18 }}>
         <div>
-          <h1 style={{ fontFamily: BALOO, fontWeight: 800, fontSize: 26, color: ADMIN.ink, margin: '0 0 6px' }}>Alertas</h1>
-          <p style={{ fontFamily: NUNITO, fontSize: 15, color: ADMIN.tinta2, fontWeight: 600, margin: '0 0 4px' }}>
+          <h1 style={{ fontFamily: BALOO, fontWeight: 700, fontSize: 'clamp(26px, 3.6vw, 34px)', color: ADMIN.ink, margin: '0 0 4px' }}>Alertas</h1>
+          <p style={{ fontFamily: NUNITO, fontSize: 15.5, color: ADMIN.tinta2, fontWeight: 600, margin: 0 }}>
             Trials por vencer, colegios inactivos y costos disparados. «Listo ✓» la marca como atendida y no vuelve.
           </p>
           {estado.modo === 'lista' && (
-            <p style={{ fontFamily: QUICK, fontSize: 13, color: ADMIN.tinta2, fontWeight: 700, margin: '0 0 20px' }}>
+            <p style={{ fontFamily: QUICK, fontSize: 13, color: ADMIN.tinta2, fontWeight: 700, margin: '4px 0 0' }}>
               {estado.generadaAt
                 ? `Actualizadas ${relativo(estado.generadaAt, new Date())} · se recalculan solas cada noche`
                 : 'Todavía no se calcularon. Tocá «Recalcular ahora».'}
@@ -120,9 +112,9 @@ export default function Page() {
         <button
           onClick={recalcular}
           disabled={recalculando}
-          className="ed-adm-recalc"
+          className="ad-ghost"
           title="Corre el mismo cálculo que el job nocturno, ahora"
-          style={{ flexShrink: 0, background: ADMIN.carta, border: `2px solid ${ADMIN.borde}`, borderRadius: 999, padding: '9px 18px', fontFamily: QUICK, fontWeight: 700, fontSize: 14, color: ADMIN.oscuro, cursor: recalculando ? 'wait' : 'pointer', opacity: recalculando ? 0.7 : 1 }}
+          style={{ flexShrink: 0, background: ADMIN.carta, border: `1.5px solid ${ADMIN.borde}`, borderRadius: 999, padding: '11px 22px', fontFamily: QUICK, fontWeight: 700, fontSize: 14.5, color: ADMIN.oscuro, cursor: recalculando ? 'wait' : 'pointer', opacity: recalculando ? 0.7 : 1 }}
         >
           {recalculando ? 'Recalculando…' : 'Recalcular ahora'}
         </button>
@@ -141,49 +133,55 @@ export default function Page() {
           {estado.mensaje}
         </div>
       ) : estado.alertas.length === 0 ? (
-        <div style={{ background: ADMIN.okFondo, border: `2px solid ${ADMIN.okBorde}`, borderRadius: 22, padding: '20px 24px', fontFamily: QUICK, fontWeight: 700, fontSize: 16, color: ADMIN.okTexto }}>
-          Todo tranquilo por acá ✨
+        <div style={{ textAlign: 'center', background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 22, padding: '48px 24px', maxWidth: 820 }}>
+          <div style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 20, color: ADMIN.ink }}>Todo tranquilo por acá</div>
+          <div style={{ fontSize: 14.5, color: ADMIN.tinta2, fontWeight: 600, marginTop: 4 }}>
+            Cuando algo necesite tu atención, aparece en esta lista.
+          </div>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 820 }}>
           {estado.alertas.map((a) => {
             const [bg, co, label] = CHIP[a.prioridad];
             return (
               <div
                 key={a.clave}
                 style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 16,
+                  flexWrap: 'wrap',
                   background: ADMIN.carta,
                   border: `2px solid ${a.prioridad === 'alta' ? ADMIN.dangerBorde : ADMIN.warnBorde}`,
-                  borderRadius: 22,
-                  padding: '16px 20px',
-                  boxShadow: `0 3px 10px ${ADMIN.sombraCalida}`,
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: 14,
+                  borderRadius: 20,
+                  padding: '18px 22px',
+                  boxShadow: '0 3px 10px rgba(120,90,40,.05)',
                 }}
               >
-                <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ flex: 1, minWidth: 240 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                    <span style={{ background: bg, color: co, borderRadius: 999, padding: '4px 12px', fontSize: 11.5, fontWeight: 800 }}>{label}</span>
                     <span style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 16.5, color: ADMIN.ink }}>{a.titulo}</span>
-                    <span style={{ background: bg, color: co, padding: '3px 11px', borderRadius: 999, fontFamily: QUICK, fontWeight: 700, fontSize: 12 }}>{label}</span>
                   </div>
-                  <p style={{ margin: '5px 0 0', fontFamily: NUNITO, fontSize: 14.5, color: ADMIN.tinta2, fontWeight: 600, lineHeight: 1.45 }}>{a.detalle}</p>
+                  <p style={{ margin: '6px 0 0', fontFamily: NUNITO, fontSize: 14, color: ADMIN.tinta2, fontWeight: 600, lineHeight: 1.45 }}>{a.detalle}</p>
+                </div>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0 }}>
                   <button
                     onClick={() => router.push(`/admin/colegios/${a.escuelaId}`)}
-                    className="ed-adm-link"
-                    style={{ marginTop: 7, background: 'none', border: 'none', padding: 0, fontFamily: QUICK, fontWeight: 700, fontSize: 13.5, color: ADMIN.medio, cursor: 'pointer' }}
+                    className="ad-ghost"
+                    style={{ background: ADMIN.carta, border: `1.5px solid ${ADMIN.borde}`, color: ADMIN.oscuro, borderRadius: 999, padding: '9px 16px', fontFamily: QUICK, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
                   >
-                    Ver colegio →
+                    Ver colegio
+                  </button>
+                  <button
+                    onClick={() => atender(a)}
+                    className="ed-primary"
+                    title="Marcar como atendida: no vuelve a aparecer"
+                    style={{ background: ADMIN.base, color: '#fff', border: 'none', borderRadius: 999, padding: '9px 18px', fontFamily: QUICK, fontWeight: 700, fontSize: 13, cursor: 'pointer', boxShadow: '0 4px 12px rgba(62,124,138,.26)' }}
+                  >
+                    Listo ✓
                   </button>
                 </div>
-                <button
-                  onClick={() => atender(a)}
-                  className="ed-adm-listo"
-                  title="Marcar como atendida: no vuelve a aparecer"
-                  style={{ alignSelf: 'flex-start', flexShrink: 0, background: ADMIN.carta, border: `1.5px solid ${ADMIN.borde}`, borderRadius: 999, padding: '8px 16px', fontFamily: QUICK, fontWeight: 700, fontSize: 14, color: ADMIN.oscuro, cursor: 'pointer' }}
-                >
-                  Listo ✓
-                </button>
               </div>
             );
           })}

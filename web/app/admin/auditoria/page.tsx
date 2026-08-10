@@ -39,8 +39,12 @@ const ENTIDADES: [string, string][] = [
 ];
 
 const inputStyle: React.CSSProperties = {
-  padding: '10px 12px', border: `2px solid ${ADMIN.borde}`, borderRadius: 12,
-  fontFamily: NUNITO, fontSize: 14, color: ADMIN.ink, background: '#fff', outline: 'none',
+  padding: '10px 13px', border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 12,
+  fontFamily: NUNITO, fontWeight: 700, fontSize: 13.5, color: ADMIN.ink, background: ADMIN.carta, outline: 'none',
+};
+const labelFiltro: React.CSSProperties = {
+  display: 'flex', flexDirection: 'column', gap: 4,
+  fontFamily: QUICK, fontWeight: 700, fontSize: 12.5, color: ADMIN.tinta2,
 };
 
 function fechaLinda(iso: string): string {
@@ -113,52 +117,52 @@ export default function AuditoriaPage() {
   }
 
   return (
-    <div style={{ maxWidth: 860 }}>
-      <h1 style={{ fontFamily: BALOO, fontWeight: 800, fontSize: 26, color: ADMIN.ink, margin: '0 0 4px' }}>Auditoría</h1>
-      <p style={{ fontFamily: QUICK, fontWeight: 600, fontSize: 14.5, color: ADMIN.tinta2, margin: '0 0 18px' }}>
-        Quién hizo qué y cuándo. Toda acción del panel queda registrada acá.
+    <div>
+      <h1 style={{ fontFamily: BALOO, fontWeight: 700, fontSize: 'clamp(26px, 3.6vw, 34px)', color: ADMIN.ink, margin: '0 0 6px' }}>Auditoría</h1>
+      <p style={{ fontFamily: NUNITO, fontWeight: 600, fontSize: 14.5, color: ADMIN.tinta2, margin: '0 0 18px' }}>
+        Registro de solo lectura de toda mutación: quién hizo qué y cuándo.
       </p>
 
       {/* Filtros */}
-      <div style={{ background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 22, padding: '16px 18px', marginBottom: 18, boxShadow: `0 3px 10px ${ADMIN.sombraCalida}` }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'flex-end' }}>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontFamily: QUICK, fontWeight: 700, fontSize: 12.5, color: ADMIN.tinta2 }}>
-            Entidad
-            <select value={filtros.entidad} onChange={(e) => setFiltros({ ...filtros, entidad: e.target.value })} style={{ ...inputStyle, minWidth: 170 }}>
-              {ENTIDADES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-            </select>
-          </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontFamily: QUICK, fontWeight: 700, fontSize: 12.5, color: ADMIN.tinta2 }}>
-            Acción
-            <input value={filtros.accion} onChange={(e) => setFiltros({ ...filtros, accion: e.target.value })} placeholder="ej. crear_colegio" style={{ ...inputStyle, width: 160 }} />
-          </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontFamily: QUICK, fontWeight: 700, fontSize: 12.5, color: ADMIN.tinta2 }}>
-            Actor (email)
-            <input value={filtros.actor} onChange={(e) => setFiltros({ ...filtros, actor: e.target.value })} placeholder="ej. jorge@" style={{ ...inputStyle, width: 150 }} />
-          </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontFamily: QUICK, fontWeight: 700, fontSize: 12.5, color: ADMIN.tinta2 }}>
-            Desde
-            <input type="date" value={filtros.desde} onChange={(e) => setFiltros({ ...filtros, desde: e.target.value })} style={inputStyle} />
-          </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontFamily: QUICK, fontWeight: 700, fontSize: 12.5, color: ADMIN.tinta2 }}>
-            Hasta
-            <input type="date" value={filtros.hasta} onChange={(e) => setFiltros({ ...filtros, hasta: e.target.value })} style={inputStyle} />
-          </label>
-          <button
-            onClick={aplicar}
-            disabled={cargando}
-            style={{ background: ADMIN.base, color: '#fff', border: 'none', borderRadius: 12, padding: '11px 20px', fontFamily: QUICK, fontWeight: 700, fontSize: 14, cursor: cargando ? 'wait' : 'pointer' }}
-          >
-            Filtrar
-          </button>
-          <button
-            onClick={limpiar}
-            disabled={cargando}
-            style={{ background: 'none', color: ADMIN.tinta2, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 12, padding: '9px 16px', fontFamily: QUICK, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}
-          >
-            Limpiar
-          </button>
-        </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'flex-end', marginBottom: 16 }}>
+        <label style={labelFiltro}>
+          Entidad
+          <select value={filtros.entidad} onChange={(e) => setFiltros({ ...filtros, entidad: e.target.value })} style={{ ...inputStyle, minWidth: 170, cursor: 'pointer' }}>
+            {ENTIDADES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+        </label>
+        <label style={labelFiltro}>
+          Acción
+          <input value={filtros.accion} onChange={(e) => setFiltros({ ...filtros, accion: e.target.value })} placeholder="ej. crear_colegio" style={{ ...inputStyle, width: 160 }} />
+        </label>
+        <label style={labelFiltro}>
+          Actor (email)
+          <input value={filtros.actor} onChange={(e) => setFiltros({ ...filtros, actor: e.target.value })} placeholder="ej. jorge@" style={{ ...inputStyle, width: 150 }} />
+        </label>
+        <label style={labelFiltro}>
+          Desde
+          <input type="date" value={filtros.desde} onChange={(e) => setFiltros({ ...filtros, desde: e.target.value })} style={inputStyle} />
+        </label>
+        <label style={labelFiltro}>
+          Hasta
+          <input type="date" value={filtros.hasta} onChange={(e) => setFiltros({ ...filtros, hasta: e.target.value })} style={inputStyle} />
+        </label>
+        <button
+          onClick={aplicar}
+          disabled={cargando}
+          className="ed-primary"
+          style={{ background: ADMIN.base, color: '#fff', border: 'none', borderRadius: 999, padding: '11px 22px', fontFamily: QUICK, fontWeight: 700, fontSize: 14, cursor: cargando ? 'wait' : 'pointer', boxShadow: `0 6px 16px ${ADMIN.sombraCTA}` }}
+        >
+          Filtrar
+        </button>
+        <button
+          onClick={limpiar}
+          disabled={cargando}
+          className="ad-ghost-warm"
+          style={{ background: ADMIN.carta, color: ADMIN.tinta2, border: `1.5px solid ${ADMIN.bordeCalido}`, borderRadius: 999, padding: '11px 20px', fontFamily: QUICK, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}
+        >
+          Limpiar
+        </button>
       </div>
 
       {error && (
@@ -167,52 +171,52 @@ export default function AuditoriaPage() {
         </div>
       )}
 
-      {/* Timeline */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {/* Timeline: una sola tarjeta con un <details> por evento (mock) */}
+      <div style={{ background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 22, padding: '10px 22px', maxWidth: 860 }}>
         {eventos.map((ev) => (
-          <div key={ev.id} style={{ background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 18, padding: '13px 16px', boxShadow: `0 2px 8px ${ADMIN.sombraCalida}` }}>
-            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 12.5, color: ADMIN.tinta2, whiteSpace: 'nowrap' }}>{fechaLinda(ev.created_at)}</span>
+          <details key={ev.id} style={{ borderBottom: `1px solid ${ADMIN.divisor}`, padding: '13px 0' }}>
+            <summary style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', cursor: 'pointer', listStyle: 'none' }}>
+              <span style={{ fontSize: 12.5, color: ADMIN.tinta2, fontWeight: 700, minWidth: 118 }}>{fechaLinda(ev.created_at)}</span>
+              <span style={{ fontSize: 13, color: ADMIN.oscuro, fontWeight: 700 }}>{ev.actor_email ?? 'sin email'}</span>
               {ev.nivel && <Pill tupla={NIVEL_ADMIN[ev.nivel]} />}
-              <span style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 14.5, color: ADMIN.oscuro }}>{ev.accion}</span>
+              <span style={{ flex: 1, fontSize: 14, color: ADMIN.ink, fontWeight: 700 }}>{ev.accion}</span>
               {ev.entidad && (
-                <span style={{ fontFamily: NUNITO, fontSize: 13, color: ADMIN.tinta2 }}>
-                  {ev.entidad}{ev.entidad_id ? ` · ${ev.entidad_id.slice(0, 8)}…` : ''}
+                <span style={{ background: ADMIN.hover, border: `1px solid ${ADMIN.chipBorde}`, color: ADMIN.tinta2, borderRadius: 999, padding: '3px 10px', fontSize: 11, fontWeight: 800 }}>
+                  {ev.entidad}
                 </span>
               )}
-              <span style={{ marginLeft: 'auto', fontFamily: NUNITO, fontSize: 13, color: ADMIN.medio, fontWeight: 700 }}>{ev.actor_email ?? 'sin email'}</span>
-            </div>
-            {ev.detalle && Object.keys(ev.detalle).length > 0 && (
-              <details style={{ marginTop: 8 }}>
-                <summary style={{ cursor: 'pointer', fontFamily: QUICK, fontWeight: 700, fontSize: 12.5, color: ADMIN.medio }}>Ver detalle</summary>
-                <pre style={{ margin: '8px 0 0', padding: '10px 12px', background: ADMIN.burbuja, border: `1.5px solid ${ADMIN.borde}`, borderRadius: 12, fontSize: 12.5, color: ADMIN.ink, overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+            </summary>
+            <div style={{ fontSize: 13, color: ADMIN.tinta2, fontWeight: 600, padding: '10px 0 2px 130px' }}>
+              {ev.entidad_id ? `${ev.entidad ?? 'registro'} · ${ev.entidad_id}` : 'Sin identificador de registro'}
+              {ev.detalle && Object.keys(ev.detalle).length > 0 && (
+                <pre style={{ margin: '8px 0 0', padding: '10px 12px', background: ADMIN.suave, border: `1.5px solid ${ADMIN.bordeCalido}`, borderRadius: 12, fontSize: 12.5, color: ADMIN.ink, overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                   {JSON.stringify(ev.detalle, null, 2)}
                 </pre>
-              </details>
-            )}
-          </div>
+              )}
+            </div>
+          </details>
         ))}
         {!eventos.length && cargado && !cargando && (
-          <div style={{ background: ADMIN.burbuja, border: `2px solid ${ADMIN.borde}`, borderRadius: 18, padding: '18px 20px', color: ADMIN.medio, fontFamily: QUICK, fontWeight: 700, fontSize: 14.5 }}>
+          <div style={{ padding: '30px 0', textAlign: 'center', color: ADMIN.tinta2, fontFamily: QUICK, fontWeight: 700, fontSize: 14.5 }}>
             No hay eventos con esos filtros.
           </div>
         )}
         {cargando && !eventos.length && (
-          <p style={{ color: ADMIN.tinta2, fontFamily: QUICK, fontWeight: 700 }}>Cargando…</p>
+          <p style={{ padding: '20px 0', color: ADMIN.tinta2, fontFamily: QUICK, fontWeight: 700 }}>Cargando…</p>
+        )}
+        {cursor && (
+          <div style={{ textAlign: 'center', padding: '16px 0' }}>
+            <button
+              onClick={() => cargar(aplicados, cursor)}
+              disabled={cargando}
+              className="ad-ghost"
+              style={{ background: ADMIN.carta, border: `1.5px solid ${ADMIN.borde}`, borderRadius: 999, padding: '10px 24px', fontFamily: QUICK, fontWeight: 700, fontSize: 14, color: ADMIN.oscuro, cursor: cargando ? 'wait' : 'pointer' }}
+            >
+              {cargando ? 'Cargando…' : 'Cargar más'}
+            </button>
+          </div>
         )}
       </div>
-
-      {cursor && (
-        <div style={{ marginTop: 16, textAlign: 'center' }}>
-          <button
-            onClick={() => cargar(aplicados, cursor)}
-            disabled={cargando}
-            style={{ background: 'none', border: `2px solid ${ADMIN.borde}`, borderRadius: 14, padding: '11px 26px', fontFamily: QUICK, fontWeight: 700, fontSize: 14.5, color: ADMIN.oscuro, cursor: cargando ? 'wait' : 'pointer' }}
-          >
-            {cargando ? 'Cargando…' : 'Cargar más'}
-          </button>
-        </div>
-      )}
     </div>
   );
 }
