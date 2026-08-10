@@ -4,6 +4,7 @@
 // admin_nivel null), se cierra la sesión y se muestra un error genérico — no
 // se revela si el email existe ni si es de docente.
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { ADMIN } from '@/lib/admin/tema';
@@ -77,7 +78,7 @@ export default function AdminLogin() {
         >
           {busy ? 'Entrando…' : 'Entrar'}
         </button>
-        <a href="/" style={{ display: 'block', textAlign: 'center', marginTop: 18, fontSize: 13.5, fontWeight: 700, color: ADMIN.tinta2, textDecoration: 'none' }}>‹ Volver a EDUTIA</a>
+        <Link href="/" style={{ display: 'block', textAlign: 'center', marginTop: 18, fontSize: 13.5, fontWeight: 700, color: ADMIN.tinta2, textDecoration: 'none' }}>‹ Volver a EDUTIA</Link>
       </div>
     </div>
   );

@@ -11,7 +11,6 @@ import { ADMIN } from '@/lib/admin/tema';
 import { llamarAdmin, ERRS_ADMIN } from '@/lib/admin/api';
 import { PRESETS, detectarPlan, normalizarFlags, type Flags, type Plan } from '@/lib/admin/planes';
 
-const BALOO = 'var(--font-baloo), cursive';
 const NUNITO = 'var(--font-nunito)';
 const QUICK = 'var(--font-quicksand), sans-serif';
 

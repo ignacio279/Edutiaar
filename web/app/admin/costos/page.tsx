@@ -15,45 +15,35 @@ import {
 const BALOO = 'var(--font-baloo), cursive';
 const QUICK = 'var(--font-quicksand), sans-serif';
 
-// Semáforo → colores del tema: [fondo de la barra, relleno/texto fuerte].
-const SEMAFORO: Record<'ok' | 'aviso' | 'rojo', readonly [string, string]> = {
-  ok: [ADMIN.okFondo, ADMIN.okCheck],
-  aviso: [ADMIN.warnFondo, ADMIN.warnTexto],
-  rojo: [ADMIN.dangerBorde, ADMIN.danger],
+// Semáforo → color del texto y de la barra (umbrales de colorSalud).
+const SEMAFORO: Record<'ok' | 'aviso' | 'rojo', string> = {
+  ok: ADMIN.okCheck,
+  aviso: ADMIN.sol,
+  rojo: ADMIN.danger,
 };
 
-const h2: React.CSSProperties = { fontFamily: BALOO, fontWeight: 800, fontSize: 19, color: ADMIN.oscuro, margin: '26px 0 10px' };
-const carta: React.CSSProperties = { background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 22, boxShadow: `0 3px 10px ${ADMIN.sombraCalida}`, overflow: 'hidden' };
-const th: React.CSSProperties = { fontFamily: QUICK, fontWeight: 700, fontSize: 12.5, color: ADMIN.tinta2, textAlign: 'left', padding: '10px 16px', borderBottom: `2px solid ${ADMIN.bordeCalido}` };
-const thNum: React.CSSProperties = { ...th, textAlign: 'right' };
-const td: React.CSSProperties = { padding: '10px 16px', fontSize: 14, color: ADMIN.ink, borderBottom: `1px solid ${ADMIN.bordeCalido}` };
-const tdNum: React.CSSProperties = { ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' };
+const h2: React.CSSProperties = { fontFamily: QUICK, fontWeight: 700, fontSize: 17, color: ADMIN.oscuro, margin: '0 0 12px' };
+const carta: React.CSSProperties = { background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 22, padding: 22 };
 
-function TablaCostos({ grupos, etiqueta }: { grupos: GrupoCosto[]; etiqueta: string }) {
+// Lista de costos en filas con divisores (el mock no usa tablas densas).
+function ListaCostos({ grupos, titulo }: { grupos: GrupoCosto[]; titulo: string }) {
   return (
     <div style={carta}>
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr>
-            <th style={th}>{etiqueta}</th>
-            <th style={thNum}>Costo</th>
-            <th style={thNum}>Llamadas</th>
-            <th style={thNum}>Tokens</th>
-            <th style={thNum}>Errores</th>
-          </tr>
-        </thead>
-        <tbody>
-          {grupos.map((g, i) => (
-            <tr key={g.clave}>
-              <td style={{ ...td, fontWeight: 700, ...(i === grupos.length - 1 ? { borderBottom: 'none' } : {}) }}>{g.nombre ?? g.clave}</td>
-              <td style={{ ...tdNum, ...(i === grupos.length - 1 ? { borderBottom: 'none' } : {}) }}>{fmtUsd(g.costo_usd)}</td>
-              <td style={{ ...tdNum, ...(i === grupos.length - 1 ? { borderBottom: 'none' } : {}) }}>{g.llamadas}</td>
-              <td style={{ ...tdNum, ...(i === grupos.length - 1 ? { borderBottom: 'none' } : {}) }}>{fmtTokens(g.tokens_entrada + g.tokens_salida)}</td>
-              <td style={{ ...tdNum, color: g.errores > 0 ? ADMIN.danger : ADMIN.tinta2, ...(i === grupos.length - 1 ? { borderBottom: 'none' } : {}) }}>{g.errores}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <h2 style={h2}>{titulo}</h2>
+      {grupos.length === 0 ? (
+        <p style={{ fontSize: 14.5, color: ADMIN.tinta2, fontWeight: 600, margin: 0 }}>Sin movimientos en este período.</p>
+      ) : (
+        grupos.map((g, i) => (
+          <div key={g.clave} style={{ display: 'flex', gap: 12, justifyContent: 'space-between', padding: '11px 0', borderBottom: i === grupos.length - 1 ? 'none' : `1px solid ${ADMIN.divisor}`, fontSize: 14, fontWeight: 700 }}>
+            <span style={{ color: ADMIN.ink, flex: 2, minWidth: 0 }}>{g.nombre ?? g.clave}</span>
+            <span style={{ color: ADMIN.tinta2, flex: 1, textAlign: 'right' }}>{g.llamadas} llamadas</span>
+            <span style={{ color: g.errores > 0 ? ADMIN.danger : ADMIN.tinta2, flex: 1, textAlign: 'right' }}>
+              {fmtTokens(g.tokens_entrada + g.tokens_salida)}
+            </span>
+            <span style={{ color: ADMIN.oscuro, flex: 1, textAlign: 'right' }}>{fmtUsd(g.costo_usd)}</span>
+          </div>
+        ))
+      )}
     </div>
   );
 }
@@ -98,20 +88,18 @@ export default function Page() {
 
   return (
     <div style={{ maxWidth: 960 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-        <h1 style={{ fontFamily: BALOO, fontWeight: 800, fontSize: 26, color: ADMIN.ink, margin: 0 }}>Costos y salud</h1>
-        <div style={{ display: 'flex', gap: 6 }}>
-          {RANGOS.map((r) =>
-            r === rango ? (
-              <div key={r} style={{ background: ADMIN.claro, color: ADMIN.oscuro, borderRadius: 999, padding: '6px 14px', fontFamily: QUICK, fontWeight: 700, fontSize: 13.5 }}>
-                {r} días
-              </div>
-            ) : (
-              <button key={r} onClick={() => setRango(r)} className="ed-side" style={{ background: 'none', border: `2px solid ${ADMIN.borde}`, color: ADMIN.tinta2, borderRadius: 999, padding: '4px 12px', fontFamily: QUICK, fontWeight: 700, fontSize: 13.5, cursor: 'pointer' }}>
-                {r} días
-              </button>
-            ),
-          )}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, marginBottom: 18 }}>
+        <h1 style={{ fontFamily: BALOO, fontWeight: 700, fontSize: 'clamp(26px, 3.6vw, 34px)', color: ADMIN.ink, margin: 0 }}>Costos y salud</h1>
+        <div style={{ display: 'flex', gap: 5, background: ADMIN.carta, border: `1.5px solid ${ADMIN.bordeCalido}`, borderRadius: 999, padding: 4 }}>
+          {RANGOS.map((r) => (
+            <button
+              key={r}
+              onClick={() => r !== rango && setRango(r)}
+              style={{ background: r === rango ? ADMIN.base : 'transparent', color: r === rango ? '#fff' : ADMIN.tinta2, border: 'none', borderRadius: 999, padding: '8px 16px', fontFamily: QUICK, fontWeight: 700, fontSize: 13, cursor: r === rango ? 'default' : 'pointer' }}
+            >
+              {r} días
+            </button>
+          ))}
         </div>
       </div>
 
@@ -127,53 +115,54 @@ export default function Page() {
 
       {!cargando && !error && (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginTop: 18 }}>
-            <Stat valor={fmtUsd(total?.costo_usd ?? 0)} label="Costo del período" detalle={`últimos ${rango} días`} />
-            <Stat valor={total?.llamadas ?? 0} label="Llamadas a la API" />
-            <Stat valor={`${porcentaje(total?.errores ?? 0, total?.llamadas ?? 0)}%`} label="Tasa de error global" detalle={`${total?.errores ?? 0} con error`} />
-            <Stat valor={fmtMs(saludGlobal?.p95)} label="Latencia p95 global" detalle={`p50 ${fmtMs(saludGlobal?.p50)}`} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 18 }}>
+            <Stat valor={fmtUsd(total?.costo_usd ?? 0)} label="costo del período" detalle={`últimos ${rango} días`} />
+            <Stat valor={total?.llamadas ?? 0} label="llamadas a la IA" detalle="SOL + LUNA" />
+            <Stat valor={`${porcentaje(total?.errores ?? 0, total?.llamadas ?? 0)}%`} label="tasa de error global" detalle={`${total?.errores ?? 0} con error`} />
+            <Stat valor={fmtMs(saludGlobal?.p95)} label="latencia p95" detalle={`p50: ${fmtMs(saludGlobal?.p50)}`} />
           </div>
 
           {sinDatos ? (
-            <div style={{ marginTop: 22, background: ADMIN.burbuja, border: `2px solid ${ADMIN.borde}`, borderRadius: 22, padding: '22px 24px', color: ADMIN.medio, fontWeight: 700, fontSize: 14.5, lineHeight: 1.5 }}>
-              {SIN_DATOS_COPY}
+            <div style={{ textAlign: 'center', background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 22, padding: '48px 24px', maxWidth: 640 }}>
+              <div style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 19, color: ADMIN.ink }}>Sin datos de uso todavía</div>
+              <div style={{ fontSize: 14.5, color: ADMIN.tinta2, fontWeight: 600, marginTop: 4 }}>{SIN_DATOS_COPY}</div>
             </div>
           ) : (
             <>
-              <h2 style={h2}>Por colegio</h2>
-              <TablaCostos grupos={porColegio} etiqueta="Colegio" />
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 18, alignItems: 'start', marginBottom: 18 }}>
+                <ListaCostos grupos={porColegio} titulo="Por colegio" />
+                <ListaCostos grupos={porFuncion} titulo="Por función" />
+              </div>
 
-              <h2 style={h2}>Por función</h2>
-              <TablaCostos grupos={porFuncion} etiqueta="Función" />
-
-              <h2 style={h2}>Salud de las funciones</h2>
-              <div style={{ ...carta, padding: '6px 0' }}>
-                {salud.map((s, i) => {
-                  const clave = colorSalud(s.tasa_error);
-                  const [fondo, fuerte] = SEMAFORO[clave];
-                  const pct = Math.round(s.tasa_error * 1000) / 10; // fracción → % con 1 decimal
-                  return (
-                    <div key={s.funcion} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '11px 16px', borderBottom: i === salud.length - 1 ? 'none' : `1px solid ${ADMIN.bordeCalido}`, flexWrap: 'wrap' }}>
-                      <div style={{ width: 170, fontWeight: 700, fontSize: 14, color: ADMIN.ink }}>{s.funcion}</div>
-                      <div style={{ flex: '1 1 140px', minWidth: 120, height: 12, borderRadius: 999, background: fondo, overflow: 'hidden' }}>
-                        <div style={{ width: `${Math.min(100, Math.max(s.tasa_error > 0 ? 3 : 0, s.tasa_error * 100))}%`, height: '100%', background: fuerte, borderRadius: 999 }} />
-                      </div>
-                      <div style={{ width: 64, textAlign: 'right', fontWeight: 800, fontSize: 13.5, color: fuerte, fontVariantNumeric: 'tabular-nums' }}>{pct}%</div>
-                      <div style={{ width: 150, textAlign: 'right', fontSize: 12.5, color: ADMIN.tinta2, fontVariantNumeric: 'tabular-nums' }}>
-                        p50 {fmtMs(s.p50)} · p95 {fmtMs(s.p95)}
-                      </div>
-                      <div style={{ width: 110, textAlign: 'right', fontSize: 12.5, color: ADMIN.tinta2 }}>
-                        {s.errores_consecutivos > 3 ? (
-                          <span style={{ background: ADMIN.dangerBorde, color: ADMIN.danger, borderRadius: 999, padding: '3px 10px', fontWeight: 800, fontSize: 12 }}>
-                            {s.errores_consecutivos} seguidos
+              <div style={carta}>
+                <h2 style={{ ...h2, marginBottom: 16 }}>Salud técnica</h2>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {salud.map((s) => {
+                    const color = SEMAFORO[colorSalud(s.tasa_error)];
+                    const pct = Math.round(s.tasa_error * 1000) / 10; // fracción → % con 1 decimal
+                    return (
+                      <div key={s.funcion}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 6 }}>
+                          <span style={{ fontSize: 14.5, fontWeight: 700, color: ADMIN.ink, minWidth: 170 }}>{s.funcion}</span>
+                          <span style={{ fontSize: 12.5, color: ADMIN.tinta2, fontWeight: 700 }}>
+                            p50 {fmtMs(s.p50)} · p95 {fmtMs(s.p95)} · {s.llamadas} llamadas
                           </span>
-                        ) : (
-                          `${s.llamadas} llamadas`
-                        )}
+                          {s.errores_consecutivos > 3 && (
+                            <span style={{ background: ADMIN.dangerFondo, border: `1px solid ${ADMIN.dangerBorde}`, color: ADMIN.danger, borderRadius: 999, padding: '3px 11px', fontSize: 11.5, fontWeight: 800 }}>
+                              {s.errores_consecutivos} fallos seguidos
+                            </span>
+                          )}
+                          <span style={{ marginLeft: 'auto', fontSize: 12.5, fontWeight: 800, color }}>
+                            {String(pct).replace('.', ',')}% de error
+                          </span>
+                        </div>
+                        <div style={{ height: 10, background: ADMIN.divisor, borderRadius: 999, overflow: 'hidden' }}>
+                          <div style={{ width: `${Math.min(100, Math.max(s.tasa_error > 0 ? 3 : 0, s.tasa_error * 1000))}%`, height: '100%', background: color, borderRadius: 999 }} />
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             </>
           )}

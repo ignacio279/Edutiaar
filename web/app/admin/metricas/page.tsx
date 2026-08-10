@@ -20,12 +20,10 @@ const QUICK = 'var(--font-quicksand), sans-serif';
 // Rangos del selector (días). El backend acota igual (máximo 90).
 const RANGOS = [7, 30, 90] as const;
 
-const h2: React.CSSProperties = { fontFamily: BALOO, fontWeight: 800, fontSize: 19, color: ADMIN.oscuro, margin: '26px 0 10px' };
-const carta: React.CSSProperties = { background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 22, boxShadow: `0 3px 10px ${ADMIN.sombraCalida}`, overflow: 'hidden' };
-const th: React.CSSProperties = { fontFamily: QUICK, fontWeight: 700, fontSize: 12.5, color: ADMIN.tinta2, textAlign: 'left', padding: '10px 16px', borderBottom: `2px solid ${ADMIN.bordeCalido}` };
-const thNum: React.CSSProperties = { ...th, textAlign: 'right' };
-const td: React.CSSProperties = { padding: '10px 16px', fontSize: 14, color: ADMIN.ink, borderBottom: `1px solid ${ADMIN.bordeCalido}` };
-const tdNum: React.CSSProperties = { ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' };
+const h2: React.CSSProperties = { fontFamily: QUICK, fontWeight: 700, fontSize: 17, color: ADMIN.oscuro, margin: 0 };
+const carta: React.CSSProperties = { background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 22, padding: 22 };
+// Encabezado de la comparativa: mayúsculas chiquitas, como en el mock.
+const thComp: React.CSSProperties = { fontSize: 11.5, fontWeight: 800, color: ADMIN.tinta2, letterSpacing: '.6px' };
 
 // "6/8" — el año no aporta nada en estas vistas.
 const fechaCorta = (iso?: string | null) => {
@@ -92,20 +90,18 @@ export default function Page() {
 
   return (
     <div style={{ maxWidth: 1000 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-        <h1 style={{ fontFamily: BALOO, fontWeight: 800, fontSize: 26, color: ADMIN.ink, margin: 0 }}>Métricas</h1>
-        <div style={{ display: 'flex', gap: 6 }}>
-          {RANGOS.map((r) =>
-            r === rango ? (
-              <div key={r} style={{ background: ADMIN.claro, color: ADMIN.oscuro, borderRadius: 999, padding: '6px 14px', fontFamily: QUICK, fontWeight: 700, fontSize: 13.5 }}>
-                {r} días
-              </div>
-            ) : (
-              <button key={r} onClick={() => setRango(r)} className="ed-side" style={{ background: 'none', border: `2px solid ${ADMIN.borde}`, color: ADMIN.tinta2, borderRadius: 999, padding: '4px 12px', fontFamily: QUICK, fontWeight: 700, fontSize: 13.5, cursor: 'pointer' }}>
-                {r} días
-              </button>
-            ),
-          )}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, marginBottom: 18 }}>
+        <h1 style={{ fontFamily: BALOO, fontWeight: 700, fontSize: 'clamp(26px, 3.6vw, 34px)', color: ADMIN.ink, margin: 0 }}>Métricas</h1>
+        <div style={{ display: 'flex', gap: 5, background: ADMIN.carta, border: `1.5px solid ${ADMIN.bordeCalido}`, borderRadius: 999, padding: 4 }}>
+          {RANGOS.map((r) => (
+            <button
+              key={r}
+              onClick={() => r !== rango && setRango(r)}
+              style={{ background: r === rango ? ADMIN.base : 'transparent', color: r === rango ? '#fff' : ADMIN.tinta2, border: 'none', borderRadius: 999, padding: '8px 16px', fontFamily: QUICK, fontWeight: 700, fontSize: 13, cursor: r === rango ? 'default' : 'pointer' }}
+            >
+              {r} días
+            </button>
+          ))}
         </div>
       </div>
 
@@ -122,126 +118,117 @@ export default function Page() {
       {!cargando && !error && (
         <>
           {/* ── Uso del período ───────────────────────────────────────────── */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginTop: 18 }}>
-            <Stat valor={uso?.ejerciciosRespondidos ?? 0} label="Ejercicios respondidos" detalle={`últimos ${rango} días`} />
-            <Stat valor={uso?.ejerciciosGenerados ?? 0} label="Ejercicios generados" detalle="por SOL" />
-            <Stat valor={uso?.boletinesGenerados ?? 0} label="Boletines de LUNA" detalle={`${uso?.boletinesAprobadosSinEditar ?? 0} aprobados sin editar`} />
-            <Stat valor={uso?.chats ?? 0} label="Consultas a LUNA" detalle="mensajes de las maestras" />
-          </div>
-
-          {/* ── Adopción semana a semana ──────────────────────────────────── */}
-          <h2 style={h2}>Adopción, semana a semana</h2>
-          <div style={{ ...carta, padding: '18px 20px' }}>
-            {serie.length === 0 ? (
-              <div style={{ color: ADMIN.tinta2, fontFamily: QUICK, fontWeight: 700, fontSize: 14 }}>Sin datos todavía.</div>
-            ) : (
-              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, height: 130 }}>
-                {serie.map((s) => (
-                  <div key={s.desde} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                    <div style={{ fontSize: 12, fontWeight: 800, color: ADMIN.medio, fontVariantNumeric: 'tabular-nums' }}>{s.sesiones}</div>
-                    <div
-                      title={`${s.alumnosActivos} chicos`}
-                      style={{ width: '100%', maxWidth: 54, height: Math.max(4, Math.round((s.sesiones / maxSemana) * 82)), background: ADMIN.base, borderRadius: 8 }}
-                    />
-                    <div style={{ fontSize: 11.5, color: ADMIN.tinta2, fontFamily: QUICK, fontWeight: 700, textAlign: 'center' }}>
-                      {fechaCorta(s.desde)}–{fechaCorta(s.hasta)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 18 }}>
+            <Stat valor={uso?.ejerciciosRespondidos ?? 0} label="ejercicios respondidos" detalle={`últimos ${rango} días`} />
+            <Stat valor={uso?.ejerciciosGenerados ?? 0} label="ejercicios generados" detalle="por SOL" />
+            <Stat valor={uso?.boletinesGenerados ?? 0} label="boletines generados" detalle={`${uso?.boletinesAprobadosSinEditar ?? 0} aprobados sin editar`} />
+            <Stat valor={uso?.chats ?? 0} label="chats con LUNA" detalle="consultas de maestras" />
           </div>
 
           {/* ── Funnel de onboarding ──────────────────────────────────────── */}
-          <h2 style={h2}>Cómo arrancó cada colegio</h2>
-          <div style={carta}>
+          <div style={{ ...carta, marginBottom: 18 }}>
+            <h2 style={{ ...h2, margin: '0 0 4px' }}>Funnel de onboarding</h2>
+            <p style={{ fontSize: 13, color: ADMIN.tinta2, fontWeight: 600, margin: '0 0 16px' }}>
+              Creado → maestras invitadas → primera actividad → primer boletín aprobado
+            </p>
             {funnels.length === 0 ? (
-              <div style={{ padding: '22px 20px', color: ADMIN.tinta2, fontFamily: QUICK, fontWeight: 700, fontSize: 14 }}>
+              <p style={{ color: ADMIN.tinta2, fontWeight: 600, fontSize: 14.5, margin: 0 }}>
                 Todavía no hay colegios cargados.
-              </div>
+              </p>
             ) : (
-              funnels.map((f, i) => {
-                const etapas = funnelColegio(f);
-                return (
-                  <div key={f.escuela.id} style={{ padding: '14px 16px', borderBottom: i === funnels.length - 1 ? 'none' : `1px solid ${ADMIN.bordeCalido}` }}>
-                    <button
-                      onClick={() => router.push(`/admin/colegios/${f.escuela.id}`)}
-                      className="ed-side"
-                      style={{ background: 'none', border: 'none', padding: 0, fontFamily: BALOO, fontWeight: 800, fontSize: 16, color: ADMIN.ink, cursor: 'pointer' }}
-                    >
-                      {f.escuela.nombre ?? 'Colegio'}
-                    </button>
-                    <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginTop: 8 }}>
-                      {etapas.map((e) => (
-                        <div key={e.clave} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                          <span style={{ color: e.hecho ? ADMIN.okCheck : ADMIN.borde, fontWeight: 800, fontSize: 15 }}>
-                            {e.hecho ? '✓' : '○'}
-                          </span>
-                          <div>
-                            <div style={{ fontSize: 13.5, fontWeight: 700, color: e.hecho ? ADMIN.ink : ADMIN.tinta2 }}>{e.label}</div>
-                            <div style={{ fontSize: 12, color: ADMIN.tinta2 }}>
-                              {e.fecha ? fechaCorta(e.fecha) : (e.hecho ? 'sin fecha' : 'pendiente')}
-                            </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {funnels.map((f) => {
+                  const etapas = funnelColegio(f);
+                  return (
+                    <div key={f.escuela.id} style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', background: ADMIN.suave, borderRadius: 16, padding: '12px 16px' }}>
+                      <button
+                        onClick={() => router.push(`/admin/colegios/${f.escuela.id}`)}
+                        style={{ background: 'none', border: 'none', padding: 0, minWidth: 180, textAlign: 'left', fontFamily: QUICK, fontWeight: 700, fontSize: 15, color: ADMIN.ink, cursor: 'pointer' }}
+                      >
+                        {f.escuela.nombre ?? 'Colegio'}
+                      </button>
+                      <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
+                        {etapas.map((e) => (
+                          <div key={e.clave} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                            <span style={{ width: 22, height: 22, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 900, flexShrink: 0, background: e.hecho ? ADMIN.okCheck : ADMIN.neutroFondo, color: e.hecho ? '#fff' : ADMIN.neutroTexto }}>
+                              {e.hecho ? '✓' : '○'}
+                            </span>
+                            <span style={{ fontSize: 12.5, color: ADMIN.tinta2, fontWeight: 700 }}>
+                              {e.label}{e.fecha ? ` · ${fechaCorta(e.fecha)}` : ''}
+                            </span>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                );
-              })
+                  );
+                })}
+              </div>
             )}
           </div>
 
-          {/* ── Comparativa ───────────────────────────────────────────────── */}
-          <h2 style={h2}>Comparativa entre colegios</h2>
-          <div style={carta}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr>
-                  <th style={th}>Colegio</th>
-                  <th style={thNum}>Chicos activos</th>
-                  <th style={thNum}>Sesiones</th>
-                  <th style={thNum}>Precisión</th>
-                  <th style={thNum}>Boletines</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filas.length === 0 ? (
-                  <tr>
-                    <td style={{ ...td, borderBottom: 'none', color: ADMIN.tinta2 }} colSpan={5}>
-                      Todavía no hay colegios para comparar.
-                    </td>
-                  </tr>
-                ) : (
-                  filas.map((f, i) => {
-                    const ultima = i === filas.length - 1 ? { borderBottom: 'none' } : {};
-                    const pill = ESTADO_COLEGIO[f.estado ?? ''] ?? null;
-                    return (
-                      <tr key={f.escuelaId}>
-                        <td style={{ ...td, ...ultima }}>
-                          <button
-                            onClick={() => router.push(`/admin/colegios/${f.escuelaId}/uso`)}
-                            className="ed-side"
-                            style={{ background: 'none', border: 'none', padding: 0, fontWeight: 700, fontSize: 14, color: ADMIN.ink, cursor: 'pointer' }}
-                          >
-                            {f.nombre || 'Colegio'}
-                          </button>
-                          {pill && (
-                            <span style={{ marginLeft: 8, background: pill[0], color: pill[1], borderRadius: 999, padding: '2px 9px', fontSize: 11.5, fontWeight: 800, fontFamily: QUICK }}>
-                              {pill[2]}
-                            </span>
-                          )}
-                        </td>
-                        <td style={{ ...tdNum, ...ultima }}>{f.alumnosActivos}</td>
-                        <td style={{ ...tdNum, ...ultima }}>{f.sesiones}</td>
-                        <td style={{ ...tdNum, ...ultima }}>{f.precision === null ? '—' : `${f.precision}%`}</td>
-                        <td style={{ ...tdNum, ...ultima }}>{f.boletinesAprobados}</td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+          {/* ── Comparativa + adopción ────────────────────────────────────── */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 18, alignItems: 'start' }}>
+            <div style={carta}>
+              <h2 style={{ ...h2, marginBottom: 12 }}>Comparativa entre colegios</h2>
+              <div style={{ display: 'flex', gap: 12, padding: '8px 12px', ...thComp }}>
+                <span style={{ flex: 2 }}>COLEGIO</span>
+                <span style={{ flex: 1, textAlign: 'right' }}>ALUMNOS</span>
+                <span style={{ flex: 1, textAlign: 'right' }}>SESIONES</span>
+                <span style={{ flex: 1, textAlign: 'right' }}>PRECISIÓN</span>
+                <span style={{ flex: 1, textAlign: 'right' }}>BOLETINES</span>
+              </div>
+              {filas.length === 0 ? (
+                <p style={{ color: ADMIN.tinta2, fontWeight: 600, fontSize: 14.5, margin: '12px 0 0' }}>
+                  Todavía no hay colegios para comparar.
+                </p>
+              ) : (
+                filas.map((f) => {
+                  const pill = ESTADO_COLEGIO[f.estado ?? ''] ?? null;
+                  return (
+                    <button
+                      key={f.escuelaId}
+                      onClick={() => router.push(`/admin/colegios/${f.escuelaId}/uso`)}
+                      className="ad-flat"
+                      style={{ display: 'flex', gap: 12, alignItems: 'center', width: '100%', background: ADMIN.suave, border: 'none', borderRadius: 12, padding: 12, marginBottom: 8, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}
+                    >
+                      <span style={{ flex: 2, fontWeight: 700, fontSize: 14, color: ADMIN.ink }}>
+                        {f.nombre || 'Colegio'}
+                        {pill && (
+                          <span style={{ marginLeft: 8, background: pill[0], color: pill[1], borderRadius: 999, padding: '2px 9px', fontSize: 11, fontWeight: 800, fontFamily: QUICK }}>
+                            {pill[2]}
+                          </span>
+                        )}
+                      </span>
+                      <span style={{ flex: 1, textAlign: 'right', fontWeight: 700, fontSize: 14, color: ADMIN.ink }}>{f.alumnosActivos}</span>
+                      <span style={{ flex: 1, textAlign: 'right', fontWeight: 700, fontSize: 14, color: ADMIN.ink }}>{f.sesiones}</span>
+                      <span style={{ flex: 1, textAlign: 'right', fontWeight: 800, fontSize: 14, color: ADMIN.oscuro }}>{f.precision === null ? '—' : `${f.precision}%`}</span>
+                      <span style={{ flex: 1, textAlign: 'right', fontWeight: 700, fontSize: 14, color: ADMIN.ink }}>{f.boletinesAprobados}</span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+
+            <div style={carta}>
+              <h2 style={{ ...h2, marginBottom: 16 }}>Adopción semanal</h2>
+              {serie.length === 0 ? (
+                <div style={{ color: ADMIN.tinta2, fontFamily: QUICK, fontWeight: 700, fontSize: 14 }}>Sin datos todavía.</div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-around', gap: 10, height: 150, paddingBottom: 24, position: 'relative' }}>
+                  {serie.map((s, i) => (
+                    <div key={s.desde} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%', position: 'relative' }}>
+                      <div
+                        title={`${s.sesiones} sesiones · ${s.alumnosActivos} chicos`}
+                        style={{ width: '70%', maxWidth: 38, height: `${Math.max(3, Math.round((s.sesiones / maxSemana) * 100))}%`, background: i === serie.length - 1 ? ADMIN.base : ADMIN.barra2, borderRadius: '9px 9px 4px 4px' }}
+                      />
+                      <span style={{ position: 'absolute', bottom: -22, fontSize: 12, color: ADMIN.tinta2, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                        {fechaCorta(s.desde)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </>
       )}
