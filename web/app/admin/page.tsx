@@ -28,18 +28,18 @@ const QUICK = 'var(--font-quicksand), sans-serif';
 const POLLING_MS = 30_000;
 const EVENTOS_FEED = 12;
 
-const h2: React.CSSProperties = { fontFamily: BALOO, fontWeight: 800, fontSize: 19, color: ADMIN.oscuro, margin: '0 0 10px' };
+const h2: React.CSSProperties = { fontFamily: QUICK, fontWeight: 700, fontSize: 17, color: ADMIN.oscuro, margin: 0 };
 const carta: React.CSSProperties = {
   background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 22,
-  boxShadow: `0 3px 10px ${ADMIN.sombraCalida}`, overflow: 'hidden',
+  padding: 22, boxShadow: '0 4px 14px rgba(120,90,40,.06)',
 };
 
-// Emoji por tipo de evento (el feed es de un vistazo, no una tabla).
-const ICONO: Record<string, string> = {
-  sesion: '✏️',
-  boletin_aprobado: '📋',
-  alta_maestra: '👩‍🏫',
-  alta_colegio: '🏫',
+// Punto de color por tipo de evento (el feed es de un vistazo, no una tabla).
+const PUNTO: Record<string, string> = {
+  sesion: ADMIN.sol,
+  boletin_aprobado: ADMIN.luna,
+  alta_maestra: ADMIN.base,
+  alta_colegio: ADMIN.base,
 };
 
 type RespResumen = {
@@ -113,21 +113,21 @@ export default function Page() {
 
   return (
     <div style={{ maxWidth: 1000 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 22 }}>
         <div>
-          <h1 style={{ fontFamily: BALOO, fontWeight: 800, fontSize: 26, color: ADMIN.ink, margin: 0 }}>
+          <h1 style={{ fontFamily: BALOO, fontWeight: 700, fontSize: 'clamp(26px, 3.6vw, 34px)', color: ADMIN.ink, margin: 0 }}>
             Hola 👋
           </h1>
-          <p style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 14.5, color: ADMIN.tinta2, margin: '4px 0 0' }}>
-            Así viene EDUTIA hoy.
+          <p style={{ fontSize: 15.5, color: ADMIN.tinta2, margin: '4px 0 0', fontWeight: 600 }}>
+            {ahora ? `${ahora.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · ` : ''}La foto del día de la plataforma
           </p>
         </div>
         <button
           onClick={() => router.push('/admin/metricas')}
-          className="ed-side"
-          style={{ background: ADMIN.base, color: '#fff', border: 'none', borderRadius: 999, padding: '10px 20px', fontFamily: QUICK, fontWeight: 800, fontSize: 14.5, cursor: 'pointer', boxShadow: `0 4px 12px ${ADMIN.sombra}` }}
+          className="ad-ghost"
+          style={{ background: ADMIN.carta, border: `1.5px solid ${ADMIN.borde}`, color: ADMIN.oscuro, borderRadius: 999, padding: '11px 22px', fontFamily: QUICK, fontWeight: 700, fontSize: 14.5, cursor: 'pointer' }}
         >
-          Ver métricas
+          Ver métricas ›
         </button>
       </div>
 
@@ -143,32 +143,35 @@ export default function Page() {
 
       {!cargando && !error && (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginTop: 20 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
             <Stat valor={resumen?.colegiosActivos ?? 0} label="Colegios activos" detalle="en prueba o activos" />
             <Stat valor={resumen?.maestrasActivas7d ?? 0} label="Maestras activas" detalle="últimos 7 días" />
             <Stat valor={resumen?.alumnosActivos7d ?? 0} label="Chicos practicando" detalle="últimos 7 días" />
             <Stat valor={resumen?.sesionesHoy ?? 0} label="Sesiones de hoy" detalle={`${uso?.ejerciciosRespondidos ?? 0} ejercicios este mes`} />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 18, marginTop: 26, alignItems: 'start' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 18, marginTop: 18, alignItems: 'start' }}>
             {/* ── Feed de actividad ─────────────────────────────────────── */}
-            <section>
-              <h2 style={h2}>Lo que está pasando</h2>
-              <div style={carta}>
+            <section style={carta}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                <h2 style={h2}>Actividad en vivo</h2>
+                <span style={{ fontSize: 12, color: ADMIN.tinta2, fontWeight: 700 }}>se refresca cada 30 s</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', marginTop: 6 }}>
                 {feed.length === 0 ? (
-                  <div style={{ padding: '22px 20px', color: ADMIN.tinta2, fontFamily: QUICK, fontWeight: 700, fontSize: 14 }}>
+                  <p style={{ fontSize: 14.5, color: ADMIN.tinta2, fontWeight: 600, margin: '14px 0 0' }}>
                     Todavía no hay actividad para mostrar.
-                  </div>
+                  </p>
                 ) : (
                   feed.map((item, i) => (
                     <div
                       key={`${item.tipo}-${item.fecha}-${i}`}
-                      style={{ display: 'flex', alignItems: 'flex-start', gap: 11, padding: '11px 16px', borderBottom: i === feed.length - 1 ? 'none' : `1px solid ${ADMIN.bordeCalido}` }}
+                      style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '11px 0', borderBottom: i === feed.length - 1 ? 'none' : `1px solid ${ADMIN.divisor}` }}
                     >
-                      <span style={{ fontSize: 16, lineHeight: '20px' }}>{ICONO[item.tipo] ?? '•'}</span>
+                      <span style={{ width: 10, height: 10, borderRadius: '50%', marginTop: 5, flexShrink: 0, background: PUNTO[item.tipo] ?? ADMIN.base }} />
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 14, color: ADMIN.ink, fontWeight: 600 }}>{item.texto}</div>
-                        <div style={{ fontSize: 12.5, color: ADMIN.tinta2, marginTop: 1 }}>
+                        <div style={{ fontSize: 14.5, fontWeight: 700, color: ADMIN.ink }}>{item.texto}</div>
+                        <div style={{ fontSize: 12.5, color: ADMIN.tinta2, fontWeight: 600, marginTop: 1 }}>
                           {ahora ? fechaRelativa(item.fecha, ahora) : ''}
                         </div>
                       </div>
@@ -176,46 +179,37 @@ export default function Page() {
                   ))
                 )}
               </div>
-              <div style={{ fontSize: 12.5, color: ADMIN.tinta2, marginTop: 8, fontFamily: QUICK, fontWeight: 700 }}>
-                Se actualiza solo cada 30 segundos.
-              </div>
             </section>
 
             {/* ── Alertas del operador (WP7: puede no estar deployado) ──── */}
-            <section>
-              <h2 style={h2}>Para atender</h2>
-              <div style={carta}>
-                {!alertas || alertas.length === 0 ? (
-                  <div style={{ padding: '22px 20px', color: ADMIN.tinta2, fontFamily: QUICK, fontWeight: 700, fontSize: 14 }}>
-                    Sin alertas. Todo tranquilo por acá.
-                  </div>
-                ) : (
-                  alertas.slice(0, 4).map((a, i) => (
+            <section style={carta}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                <h2 style={h2}>Alertas del operador</h2>
+                <button
+                  onClick={() => router.push('/admin/alertas')}
+                  style={{ background: 'none', border: 'none', color: ADMIN.base, fontFamily: QUICK, fontWeight: 700, fontSize: 13.5, cursor: 'pointer' }}
+                >
+                  Ver todas ›
+                </button>
+              </div>
+              {!alertas || alertas.length === 0 ? (
+                <p style={{ fontSize: 14.5, color: ADMIN.tinta2, fontWeight: 600, margin: '14px 0 0' }}>
+                  Sin alertas. Todo tranquilo por acá.
+                </p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>
+                  {alertas.slice(0, 4).map((a) => (
                     <div
                       key={a.clave}
-                      style={{ padding: '12px 16px', borderBottom: i === Math.min(alertas.length, 4) - 1 ? 'none' : `1px solid ${ADMIN.bordeCalido}` }}
+                      style={{ background: a.prioridad === 'alta' ? ADMIN.dangerFondo : ADMIN.warnFondo, border: `1.5px solid ${a.prioridad === 'alta' ? ADMIN.dangerBorde : ADMIN.warnBorde}`, borderRadius: 14, padding: '12px 14px' }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        <span style={{ background: a.prioridad === 'alta' ? ADMIN.dangerBorde : ADMIN.warnFondo, color: a.prioridad === 'alta' ? ADMIN.danger : ADMIN.warnTexto, borderRadius: 999, padding: '2px 10px', fontSize: 11.5, fontWeight: 800, fontFamily: QUICK }}>
-                          {a.prioridad === 'alta' ? 'Alta' : 'Media'}
-                        </span>
-                        <span style={{ fontSize: 14, fontWeight: 700, color: ADMIN.ink }}>{a.titulo}</span>
-                      </div>
-                      <div style={{ fontSize: 12.5, color: ADMIN.tinta2, marginTop: 3 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: ADMIN.ink }}>{a.titulo}</div>
+                      <div style={{ fontSize: 12.5, color: ADMIN.tinta2, fontWeight: 600, marginTop: 2 }}>
                         {a.escuelaNombre}{a.detalle ? ` · ${a.detalle}` : ''}
                       </div>
                     </div>
-                  ))
-                )}
-              </div>
-              {alertas && alertas.length > 0 && (
-                <button
-                  onClick={() => router.push('/admin/alertas')}
-                  className="ed-side"
-                  style={{ marginTop: 10, background: 'none', border: `2px solid ${ADMIN.borde}`, color: ADMIN.medio, borderRadius: 999, padding: '7px 16px', fontFamily: QUICK, fontWeight: 700, fontSize: 13.5, cursor: 'pointer' }}
-                >
-                  Ver todas ({alertas.length})
-                </button>
+                  ))}
+                </div>
               )}
             </section>
           </div>

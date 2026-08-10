@@ -31,12 +31,17 @@ const ERRS: Record<string, string> = {
 const errCopy = (code?: string) => (code && ERRS[code]) || 'Algo salió mal. Probá de nuevo.';
 
 const input: React.CSSProperties = {
-  padding: '11px 14px', border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 12,
-  fontFamily: NUNITO, fontSize: 15, color: ADMIN.ink, background: ADMIN.suave, outline: 'none',
+  padding: '12px 14px', border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 12,
+  fontFamily: NUNITO, fontSize: 14, color: ADMIN.ink, background: ADMIN.suave, outline: 'none',
 };
 const label: React.CSSProperties = {
-  display: 'block', fontFamily: QUICK, fontWeight: 700, fontSize: 13.5, color: ADMIN.tinta2, margin: '0 0 6px',
+  display: 'block', fontSize: 13, fontWeight: 700, color: ADMIN.tinta2, marginBottom: 6,
 };
+
+// Días que faltan para el fin de la prueba (negativo = vencida).
+function diasHasta(fecha: string, ahora: Date): number {
+  return Math.ceil((new Date(`${fecha}T23:59:59`).getTime() - ahora.getTime()) / 86_400_000);
+}
 
 export default function ColegiosPage() {
   const router = useRouter();
@@ -87,23 +92,20 @@ export default function ColegiosPage() {
   );
 
   return (
-    <div style={{ maxWidth: 860 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap', marginBottom: 6 }}>
-        <h1 style={{ fontFamily: BALOO, fontWeight: 800, fontSize: 'clamp(24px,4vw,30px)', color: ADMIN.ink, margin: 0 }}>Colegios</h1>
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 18 }}>
+        <h1 style={{ fontFamily: BALOO, fontWeight: 700, fontSize: 'clamp(26px, 3.6vw, 34px)', color: ADMIN.ink, margin: 0 }}>Colegios</h1>
         <button
           onClick={() => setModal(true)}
           className="ed-primary"
-          style={{ background: ADMIN.base, color: '#fff', border: 'none', borderRadius: 12, padding: '12px 20px', fontFamily: QUICK, fontWeight: 700, fontSize: 15, cursor: 'pointer', boxShadow: `0 4px 14px ${ADMIN.sombraFuerte}` }}
+          style={{ background: ADMIN.base, color: '#fff', border: 'none', borderRadius: 999, padding: '12px 24px', fontFamily: QUICK, fontWeight: 700, fontSize: 15, cursor: 'pointer', boxShadow: `0 6px 16px ${ADMIN.sombraCTA}` }}
         >
           + Nuevo colegio
         </button>
       </div>
-      <p style={{ fontFamily: NUNITO, fontSize: 15.5, color: ADMIN.tinta2, margin: '0 0 20px', fontWeight: 600 }}>
-        Cada colegio arranca en prueba de 30 días; de su estado cuelga todo el acceso.
-      </p>
 
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 18 }}>
-        <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)} style={{ ...input, padding: '10px 12px', cursor: 'pointer' }}>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+        <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)} style={{ ...input, padding: '11px 14px', fontWeight: 700, background: ADMIN.carta, cursor: 'pointer' }}>
           <option value="">Todos los estados</option>
           {Object.entries(ESTADO_COLEGIO).map(([k, [, , lbl]]) => (
             <option key={k} value={k}>{lbl}</option>
@@ -112,80 +114,94 @@ export default function ColegiosPage() {
         <input
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
-          placeholder="Buscar por nombre…"
-          style={{ ...input, flex: 1, minWidth: 200 }}
+          placeholder="Buscar por nombre..."
+          style={{ ...input, flex: 1, minWidth: 200, maxWidth: 340, padding: '11px 16px', background: ADMIN.carta }}
         />
       </div>
 
       {colegios === null ? (
         <p style={{ color: ADMIN.tinta2, fontWeight: 700, fontFamily: QUICK }}>Cargando colegios…</p>
       ) : visibles.length === 0 ? (
-        <div style={{ background: ADMIN.burbuja, border: `2px solid ${ADMIN.borde}`, borderRadius: 22, padding: '22px 24px', color: ADMIN.medio, fontWeight: 700, fontFamily: QUICK }}>
-          {colegios.length === 0 && !filtroEstado
-            ? 'Todavía no hay colegios. Creá el primero con «+ Nuevo colegio».'
-            : 'No encontramos colegios con esos filtros.'}
+        <div style={{ textAlign: 'center', background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 22, padding: '48px 24px' }}>
+          <div style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 19, color: ADMIN.ink }}>
+            {colegios.length === 0 && !filtroEstado ? 'Todavía no hay colegios' : 'No encontramos colegios con ese filtro'}
+          </div>
+          <div style={{ fontSize: 14.5, color: ADMIN.tinta2, fontWeight: 600, marginTop: 4 }}>
+            {colegios.length === 0 && !filtroEstado ? 'Creá el primero con «+ Nuevo colegio».' : 'Probá con otro estado u otro nombre.'}
+          </div>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {visibles.map((c) => (
-            <div
-              key={c.id}
-              onClick={() => router.push(`/admin/colegios/${c.id}`)}
-              style={{ background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 22, padding: '16px 20px', boxShadow: `0 3px 10px ${ADMIN.sombraCalida}`, cursor: 'pointer' }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                <span style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 19, color: ADMIN.ink }}>{c.nombre}</span>
-                <Pill tupla={ESTADO_COLEGIO[c.estado]} />
-                {c.tipo && (
-                  <span style={{ background: ADMIN.claro, color: ADMIN.oscuro, borderRadius: 999, padding: '4px 12px', fontFamily: QUICK, fontWeight: 700, fontSize: 12.5 }}>
-                    {TIPO_COLEGIO[c.tipo] ?? c.tipo}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {visibles.map((c) => {
+            const dias = c.estado === 'trial' && c.trial_fin ? diasHasta(c.trial_fin, new Date()) : null;
+            return (
+              <button
+                key={c.id}
+                onClick={() => router.push(`/admin/colegios/${c.id}`)}
+                className="ad-row"
+                style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 20, padding: '16px 20px', cursor: 'pointer', textAlign: 'left', boxShadow: '0 3px 10px rgba(120,90,40,.05)', fontFamily: NUNITO }}
+              >
+                <div style={{ flex: 1, minWidth: 200 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                    <span style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 17, color: ADMIN.ink }}>{c.nombre}</span>
+                    {c.tipo && (
+                      <span style={{ background: ADMIN.hover, border: `1px solid ${ADMIN.chipBorde}`, color: ADMIN.tinta2, borderRadius: 999, padding: '3px 10px', fontSize: 11.5, fontWeight: 800 }}>
+                        {TIPO_COLEGIO[c.tipo] ?? c.tipo}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 13.5, color: ADMIN.tinta2, fontWeight: 600, marginTop: 3 }}>
+                    {[c.zona, c.provincia].filter(Boolean).join(', ')}
+                    {(c.zona || c.provincia) ? ' · ' : ''}
+                    {c.maestras} {c.maestras === 1 ? 'maestra' : 'maestras'} · {c.aulas} {c.aulas === 1 ? 'aula' : 'aulas'} · {c.alumnos} {c.alumnos === 1 ? 'alumno' : 'alumnos'}
+                  </div>
+                </div>
+                {dias !== null && (
+                  <span style={{ fontSize: 13, color: ADMIN.warnTexto, fontWeight: 700 }}>
+                    {dias >= 0 ? `vence en ${dias} ${dias === 1 ? 'día' : 'días'}` : `venció hace ${-dias} ${dias === -1 ? 'día' : 'días'}`}
                   </span>
                 )}
-              </div>
-              <div style={{ fontFamily: NUNITO, fontSize: 14, color: ADMIN.tinta2, fontWeight: 600, marginTop: 6 }}>
-                {c.provincia ? `${c.provincia} · ` : ''}
-                {c.zona ? `${c.zona} · ` : ''}
-                {c.maestras} {c.maestras === 1 ? 'maestra' : 'maestras'} · {c.aulas} {c.aulas === 1 ? 'aula' : 'aulas'} · {c.alumnos} {c.alumnos === 1 ? 'alumno' : 'alumnos'}
-                {c.estado === 'trial' && c.trial_fin ? ` · Prueba hasta ${c.trial_fin}` : ''}
-              </div>
-            </div>
-          ))}
+                <Pill tupla={ESTADO_COLEGIO[c.estado]} />
+              </button>
+            );
+          })}
         </div>
       )}
 
       {modal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(58,51,42,.45)', display: 'grid', placeItems: 'center', zIndex: 60, animation: 'edFade .2s ease' }} onClick={() => !busy && setModal(false)}>
-          <div style={{ width: '100%', maxWidth: 440, background: ADMIN.carta, border: `2px solid ${ADMIN.borde}`, borderRadius: 24, padding: '26px 28px', boxShadow: '0 18px 44px rgba(58,51,42,.3)' }} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ fontFamily: BALOO, fontWeight: 800, fontSize: 21, color: ADMIN.ink, margin: '0 0 6px' }}>Nuevo colegio</h3>
-            <p style={{ fontFamily: NUNITO, fontSize: 14.5, color: ADMIN.tinta2, margin: '0 0 16px', lineHeight: 1.5 }}>
-              Arranca en período de prueba de 30 días con el plan Docente (SOL + LUNA).
+        <div style={{ position: 'fixed', inset: 0, background: ADMIN.velo, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 22, zIndex: 60 }} onClick={() => !busy && setModal(false)}>
+          <div style={{ width: '100%', maxWidth: 440, background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 24, padding: 28, boxShadow: '0 20px 50px rgba(58,51,42,.25)', animation: 'adPop .25s ease' }} onClick={(e) => e.stopPropagation()}>
+            <h2 style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 20, color: ADMIN.ink, margin: '0 0 4px' }}>Nuevo colegio</h2>
+            <p style={{ fontFamily: NUNITO, fontSize: 13.5, color: ADMIN.tinta2, fontWeight: 600, margin: '0 0 18px' }}>
+              Nace en Prueba con 30 días.
             </p>
-            <label style={label}>Nombre del colegio</label>
-            <input value={nombre} onChange={(e) => setNombre(e.target.value)} autoFocus placeholder="Escuela N° 12 Los Aromos" style={{ ...input, width: '100%', marginBottom: 14 }} />
+            <label style={label}>Nombre</label>
+            <input value={nombre} onChange={(e) => setNombre(e.target.value)} autoFocus placeholder="Escuela 9 · Arroyo Seco" style={{ ...input, width: '100%', marginBottom: 12 }} />
             <label style={label}>Provincia</label>
-            <select value={provincia} onChange={(e) => setProvincia(e.target.value)} style={{ ...input, width: '100%', marginBottom: 14, cursor: 'pointer' }}>
+            <select value={provincia} onChange={(e) => setProvincia(e.target.value)} style={{ ...input, width: '100%', marginBottom: 12, fontWeight: 700, cursor: 'pointer' }}>
               <option value="">Elegí la provincia…</option>
               {PROVINCIAS.map((p) => (
                 <option key={p} value={p}>{p}</option>
               ))}
             </select>
-            <label style={label}>Zona (detalle libre)</label>
-            <input value={zona} onChange={(e) => setZona(e.target.value)} placeholder="Traslasierra, Córdoba" style={{ ...input, width: '100%', marginBottom: 14 }} />
+            <label style={label}>Zona</label>
+            <input value={zona} onChange={(e) => setZona(e.target.value)} placeholder="Arroyo Seco, Misiones" style={{ ...input, width: '100%', marginBottom: 12 }} />
             <label style={label}>Tipo</label>
-            <select value={tipo} onChange={(e) => setTipo(e.target.value)} style={{ ...input, width: '100%', marginBottom: 20, cursor: 'pointer' }}>
+            <select value={tipo} onChange={(e) => setTipo(e.target.value)} style={{ ...input, width: '100%', marginBottom: 20, fontWeight: 700, cursor: 'pointer' }}>
               <option value="">Elegí un tipo…</option>
               {Object.entries(TIPO_COLEGIO).map(([k, lbl]) => (
                 <option key={k} value={k}>{lbl}</option>
               ))}
             </select>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button onClick={() => setModal(false)} disabled={busy} style={{ background: 'none', border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 12, padding: '10px 18px', fontFamily: QUICK, fontWeight: 700, fontSize: 14.5, color: ADMIN.tinta2, cursor: 'pointer' }}>
+              <button onClick={() => setModal(false)} disabled={busy} className="ad-ghost-warm" style={{ background: ADMIN.carta, border: `1.5px solid ${ADMIN.bordeCalido}`, color: ADMIN.tinta2, borderRadius: 999, padding: '11px 20px', fontFamily: QUICK, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
                 Cancelar
               </button>
               <button
                 onClick={crear}
                 disabled={busy}
-                style={{ background: busy ? ADMIN.borde : ADMIN.base, border: 'none', borderRadius: 12, padding: '10px 18px', fontFamily: QUICK, fontWeight: 700, fontSize: 14.5, color: '#fff', cursor: busy ? 'not-allowed' : 'pointer' }}
+                className="ed-primary"
+                style={{ background: busy ? ADMIN.borde : ADMIN.base, border: 'none', borderRadius: 999, padding: '11px 24px', fontFamily: QUICK, fontWeight: 700, fontSize: 14, color: '#fff', cursor: busy ? 'not-allowed' : 'pointer', boxShadow: busy ? 'none' : `0 6px 16px ${ADMIN.sombraCTA}` }}
               >
                 {busy ? 'Creando…' : 'Crear colegio'}
               </button>
