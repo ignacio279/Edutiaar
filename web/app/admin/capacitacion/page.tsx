@@ -1,57 +1,59 @@
 'use client';
-// Pantalla de VISIÓN — Capacitación docente (fase Observatorio y avisos, WP-D).
-// Pieza de venta: cuenta a dónde va EDUTIA, sin datos ni Edge Functions (cero
-// estado). No va al nav a propósito (D-OA6): se llega desde el Observatorio y
-// de acá se vuelve. NO usa <EnConstruccion> — esto no es un stub de otro WP.
-import { useRouter } from 'next/navigation';
+// Pantalla de VISIÓN — Capacitación docente (fase Observatorio y avisos, WP-D;
+// restyle 2026-08 al mock Admin.dc.html: banner "Próximamente" + tarjetas de
+// curso con barra de avance). Pieza de venta: cuenta a dónde va EDUTIA, sin
+// datos ni Edge Functions (cero estado). Vive en el grupo VISIÓN del sidebar.
 import { ADMIN } from '@/lib/admin/tema';
 
 const BALOO = 'var(--font-baloo), cursive';
 const QUICK = 'var(--font-quicksand), sans-serif';
 const NUNITO = 'var(--font-nunito)';
 
-const MINIS: readonly [string, string][] = [
-  ['Trayectos por nivel', 'Cursos cortos pensados para plurigrado.'],
-  ['Certificados', 'Constancias descargables para presentar en supervisión.'],
-  ['Seguimiento por jurisdicción', 'Avance agregado por provincia.'],
-  ['Contenido co-creado', 'Materiales armados junto a ministerios y ONGs.'],
+// Contenido ilustrativo: así se va a ver cuando existan los trayectos reales.
+const CURSOS: readonly { tipo: string; titulo: string; desc: string; avance: string; pct: number }[] = [
+  { tipo: 'Curso · 4 módulos', titulo: 'Primeros pasos con SOL', desc: 'Cómo arrancar la práctica diaria con los chicos.', avance: '3 de 4 colegios', pct: 75 },
+  { tipo: 'Curso · 6 módulos', titulo: 'LUNA para boletines', desc: 'Revisar, ajustar y aprobar boletines en minutos.', avance: '2 de 4 colegios', pct: 50 },
+  { tipo: 'Recurso · guía', titulo: 'Plurigrado con EDUTIA', desc: 'Estrategias para aulas de varios grados a la vez.', avance: '1 de 4 colegios', pct: 25 },
 ];
 
 export default function CapacitacionPage() {
-  const router = useRouter();
   return (
-    <div style={{ maxWidth: 860 }}>
-      <h1 style={{ fontFamily: BALOO, fontWeight: 800, fontSize: 'clamp(24px,4vw,30px)', color: ADMIN.ink, margin: '0 0 16px' }}>
-        Capacitación docente
-      </h1>
-
-      <div style={{ background: ADMIN.burbuja, border: `2px solid ${ADMIN.borde}`, borderRadius: 22, padding: '24px 26px' }}>
-        <span style={{ background: ADMIN.claro, color: ADMIN.oscuro, borderRadius: 999, padding: '5px 14px', fontFamily: QUICK, fontWeight: 700, fontSize: 12.5 }}>
+    <div>
+      <div style={{ background: ADMIN.burbuja, border: `2px solid ${ADMIN.borde}`, borderRadius: 18, padding: '14px 22px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 22 }}>
+        <span style={{ background: ADMIN.base, color: '#fff', borderRadius: 999, padding: '5px 14px', fontFamily: QUICK, fontWeight: 700, fontSize: 12.5 }}>
           Próximamente
         </span>
-        <p style={{ fontFamily: NUNITO, fontSize: 15.5, color: ADMIN.ink, fontWeight: 600, lineHeight: 1.65, margin: '14px 0 20px' }}>
-          Trayectos de formación para maestras rurales, gestionados desde este mismo
-          panel: la seño que sostiene un aula plurigrado también merece su propio
-          recorrido de aprendizaje, con cursos a su ritmo y evidencia de avance que
-          le sirva ante la supervisión y el ministerio.
-        </p>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 12 }}>
-          {MINIS.map(([titulo, linea]) => (
-            <div key={titulo} style={{ background: ADMIN.carta, border: `2px solid ${ADMIN.borde}`, borderRadius: 16, padding: '14px 16px' }}>
-              <div style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 15, color: ADMIN.oscuro, marginBottom: 4 }}>{titulo}</div>
-              <div style={{ fontFamily: NUNITO, fontSize: 13.5, color: ADMIN.tinta2, fontWeight: 600, lineHeight: 1.5 }}>{linea}</div>
-            </div>
-          ))}
-        </div>
+        <span style={{ fontSize: 14, color: ADMIN.oscuro, fontWeight: 700 }}>
+          Vista de concepto — cursos y recursos para maestras.
+        </span>
       </div>
 
-      <button
-        onClick={() => router.push('/admin/observatorio')}
-        style={{ background: 'none', border: 'none', color: ADMIN.medio, fontFamily: QUICK, fontWeight: 700, fontSize: 14, cursor: 'pointer', padding: 0, marginTop: 16 }}
-      >
-        ← Volver al Observatorio
-      </button>
+      <h1 style={{ fontFamily: BALOO, fontWeight: 700, fontSize: 'clamp(26px, 3.6vw, 34px)', color: ADMIN.ink, margin: '0 0 6px' }}>
+        Capacitación docente
+      </h1>
+      <p style={{ fontFamily: NUNITO, fontSize: 15.5, color: ADMIN.tinta2, fontWeight: 600, margin: '0 0 18px', maxWidth: 720, lineHeight: 1.5 }}>
+        La seño que sostiene un aula plurigrado también merece su propio recorrido de aprendizaje: cursos a su
+        ritmo y evidencia de avance que le sirva ante la supervisión y el ministerio.
+      </p>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, maxWidth: 900 }}>
+        {CURSOS.map((c) => (
+          <div key={c.titulo} style={{ background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 22, padding: 22 }}>
+            <span style={{ background: ADMIN.hover, border: `1px solid ${ADMIN.chipBorde}`, color: ADMIN.tinta2, borderRadius: 999, padding: '3px 11px', fontSize: 11.5, fontWeight: 800 }}>
+              {c.tipo}
+            </span>
+            <div style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 17, color: ADMIN.ink, marginTop: 10 }}>{c.titulo}</div>
+            <div style={{ fontFamily: NUNITO, fontSize: 13.5, color: ADMIN.tinta2, fontWeight: 600, marginTop: 4, lineHeight: 1.4 }}>{c.desc}</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, fontWeight: 700, color: ADMIN.tinta2, margin: '14px 0 6px' }}>
+              <span>Avance de los colegios</span>
+              <span style={{ color: ADMIN.oscuro }}>{c.avance}</span>
+            </div>
+            <div style={{ height: 10, background: ADMIN.divisor, borderRadius: 999, overflow: 'hidden' }}>
+              <div style={{ width: `${c.pct}%`, height: '100%', background: ADMIN.base, borderRadius: 999 }} />
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
