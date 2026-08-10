@@ -117,6 +117,14 @@ async function main() {
     const pass = randPass();
     const id = await ensureUser(a.email, pass, { nombre: a.name, rol: 'alumno' });
     await upsert('perfil', [{ id, rol: 'alumno', nombre: a.name, avatar: a.animal, grado: 3, escuela_id: ID.escuela, docente_id: anaId, aula_id: ID.aula }]);
+    // Alumno golondrina (0022): el vínculo vive en la matrícula; el upsert de
+    // arriba puebla el caché con los MISMOS valores (sin divergencia) y acá
+    // se asegura la matrícula activa (idempotente: si ya existe, no se reabre).
+    const mR = await fetch(`${URL}/rest/v1/matricula?alumno_id=eq.${id}&fecha_fin=is.null&select=id`, { headers: H });
+    const mExiste = (await mR.json().catch(() => []));
+    if (!Array.isArray(mExiste) || mExiste.length === 0) {
+      await rpc('matricula_abrir', { p_alumno: id, p_escuela: ID.escuela, p_aula: ID.aula, p_docente: anaId, p_grado: 3, p_actor: anaId });
+    }
     await rpc('set_alumno_cred', { p_perfil: id, p_aula: ID.aula, p_pin: a.pin, p_email: a.email, p_password: pass });
     console.log(`✓ alumno ${a.name} (PIN ${a.pin})`);
   }

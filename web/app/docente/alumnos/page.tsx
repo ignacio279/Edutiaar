@@ -293,10 +293,14 @@ function AlumnoRow({ alumno, aulas, onDone }: { alumno: Alumno; aulas: Aula[]; o
     if (!ok) { toast(msgErr(j)); return; }
     toast('Alumno actualizado.'); setMode(''); onDone();
   }
-  async function borrar() {
-    const { ok, j } = await gestion('borrar_alumno', { alumno_id: alumno.id });
+  // Alumno golondrina: "dar de baja" cierra el vínculo con este colegio según
+  // el motivo — NO borra nada. El legajo del chico queda intacto y viaja con
+  // él a la próxima escuela (el único borrado real es el flujo ARCO del admin).
+  async function darDeBaja(motivo: 'migracion' | 'egreso' | 'error_carga') {
+    const { ok, j } = await gestion('cerrar_matricula', { alumno_id: alumno.id, motivo });
     if (!ok) { toast(msgErr(j)); return; }
-    toast('Alumno borrado.'); onDone();
+    toast(motivo === 'egreso' ? 'Egresó. Su recorrido queda guardado.' : 'Baja registrada. Su recorrido viaja con él.');
+    onDone();
   }
 
   return (
@@ -310,11 +314,20 @@ function AlumnoRow({ alumno, aulas, onDone }: { alumno: Alumno; aulas: Aula[]; o
         <button onClick={() => setMode(mode === 'pin' ? '' : 'pin')} style={btnGhostSm}>PIN</button>
         <button onClick={() => setMode(mode === 'edit' ? '' : 'edit')} style={btnGhostSm}>Editar</button>
         {mode === 'del' ? (
-          <><span style={{ fontSize: 13.5, color: '#BB4F3F', fontWeight: 700 }}>¿Borrar?</span><button onClick={borrar} style={{ ...btnSm, background: '#BB4F3F' }}>Sí</button><button onClick={() => setMode('')} style={btnGhostSm}>No</button></>
+          <button onClick={() => setMode('')} style={btnGhostSm}>Cancelar</button>
         ) : (
-          <button onClick={() => setMode('del')} style={btnGhostSm}>Borrar</button>
+          <button onClick={() => setMode('del')} style={btnGhostSm}>Dar de baja</button>
         )}
       </div>
+
+      {mode === 'del' && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', paddingLeft: 52, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 13.5, color: '#7A6F5F', fontWeight: 700 }}>Su recorrido no se borra. ¿Por qué se va?</span>
+          <button onClick={() => darDeBaja('migracion')} style={{ ...btnSm, background: '#F4A93B' }}>Se mudó</button>
+          <button onClick={() => darDeBaja('egreso')} style={{ ...btnSm, background: '#7FB069' }}>Egresó</button>
+          <button onClick={() => darDeBaja('error_carga')} style={{ ...btnSm, background: '#BB4F3F' }}>Fue un error de carga</button>
+        </div>
+      )}
 
       {mode === 'pin' && (
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', paddingLeft: 52 }}>

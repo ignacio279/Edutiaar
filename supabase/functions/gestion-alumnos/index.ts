@@ -102,6 +102,8 @@ Deno.serve(async (req) => {
       }
 
       case 'crear_alumno': {
+        // Alumno golondrina (ADR-011): el perfil nace SIN vínculo; el vínculo
+        // lo abre matricula_abrir (única puerta) y su trigger puebla el caché.
         const { aula_id, nombre, avatar, grado, pin } = body;
         const v = validarCrearAlumno({ nombre, avatar, grado, pin, aula_id });
         if (!v.ok) return json({ error: v.error }, 400);
@@ -114,9 +116,14 @@ Deno.serve(async (req) => {
         if (cErr || !created?.user) throw cErr ?? new Error('no_se_creo_user');
         const id = created.user.id;
         const { error: pErr } = await sb.from('perfil').insert({
-          id, rol: 'alumno', nombre: String(nombre).trim(), avatar, grado, escuela_id: caller.escuela_id, docente_id: user.id, aula_id,
+          id, rol: 'alumno', nombre: String(nombre).trim(), avatar,
         });
         if (pErr) { await sb.auth.admin.deleteUser(id).catch(() => {}); throw pErr; } // rollback del auth user
+        const { error: mErr } = await sb.rpc('matricula_abrir', {
+          p_alumno: id, p_escuela: caller.escuela_id, p_aula: aula_id,
+          p_docente: user.id, p_grado: grado, p_actor: user.id,
+        });
+        if (mErr) { await sb.auth.admin.deleteUser(id).catch(() => {}); throw mErr; } // rollback también de la matrícula
         await sb.rpc('set_alumno_cred', { p_perfil: id, p_aula: aula_id, p_pin: pin, p_email: email, p_password: password });
         return json({ alumno: { id, nombre: String(nombre).trim(), avatar, grado, aula_id } });
       }
@@ -124,12 +131,21 @@ Deno.serve(async (req) => {
       case 'editar_alumno': {
         const { alumno_id, nombre, grado, avatar, aula_id } = body;
         if (!(await alumnoMio(alumno_id))) return json({ error: 'no_es_tuyo' }, 403);
+        // nombre/avatar son del perfil (el guard los deja); grado/aula son del
+        // VÍNCULO → se escriben en la matrícula activa y el trigger sincroniza
+        // el caché de perfil (ADR-011: la matrícula es la fuente de verdad).
         const patch: Record<string, unknown> = {};
         if (nombre !== undefined) { if (!noVacio(nombre)) return json({ error: 'Poné un nombre.' }, 400); patch.nombre = String(nombre).trim(); }
-        if (grado !== undefined) { if (!gradoValido(grado)) return json({ error: 'Grado 1 a 7.' }, 400); patch.grado = grado; }
         if (avatar !== undefined) { if (!avatarValido(avatar)) return json({ error: 'Avatar inválido.' }, 400); patch.avatar = avatar; }
-        if (aula_id !== undefined) { if (!(await aulaMia(aula_id))) return json({ error: 'no_es_tuyo' }, 403); patch.aula_id = aula_id; }
+        const patchM: Record<string, unknown> = {};
+        if (grado !== undefined) { if (!gradoValido(grado)) return json({ error: 'Grado 1 a 7.' }, 400); patchM.grado = grado; }
+        if (aula_id !== undefined) { if (!(await aulaMia(aula_id))) return json({ error: 'no_es_tuyo' }, 403); patchM.aula_id = aula_id; }
         if (Object.keys(patch).length) await sb.from('perfil').update(patch).eq('id', alumno_id);
+        if (Object.keys(patchM).length) {
+          const { data: m } = await sb.from('matricula')
+            .update(patchM).eq('alumno_id', alumno_id).is('fecha_fin', null).select('id');
+          if (!m || m.length === 0) return json({ error: 'sin_matricula_activa' }, 409);
+        }
         return json({ ok: true });
       }
 
@@ -141,10 +157,23 @@ Deno.serve(async (req) => {
         return json({ ok: true });
       }
 
-      case 'borrar_alumno': {
-        const { alumno_id } = body;
+      case 'cerrar_matricula': {
+        // Alumno golondrina (ADR-011): "eliminar" ya NO borra nada. Cierra el
+        // vínculo con este colegio; el legajo del chico queda intacto y viaja
+        // con él (en_transito/egresado). El ÚNICO borrado real del sistema es
+        // el flujo ARCO (cancelación, solo super-admin).
+        const { alumno_id, motivo } = body;
         if (!(await alumnoMio(alumno_id))) return json({ error: 'no_es_tuyo' }, 403);
-        await sb.auth.admin.deleteUser(alumno_id); // cascada FK: perfil/cred/alumno_nodo/sesion/respuesta
+        if (!['migracion', 'egreso', 'error_carga'].includes(motivo)) {
+          return json({ error: 'motivo_invalido' }, 400); // arco_baja es solo del flujo ARCO
+        }
+        const { data: m } = await sb.from('matricula')
+          .select('id').eq('alumno_id', alumno_id).is('fecha_fin', null).maybeSingle();
+        if (!m) return json({ error: 'sin_matricula_activa' }, 409);
+        const { error: cerrarErr } = await sb.rpc('matricula_cerrar', {
+          p_matricula: (m as { id: string }).id, p_motivo: motivo, p_actor: user.id,
+        });
+        if (cerrarErr) throw cerrarErr;
         return json({ ok: true });
       }
 
