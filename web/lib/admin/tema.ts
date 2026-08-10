@@ -30,24 +30,40 @@ export const ADMIN = {
   warnFondo: '#FBEFD9', // avisos (naranja de la app)
   warnBorde: '#F4D9A6',
   warnTexto: '#8A6215',
+  // — Claves del restyle 2026-08 (mock Admin.dc.html de claude.ai/design) —
+  hover: '#F6EFDF', // hover cálido (sidebar, chips neutros, ghost warm)
+  chipBorde: '#E6D9BC', // borde de chips sobre `hover`
+  tinta3: '#B4A88F', // label "VISIÓN", chips deshabilitados
+  divisor: '#F4ECDA', // separadores de filas y pista de barras
+  dangerFondo: '#F7E2DD', // fondo de alertas altas, pill suspendido, chip "Cuesta"
+  neutroFondo: '#EDE6D6', // pill archivado/inactivo, círculo pendiente del funnel
+  neutroTexto: '#8A7D63', // texto sobre `neutroFondo`
+  sol: '#F4A93B', // punto SOL del feed, banner ver-como, aviso de secretos
+  luna: '#8B7EC8', // punto LUNA del feed (violeta de LUNA, duplicado adrede)
+  barra2: '#9DC3D1', // rampa de bar-charts: borde → barra2 → barra3 → base
+  barra3: '#6BA3B5',
+  switchOff: '#D9CDB6', // track de switch apagado (Features)
+  switchOnDim: '#9DB9C2', // track prendido pero deshabilitado (hijos de LUNA)
+  sombraCTA: 'rgba(62,124,138,.28)', // sombra de botones primarios
+  velo: 'rgba(58,51,42,.35)', // overlay de modales
 } as const;
 
 // Pills de estado como tuplas [bg, color, label] (patrón BADGE/TAG de la app).
 export const ESTADO_COLEGIO: Record<string, readonly [string, string, string]> = {
   trial: ['#FBEFD9', '#8A6215', 'Prueba'],
   activo: ['#E6F0DC', '#4E7A3A', 'Activo'],
-  suspendido: ['#E8C9C2', '#8A3D30', 'Suspendido'],
-  archivado: ['#EFE3CE', '#9A8E78', 'Archivado'],
+  suspendido: ['#F7E2DD', '#BB4F3F', 'Suspendido'],
+  archivado: ['#EDE6D6', '#8A7D63', 'Archivado'],
 };
 
 export const ESTADO_MAESTRA: Record<string, readonly [string, string, string]> = {
   activo: ['#E6F0DC', '#4E7A3A', 'Activa'],
-  suspendido: ['#E8C9C2', '#8A3D30', 'Suspendida'],
+  suspendido: ['#F7E2DD', '#BB4F3F', 'Suspendida'],
 };
 
 export const NIVEL_ADMIN: Record<string, readonly [string, string, string]> = {
   super: ['#E3EEF4', '#2F6172', 'Super admin'],
-  operativo: ['#EFE3CE', '#7A6F5F', 'Operativo'],
+  operativo: ['#F6EFDF', '#7A6F5F', 'Operativo'],
 };
 
 export const TIPO_COLEGIO: Record<string, string> = {

@@ -161,6 +161,56 @@ button {
 .ed-side:hover {
   background: #fbf4e6;
 }
+/* panel admin — hovers del restyle (mock Admin.dc.html) */
+.ad-nav {
+  transition: background 0.15s ease;
+}
+.ad-nav:hover {
+  background: #f6efdf;
+}
+.ad-ghost {
+  transition: background 0.15s ease;
+}
+.ad-ghost:hover {
+  background: #edf4f7;
+}
+.ad-ghost-warm {
+  transition: background 0.15s ease;
+}
+.ad-ghost-warm:hover {
+  background: #f6efdf;
+}
+.ad-ghost-danger {
+  transition: background 0.15s ease;
+}
+.ad-ghost-danger:hover {
+  background: #f7e2dd;
+}
+.ad-row {
+  transition: transform 0.12s ease, border-color 0.12s ease;
+}
+.ad-row:hover {
+  transform: translateY(-2px);
+  border-color: #c9dee7;
+}
+.ad-flat {
+  transition: background 0.15s ease;
+}
+.ad-flat:hover {
+  background: #f4ecda;
+}
+@keyframes adPop {
+  0% {
+    transform: scale(0.9);
+  }
+  60% {
+    transform: scale(1.03);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
 .ed-toast {
   position: fixed;
   left: 50%;
