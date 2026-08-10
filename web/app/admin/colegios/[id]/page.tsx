@@ -165,21 +165,25 @@ export default function FichaColegio() {
           Plan {PLAN_LABEL[det.feature.plan] ?? PLAN_LABEL.custom}
         </span>
         <div style={{ flex: 1 }} />
-        {puedeActivar && (
-          <button onClick={() => cambiarEstado('activo')} disabled={busy} className="ed-primary" style={{ background: ADMIN.base, color: '#fff', border: 'none', borderRadius: 999, padding: '11px 22px', fontFamily: QUICK, fontWeight: 700, fontSize: 14, cursor: 'pointer', boxShadow: `0 6px 16px ${ADMIN.sombraCTA}` }}>
-            Activar
-          </button>
-        )}
-        {puedeSuspender && (
-          <button onClick={() => setConfirmando('suspendido')} disabled={busy} className="ad-ghost-danger" style={{ ...btn, color: ADMIN.danger, borderColor: ADMIN.dangerBorde }}>
-            Suspender
-          </button>
-        )}
-        {puedeArchivar && (
-          <button onClick={() => setConfirmando('archivado')} disabled={busy} className="ad-ghost-danger" style={{ ...btn, color: ADMIN.danger, borderColor: ADMIN.dangerBorde }}>
-            Archivar
-          </button>
-        )}
+        {/* Los botones viajan juntos: si no entran, envuelven como bloque y no
+            queda uno solo colgando en la línea de abajo. */}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {puedeActivar && (
+            <button onClick={() => cambiarEstado('activo')} disabled={busy} className="ed-primary" style={{ background: ADMIN.base, color: '#fff', border: 'none', borderRadius: 999, padding: '11px 22px', fontFamily: QUICK, fontWeight: 700, fontSize: 14, cursor: 'pointer', boxShadow: `0 6px 16px ${ADMIN.sombraCTA}` }}>
+              Activar
+            </button>
+          )}
+          {puedeSuspender && (
+            <button onClick={() => setConfirmando('suspendido')} disabled={busy} className="ad-ghost-danger" style={{ ...btn, color: ADMIN.danger, borderColor: ADMIN.dangerBorde }}>
+              Suspender
+            </button>
+          )}
+          {puedeArchivar && (
+            <button onClick={() => setConfirmando('archivado')} disabled={busy} className="ad-ghost-danger" style={{ ...btn, color: ADMIN.danger, borderColor: ADMIN.dangerBorde }}>
+              Archivar
+            </button>
+          )}
+        </div>
       </div>
 
       <FichaTabs colegioId={id} />

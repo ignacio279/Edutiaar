@@ -28,8 +28,10 @@ export const RANGOS = [7, 30, 90] as const;
 
 // Copy del estado vacío: hasta que la Fase final cablee la instrumentación,
 // uso_api está vacía y todo da cero. Cálido, sin drama.
+// Explicación del estado vacío. Sin la frase "Sin datos de uso todavía": esa es
+// el título de la tarjeta y repetirla suena a eco.
 export const SIN_DATOS_COPY =
-  'Sin datos de uso todavía. Apenas las funciones empiecen a registrar sus llamadas a la API, acá vas a ver los costos y la salud de cada una.';
+  'Apenas las funciones empiecen a registrar sus llamadas a la API, acá vas a ver los costos y la salud de cada una.';
 
 // ── Formateos ───────────────────────────────────────────────────────────────
 

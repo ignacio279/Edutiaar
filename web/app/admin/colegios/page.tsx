@@ -43,6 +43,14 @@ function diasHasta(fecha: string, ahora: Date): number {
   return Math.ceil((new Date(`${fecha}T23:59:59`).getTime() - ahora.getTime()) / 86_400_000);
 }
 
+// "zona, provincia" sin repetir: la zona es texto libre y suele incluirla ya
+// (ej. zona "Neuquén, Patagonia" + provincia "Neuquén").
+function ubicacion(zona: string | null, provincia: string | null): string {
+  if (!zona) return provincia ?? '';
+  if (!provincia || zona.toLowerCase().includes(provincia.toLowerCase())) return zona;
+  return `${zona}, ${provincia}`;
+}
+
 export default function ColegiosPage() {
   const router = useRouter();
 
@@ -151,7 +159,7 @@ export default function ColegiosPage() {
                     )}
                   </div>
                   <div style={{ fontSize: 13.5, color: ADMIN.tinta2, fontWeight: 600, marginTop: 3 }}>
-                    {[c.zona, c.provincia].filter(Boolean).join(', ')}
+                    {ubicacion(c.zona, c.provincia)}
                     {(c.zona || c.provincia) ? ' · ' : ''}
                     {c.maestras} {c.maestras === 1 ? 'maestra' : 'maestras'} · {c.aulas} {c.aulas === 1 ? 'aula' : 'aulas'} · {c.alumnos} {c.alumnos === 1 ? 'alumno' : 'alumnos'}
                   </div>

@@ -283,13 +283,27 @@ export default function Page() {
                   const valores = ordenadas.map((f) => f.dominioPromedio ?? f.precision ?? 0);
                   const max = Math.max(1, ...valores);
                   const mejor = Math.max(...valores);
+                  // Con k-anonimato todos los valores llegan en null: dibujar
+                  // barras planas mentiría ("cero dominio"), así que se dice.
+                  const sinMuestra = ordenadas.every((f) => f.muestraInsuficiente);
+                  if (sinMuestra) {
+                    return (
+                      <div key={materia} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
+                        <span style={{ fontSize: 13.5, fontWeight: 700, color: ADMIN.ink }}>
+                          {materia}{' '}
+                          <span style={{ fontSize: 12, color: ADMIN.tinta2 }}>
+                            · {ordenadas.map((f) => `${f.grado}°`).join(' · ')}
+                          </span>
+                        </span>
+                        {pillInsuf}
+                      </div>
+                    );
+                  }
                   return (
                     <div key={materia} style={{ marginBottom: 14 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13.5, fontWeight: 700, color: ADMIN.ink, marginBottom: 6 }}>
                         <span>{materia}</span>
-                        <span style={{ color: ADMIN.oscuro }}>
-                          {ordenadas.every((f) => f.muestraInsuficiente) ? 'muestra insuficiente' : `${Math.round(mejor)}%`}
-                        </span>
+                        <span style={{ color: ADMIN.oscuro }}>{Math.round(mejor)}%</span>
                       </div>
                       <div style={{ display: 'flex', gap: 5, alignItems: 'flex-end', height: 44 }}>
                         {ordenadas.map((f, i) => {
