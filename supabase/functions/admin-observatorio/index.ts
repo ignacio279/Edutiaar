@@ -63,14 +63,27 @@ Deno.serve(async (req) => {
       return (data ?? []) as EscuelaObs[];
     };
 
+    // Oposición ARCO (migración 0024): un alumno con excluido_procesamiento
+    // queda FUERA de todo agregado no esencial — este universo es la única
+    // puerta de entrada de alumnos al observatorio, así que el filtro va acá
+    // y soloIncluidos() (abajo) saca sus filas de sesion/alumno_nodo ANTES de
+    // computar (sin él, los agregados sin filtro de provincia las contarían).
     const traerAlumnos = async (): Promise<AlumnoObs[]> => {
       const { data, error } = await sb
         .from('perfil')
         .select('id, grado, escuela_id')
         .eq('rol', 'alumno')
+        .eq('excluido_procesamiento', false)
         .limit(MAX_FILAS);
       if (error) throw error;
       return (data ?? []) as AlumnoObs[];
+    };
+
+    // Filtra filas keyed por alumno_id al universo NO excluido (la oposición
+    // se respeta antes de agregar; el k-anonimato k=5 sigue intacto después).
+    const soloIncluidos = <T extends { alumno_id: string }>(filas: T[], alumnos: AlumnoObs[]): T[] => {
+      const incluidos = new Set(alumnos.map((a) => a.id));
+      return filas.filter((f) => incluidos.has(f.alumno_id));
     };
 
     const traerSesiones = async (): Promise<SesionObs[]> => {
