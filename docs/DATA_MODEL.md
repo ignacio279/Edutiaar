@@ -185,3 +185,40 @@ Snapshot nocturno de las alertas del operador. `clave` (PK — la clave determin
 
 ### Cron (primer job del repo)
 Extensiones `pg_cron` + `pg_net`. Helper `llamar_admin_jobs(accion)` (SECURITY DEFINER, EXECUTE revocado): lee `project_url`/`service_role_key` de **Vault** (se siembran a mano en el deploy; si faltan degrada con notice) y hace `net.http_post` a la Edge Function `admin-jobs`. Schedule `admin-jobs-nocturno` a las 06:00 UTC (03:00 AR). El futuro job de LUNA se cuelga del mismo helper con otra acción.
+
+## Fase "Alumno golondrina" *(mig. 0022–0027 — ADR-011)*
+
+> `perfil.id` **es** el id EDUTIA del alumno (UUID, independiente del colegio).
+> **Prohibido** el DNI o cualquier identificador estatal como clave, campo
+> requerido o mecanismo de búsqueda. Las columnas de vínculo de `perfil`
+> (`docente_id/aula_id/escuela_id/grado`) pasan a ser **caché de la matrícula
+> activa** mantenido por el trigger `matricula_sync`; `perfil_guard` (BEFORE
+> UPDATE) rechaza cualquier otro escritor de esas columnas, de `estado` y de
+> `excluido_procesamiento`.
+
+### perfil (columnas nuevas)
+`estado` (`activo|en_transito|egresado|baja` — máquina de estados en DB, `baja` terminal y solo vía ARCO) · `excluido_procesamiento` (boolean, oposición ARCO; solo lo escribe la RPC `arco_set_exclusion`).
+
+### matricula ⭐ *(0022)*
+La fuente de verdad del vínculo alumno↔colegio; el legajo (keyed por `alumno_id`) viaja con el chico.
+`id` · `alumno_id` (FK → perfil, cascade) · `escuela_id` · `aula_id` · `docente_id` · `grado` · `fecha_inicio` · `fecha_fin` (null = activa) · `estado` (`activa|cerrada`) · `motivo_cierre` (`migracion|egreso|arco_baja|error_carga`) · `abierta_por`/`cerrada_por` (sin FK) · `consentimiento_id` (FK → consentimiento) · `created_at`.
+**Constraint del feature:** índice único parcial `matricula_una_activa` (una activa por alumno). SELECT por RLS: el alumno la suya, la docente vía `es_mi_alumno` (al cerrar pierde también el historial). Escritura SOLO vía RPCs `matricula_abrir`/`matricula_cerrar` (cerrar revoca `alumno_cred`+`intento_login` y transiciona el estado según motivo; ambas auditan).
+
+### consentimiento *(0023)*
+`id` · `alumno_id` (FK cascade) · `escuela_id` (hacia qué colegio) · `adulto_nombre` · `adulto_vinculo` (`madre|padre|tutor|otro`) · `alcance` (`tratamiento|transferencia`) · `via` (`asistida|link|migracion`) · `estado` (`vigente|revocado|pendiente_regularizar`) · `registrado_por` (sin FK) · `otorgado_at` · `revocado_at` · `created_at`. SELECT por `es_mi_alumno`; escritura server-only. El backfill dejó deuda `pendiente_regularizar` por alumno pre-existente.
+
+### transferencia *(0023 + lockout 0027, server-only)*
+`id` · `alumno_id` · `escuela_origen`/`escuela_destino` · `solicitada_por` · `estado` (`pendiente|confirmada|denegada|expirada`) · `token_hash` (SHA-256 del token opaco de 128 bits; el claro solo viaja en el link) · `expira_at` · `consentimiento_id` · `confirmada_via` (`link|asistida`) · `resuelta_at` · `intentos_fallidos`/`bloqueada_hasta` (lockout 5 intentos/15 min). **CHECK duro:** `estado <> 'confirmada' or consentimiento_id is not null` — sin consentimiento no existe transferencia, ni por SQL directo. Única pendiente por alumno (índice parcial).
+
+### plataforma_config *(0023, server-only)*
+`clave` (PK) · `valor` (jsonb) · `updated_at`. Sembrada: `transferencia_dias_expiracion` = 14.
+
+### arco_caso *(0024, server-only)*
+`id` · `alumno_id` (**sin FK**: el caso legal sobrevive a la cancelación) · `tipo` (`acceso|rectificacion|cancelacion|oposicion`) · `estado` (`solicitado|confirmado|ejecutado|rechazado`) · `solicitado_por` · `detalle` (jsonb; en rectificación guarda el diff) · `agregado` (jsonb: snapshot ANÓNIMO pre-borrado — conteos, grado, provincia, rango de fechas; sin nombre ni uuids) · `ejecutado_por` · `ejecutado_at` · `created_at`. La cancelación (2 pasos, confirma solo `super`) es **el único borrado físico del sistema**.
+
+### institucion / institucion_admin *(0025)*
+`institucion`: `id` · `nombre` · `tipo` (`provincia|fundacion|red|municipio`) · `contacto` (jsonb) · `estado` (`activa|suspendida|archivada`). `escuela.institucion_id` FK nullable.
+`institucion_admin` *(server-only, tabla propia — NO un nivel de `plataforma_admin`, diseño fail-closed)*: `perfil_id` (PK → auth.users) · `institucion_id` (FK cascade) · `nombre` · `activo` · `creado_por`. **Jamás ve alumnos individuales**: solo agregados de sus colegios vía `institucion-panel`.
+
+### licencia / licencia_asignacion *(0026, server-only)*
+`licencia`: `id` · `escuela_id` **XOR** `institucion_id` (check `num_nonnulls = 1`) · `plan` (`basico|docente|completo|custom`) · `cupos` (solo pools) · `fecha_inicio`/`fecha_fin` · `estado` (`prueba|activa|vencida|suspendida`) · `condiciones`. `licencia_asignacion`: `escuela_id` (PK — un colegio consume a lo sumo un cupo) · `licencia_id`; trigger `licencia_cupos_guard` (error `sin_cupos`). `acceso_calcular` v2 (misma firma): licencia efectiva = directa > pool; suspendida → bloqueado; vencida → **solo lectura**; sin licencia → rama trial 0018. Backfill: una licencia por colegio existente.
