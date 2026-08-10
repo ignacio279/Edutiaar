@@ -1,12 +1,13 @@
 'use client';
-// Layout del panel de administración (Dashboard admin v3). A diferencia de
-// /docente (sidebar duplicado inline), acá el shell vive en el layout.
-// Gate de rol: sin sesión o sin fila activa en plataforma_admin (RPC
-// admin_nivel) → afuera. El server re-verifica en cada Edge Function.
+// Layout del panel de administración (Dashboard admin v3, restyle 2026-08 al
+// mock Admin.dc.html: sidebar sin íconos, grupo VISIÓN con chip "Pronto", rol
+// como label estático). A diferencia de /docente (sidebar duplicado inline),
+// acá el shell vive en el layout. Gate de rol: sin sesión o sin fila activa en
+// plataforma_admin (RPC admin_nivel) → afuera. El server re-verifica en cada
+// Edge Function.
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { uiIcon } from '@/lib/art';
 import { ADMIN } from '@/lib/admin/tema';
 import { ADMIN_NAV, navActivo } from './nav';
 import { AdminContext, type AdminMe } from './admin-context';
@@ -15,12 +16,16 @@ const QUICK = 'var(--font-quicksand), sans-serif';
 const BALOO = 'var(--font-baloo), cursive';
 
 const sideBtn: React.CSSProperties = {
-  display: 'flex', alignItems: 'center', gap: 11, padding: '12px 14px', borderRadius: 14,
-  background: 'none', border: 'none', color: ADMIN.tinta2, fontFamily: QUICK, fontWeight: 700,
-  fontSize: 15.5, cursor: 'pointer', textAlign: 'left',
+  display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left',
+  padding: '11px 13px', borderRadius: 12, border: 'none', cursor: 'pointer',
+  fontFamily: QUICK, fontWeight: 700, fontSize: 14.5, background: 'transparent', color: ADMIN.tinta2,
 };
 const sideActive: React.CSSProperties = {
   ...sideBtn, background: ADMIN.claro, color: ADMIN.oscuro, cursor: 'default',
+};
+const chipPronto: React.CSSProperties = {
+  background: ADMIN.burbuja, border: `1px solid ${ADMIN.borde}`, color: ADMIN.base,
+  borderRadius: 999, padding: '2px 8px', fontSize: 10.5, fontWeight: 800,
 };
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -64,34 +69,50 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   const activo = navActivo(pathname);
-  const items = ADMIN_NAV.filter((it) => !it.soloSuper || me.nivel === 'super');
+  const items = ADMIN_NAV.filter((it) => !it.vision && (!it.soloSuper || me.nivel === 'super'));
+  const vision = ADMIN_NAV.filter((it) => it.vision);
 
   return (
     <AdminContext.Provider value={me}>
       <div style={{ minHeight: '100vh', display: 'flex', animation: 'edFade .3s ease' }}>
-        <aside style={{ width: 236, flexShrink: 0, background: ADMIN.carta, borderRight: `2px solid ${ADMIN.bordeCalido}`, padding: '26px 18px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '6px 10px 20px' }}>
-            <div style={{ width: 34, height: 34, borderRadius: 10, background: ADMIN.base, display: 'grid', placeItems: 'center', color: '#fff', fontFamily: BALOO, fontWeight: 800, fontSize: 18 }}>E</div>
-            <div>
-              <div style={{ fontFamily: BALOO, fontWeight: 800, fontSize: 19, color: ADMIN.ink, letterSpacing: '-.5px', lineHeight: 1 }}>EDUTIA</div>
-              <div style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 11.5, color: ADMIN.medio, letterSpacing: '.4px' }}>ADMINISTRACIÓN</div>
+        <aside style={{ width: 236, flexShrink: 0, background: ADMIN.carta, borderRight: `2px solid ${ADMIN.bordeCalido}`, padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: 3, position: 'sticky', top: 0, height: '100vh', overflowY: 'auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 8px 20px' }}>
+            <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 11, background: ADMIN.base, display: 'grid', placeItems: 'center', color: '#fff', fontFamily: BALOO, fontWeight: 800, fontSize: 22 }}>E</div>
+            <div style={{ lineHeight: 1.1 }}>
+              <div style={{ fontFamily: BALOO, fontWeight: 800, fontSize: 19, color: ADMIN.ink, letterSpacing: '-.4px' }}>EDUTIA</div>
+              <div style={{ fontSize: 10.5, fontWeight: 800, color: ADMIN.tinta2, letterSpacing: '1.4px' }}>ADMINISTRACIÓN</div>
             </div>
           </div>
           {items.map((it) =>
             it.key === activo ? (
+              <div key={it.key} style={sideActive}>{it.label}</div>
+            ) : (
+              <button key={it.key} onClick={() => router.push(it.ruta)} className="ad-nav" style={sideBtn}>{it.label}</button>
+            ),
+          )}
+          <div style={{ fontSize: 11, fontWeight: 800, color: ADMIN.tinta3, letterSpacing: '1.4px', padding: '18px 12px 6px' }}>VISIÓN</div>
+          {vision.map((it) =>
+            it.key === activo ? (
               <div key={it.key} style={sideActive}>
-                <span style={{ width: 21, height: 21, background: `${uiIcon(it.icono)} center/contain no-repeat` }} />{it.label}
+                <span style={{ flex: 1, textAlign: 'left' }}>{it.label}</span>
+                <span style={chipPronto}>Pronto</span>
               </div>
             ) : (
-              <button key={it.key} onClick={() => router.push(it.ruta)} className="ed-side" style={sideBtn}>
-                <span style={{ width: 21, height: 21, background: `${uiIcon(it.icono)} center/contain no-repeat` }} />{it.label}
+              <button key={it.key} onClick={() => router.push(it.ruta)} className="ad-nav" style={sideBtn}>
+                <span style={{ flex: 1, textAlign: 'left' }}>{it.label}</span>
+                <span style={chipPronto}>Pronto</span>
               </button>
             ),
           )}
           <div style={{ flex: 1 }} />
-          <button onClick={signOut} className="ed-side" style={sideBtn}>Cerrar sesión</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderRadius: 12, background: ADMIN.burbuja, border: `1px solid ${ADMIN.borde}`, color: ADMIN.oscuro, fontFamily: QUICK, fontWeight: 700, fontSize: 12.5, lineHeight: 1.3 }}>
+            {me.nivel === 'super' ? 'Rol: Super admin' : 'Rol: Operativo'}
+          </div>
+          <button onClick={signOut} className="ed-side" style={{ padding: 12, borderRadius: 12, background: 'none', border: 'none', color: ADMIN.tinta2, fontFamily: QUICK, fontWeight: 700, fontSize: 15, cursor: 'pointer', textAlign: 'left' }}>
+            Cerrar sesión
+          </button>
         </aside>
-        <main style={{ flex: 1, minWidth: 0, padding: '30px 34px', overflowX: 'hidden' }}>
+        <main style={{ flex: 1, minWidth: 0, padding: 'clamp(22px, 3.2vw, 38px)', overflowX: 'hidden', animation: 'edFade .25s ease' }}>
           {children}
         </main>
       </div>

@@ -1,15 +1,18 @@
 // Navegación del panel admin — CONGELADA para los work-packages (la clave
 // anti-conflictos del trabajo en paralelo: cada sección reemplaza SU page.tsx
 // stub, nada más). Solo se edita en las fases secuenciales de fundaciones
-// (Fase 0 la creó; la fase "Observatorio y avisos" sumó Observatorio).
-// Capacitación y Exportaciones NO van acá a propósito: son pantallas de
-// visión linkeadas desde el Observatorio — el nav es operativo, no aspiracional.
+// (Fase 0 la creó; "Observatorio y avisos" sumó Observatorio; el restyle
+// 2026-08 al mock Admin.dc.html sumó el grupo VISIÓN — `vision: true` agrupa
+// Observatorio/Capacitación/Exportaciones bajo ese label con chip "Pronto",
+// supersede la regla vieja de "Capacitación/Exportaciones no van en el nav").
+// El campo `icono` se conserva por los tests aunque el sidebar ya no lo pinte.
 export type AdminNavItem = {
   key: string;
   label: string;
   ruta: string;
   icono: string; // clave de uiIcon (web/lib/art.ts)
   soloSuper?: boolean;
+  vision?: boolean; // va en el grupo VISIÓN del sidebar (chip "Pronto")
 };
 
 export const ADMIN_NAV: readonly AdminNavItem[] = [
@@ -18,11 +21,13 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
   { key: 'maestras', label: 'Maestras', ruta: '/admin/maestras', icono: 'people' },
   { key: 'metricas', label: 'Métricas', ruta: '/admin/metricas', icono: 'chart' },
   { key: 'costos', label: 'Costos y salud', ruta: '/admin/costos', icono: 'coin' },
-  { key: 'observatorio', label: 'Observatorio', ruta: '/admin/observatorio', icono: 'globe' },
   { key: 'alertas', label: 'Alertas', ruta: '/admin/alertas', icono: 'bell' },
   { key: 'anuncios', label: 'Anuncios', ruta: '/admin/anuncios', icono: 'megaphone' },
   { key: 'auditoria', label: 'Auditoría', ruta: '/admin/auditoria', icono: 'book' },
   { key: 'config', label: 'Administradores', ruta: '/admin/config', icono: 'gear', soloSuper: true },
+  { key: 'observatorio', label: 'Observatorio', ruta: '/admin/observatorio', icono: 'globe', vision: true },
+  { key: 'capacitacion', label: 'Capacitación', ruta: '/admin/capacitacion', icono: 'book', vision: true },
+  { key: 'exportaciones', label: 'Exportaciones', ruta: '/admin/exportaciones', icono: 'chart', vision: true },
 ] as const;
 
 // Resuelve el ítem activo por prefijo de ruta (la ficha de colegio marca
