@@ -47,8 +47,8 @@ const ERRS: Record<string, string> = {
 
 // Estado de materia (sol_materia): borrador | publicado.
 const ESTADO_MATERIA: Record<string, readonly [string, string, string]> = {
-  borrador: ['#EFE3CE', '#7A6F5F', 'Borrador'],
-  publicado: ['#E6F0DC', '#4E7A3A', 'Publicada'],
+  borrador: [ADMIN.hover, ADMIN.tinta2, 'Borrador'],
+  publicado: [ADMIN.okFondo, ADMIN.okTexto, 'Publicada'],
 };
 
 const plural = (n: number, uno: string, muchos: string) => `${n} ${n === 1 ? uno : muchos}`;
@@ -66,7 +66,7 @@ function horaLinda(iso: string): string {
 function colorPrecision(p: number): [string, string] {
   if (p >= 70) return [ADMIN.okFondo, ADMIN.okTexto];
   if (p >= 50) return [ADMIN.warnFondo, ADMIN.warnTexto];
-  return ['#F7E2DD', '#BB4F3F'];
+  return [ADMIN.dangerFondo, ADMIN.danger];
 }
 
 export default function VerComoPage() {
@@ -103,23 +103,26 @@ export default function VerComoPage() {
       <div
         style={{
           position: 'sticky', top: 0, zIndex: 30,
-          background: ADMIN.warnFondo, border: `2px solid ${ADMIN.warnBorde}`, borderRadius: 18,
-          padding: '13px 18px', marginBottom: 20,
-          display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
-          boxShadow: '0 4px 14px rgba(58,51,42,.10)',
+          background: ADMIN.warnFondo, border: `2px solid ${ADMIN.sol}`, borderRadius: 18,
+          padding: '16px 22px', marginBottom: 22,
+          display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap',
         }}
       >
-        <span style={{ fontFamily: QUICK, fontWeight: 800, fontSize: 15, color: ADMIN.warnTexto }}>
-          Estás viendo como {snap?.docente.nombre ?? 'esta maestra'} — solo lectura
-        </span>
-        <span style={{ fontFamily: NUNITO, fontSize: 13, color: ADMIN.warnTexto, fontWeight: 600 }}>
-          No estás en su sesión: es una foto de su panel y queda registrada en la auditoría.
-        </span>
+        <div style={{ flex: 1, minWidth: 240 }}>
+          <div style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 16.5, color: ADMIN.warnTexto }}>
+            Estás viendo como {snap?.docente.nombre ?? 'esta maestra'} — solo lectura
+          </div>
+          <div style={{ fontFamily: NUNITO, fontSize: 13.5, color: ADMIN.tinta2, fontWeight: 600, marginTop: 2 }}>
+            No es su sesión; esta consulta queda auditada.
+          </div>
+        </div>
         <button
           onClick={salir}
+          className="ed-primary"
           style={{
-            marginLeft: 'auto', background: ADMIN.warnTexto, color: '#fff', border: 'none', borderRadius: 12,
-            padding: '9px 20px', fontFamily: QUICK, fontWeight: 700, fontSize: 14.5, cursor: 'pointer',
+            background: ADMIN.sol, color: '#fff', border: 'none', borderRadius: 999,
+            padding: '11px 24px', fontFamily: QUICK, fontWeight: 700, fontSize: 14, cursor: 'pointer',
+            boxShadow: '0 4px 12px rgba(244,169,59,.3)',
           }}
         >
           Salir
@@ -127,7 +130,7 @@ export default function VerComoPage() {
       </div>
 
       {error && (
-        <div style={{ background: '#F7E2DD', border: '2px solid #E8C9C2', borderRadius: 18, padding: '16px 20px', color: '#8A3D30', fontFamily: QUICK, fontWeight: 700, fontSize: 14.5 }}>
+        <div style={{ background: ADMIN.dangerFondo, border: `2px solid ${ADMIN.dangerBorde}`, borderRadius: 18, padding: '16px 20px', color: ADMIN.danger, fontFamily: QUICK, fontWeight: 700, fontSize: 14.5 }}>
           {error}
         </div>
       )}
@@ -138,12 +141,13 @@ export default function VerComoPage() {
 
       {snap && (
         <>
-          {/* Encabezado */}
-          <h1 style={{ fontFamily: BALOO, fontWeight: 800, fontSize: 27, color: ADMIN.ink, margin: '0 0 4px' }}>
-            {snap.docente.nombre}
+          {/* Encabezado — en el mock esta h1 va en Quicksand, no en Baloo:
+              es el panel de la maestra, no una pantalla de plataforma. */}
+          <h1 style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 'clamp(24px, 3.2vw, 30px)', color: ADMIN.ink, margin: '0 0 4px' }}>
+            Panel de {snap.docente.nombre}
           </h1>
-          <p style={{ fontFamily: NUNITO, fontSize: 15, color: ADMIN.tinta2, fontWeight: 600, margin: '0 0 20px' }}>
-            {snap.escuela?.nombre ?? 'Sin colegio asignado'} · {plural(snap.alumnos.length, 'alumno', 'alumnos')} ·{' '}
+          <p style={{ fontFamily: NUNITO, fontSize: 14.5, color: ADMIN.tinta2, fontWeight: 600, margin: '0 0 20px' }}>
+            {snap.escuela?.nombre ?? 'Sin colegio asignado'} · réplica de solo lectura · {plural(snap.alumnos.length, 'alumno', 'alumnos')} ·{' '}
             {plural(snap.aulas.length, 'aula', 'aulas')}
           </p>
 
@@ -181,7 +185,7 @@ export default function VerComoPage() {
           ) : (
             <div style={{ ...tarjeta, padding: 0, overflowX: 'auto', marginBottom: 24 }}>
               <div style={{ minWidth: 560 }}>
-                <div style={{ ...filaGrilla, borderBottom: `2px solid ${ADMIN.bordeCalido}`, fontFamily: QUICK, fontWeight: 700, fontSize: 12.5, color: ADMIN.tinta2 }}>
+                <div style={{ ...filaGrilla, borderBottom: `2px solid ${ADMIN.divisor}`, fontFamily: QUICK, fontWeight: 800, fontSize: 11.5, letterSpacing: '.6px', color: ADMIN.tinta2, textTransform: 'uppercase' }}>
                   <span>Alumno</span>
                   <span style={{ textAlign: 'center' }}>Grado</span>
                   <span>Aula</span>
@@ -191,7 +195,7 @@ export default function VerComoPage() {
                 {snap.alumnos.map((al) => {
                   const [bg, color] = al.precisionReciente === null ? [ADMIN.burbuja, ADMIN.medio] : colorPrecision(al.precisionReciente);
                   return (
-                    <div key={al.id} style={{ ...filaGrilla, borderBottom: `1.5px solid ${ADMIN.bordeCalido}` }}>
+                    <div key={al.id} style={{ ...filaGrilla, borderBottom: `1px solid ${ADMIN.divisor}` }}>
                       <span style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 15, color: ADMIN.ink }}>{al.nombre}</span>
                       <span style={{ textAlign: 'center', fontFamily: NUNITO, fontSize: 14, color: ADMIN.tinta2, fontWeight: 600 }}>
                         {gradoLabel(al.grado)}
@@ -208,7 +212,7 @@ export default function VerComoPage() {
                         )}
                       </span>
                       <span style={{ textAlign: 'center' }}>
-                        <span style={{ display: 'inline-block', background: bg, color, borderRadius: 999, padding: '4px 12px', fontFamily: QUICK, fontWeight: 700, fontSize: 12.5 }}>
+                        <span style={{ display: 'inline-block', background: bg, color, borderRadius: 999, padding: '4px 12px', fontFamily: QUICK, fontWeight: 800, fontSize: 12 }}>
                           {al.precisionReciente === null ? 'sin datos' : `${al.precisionReciente}%`}
                         </span>
                       </span>
@@ -230,7 +234,7 @@ export default function VerComoPage() {
                 return (
                   <div key={m.id} style={{ ...tarjeta, padding: '13px 18px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                     <span style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 16, color: ADMIN.ink }}>{m.nombre}</span>
-                    <span style={{ display: 'inline-block', background: tupla[0], color: tupla[1], borderRadius: 999, padding: '4px 12px', fontFamily: QUICK, fontWeight: 700, fontSize: 12.5 }}>
+                    <span style={{ display: 'inline-block', background: tupla[0], color: tupla[1], borderRadius: 999, padding: '4px 12px', fontFamily: QUICK, fontWeight: 800, fontSize: 12 }}>
                       {tupla[2]}
                     </span>
                     <span style={{ marginLeft: 'auto', fontFamily: NUNITO, fontSize: 13.5, color: ADMIN.tinta2, fontWeight: 600 }}>
@@ -273,29 +277,30 @@ export default function VerComoPage() {
 }
 
 function Numerito({ valor, label }: { valor: string; label: string }) {
+  // En el mock las tiles de ver-como llevan el número en tinta, no en petróleo:
+  // es la vista de la maestra, no una métrica de plataforma.
   return (
-    <div style={{ ...tarjeta, padding: '14px 20px', minWidth: 140 }}>
-      <div style={{ fontFamily: BALOO, fontWeight: 800, fontSize: 26, color: ADMIN.oscuro, lineHeight: 1.1 }}>{valor}</div>
-      <div style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 12.5, color: ADMIN.tinta2, marginTop: 4 }}>{label}</div>
+    <div style={{ ...tarjeta, borderRadius: 20, padding: '18px 20px', minWidth: 150 }}>
+      <div style={{ fontFamily: BALOO, fontWeight: 700, fontSize: 28, color: ADMIN.ink, lineHeight: 1 }}>{valor}</div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: ADMIN.tinta2, marginTop: 6 }}>{label}</div>
     </div>
   );
 }
 
 function Vacio({ texto }: { texto: string }) {
   return (
-    <div style={{ background: ADMIN.burbuja, border: `2px solid ${ADMIN.borde}`, borderRadius: 18, padding: '16px 20px', color: ADMIN.medio, fontFamily: QUICK, fontWeight: 700, fontSize: 14.5, marginBottom: 24 }}>
+    <div style={{ background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 18, padding: '16px 20px', color: ADMIN.tinta2, fontFamily: QUICK, fontWeight: 700, fontSize: 14.5, marginBottom: 24 }}>
       {texto}
     </div>
   );
 }
 
-// ---------- estilos ----------
+// ---------- estilos (del mock Admin.dc.html) ----------
 const tarjeta: React.CSSProperties = {
   background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 22,
-  boxShadow: `0 3px 10px ${ADMIN.sombraCalida}`,
 };
 const subtitulo: React.CSSProperties = {
-  fontFamily: BALOO, fontWeight: 800, fontSize: 18.5, color: ADMIN.oscuro, margin: '0 0 10px',
+  fontFamily: QUICK, fontWeight: 700, fontSize: 17, color: ADMIN.oscuro, margin: '0 0 12px',
 };
 const filaGrilla: React.CSSProperties = {
   display: 'grid', gridTemplateColumns: '1.5fr .6fr 1fr 1.4fr 1fr', gap: 10,
