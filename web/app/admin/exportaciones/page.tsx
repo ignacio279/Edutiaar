@@ -1,25 +1,22 @@
 'use client';
 // Pantalla de VISIÓN — Exportaciones para el ministerio (fase Observatorio y
-// avisos, WP-D; restyle 2026-08 al mock Admin.dc.html: banner "Próximamente" +
-// filas de reporte con chips PDF/CSV deshabilitados). Pieza de venta: cuenta a
-// dónde va EDUTIA, sin datos ni Edge Functions. Vive en el grupo VISIÓN.
+// avisos, WP-D). Pieza de venta: cuenta a dónde va EDUTIA, sin datos ni Edge
+// Functions. Vive en el grupo VISIÓN del sidebar.
+// A propósito NO lista reportes de ejemplo: el resto del panel muestra datos
+// reales y una tabla con períodos y jurisdicciones inventados se lee como si
+// lo fueran.
 import { ADMIN } from '@/lib/admin/tema';
 
 const BALOO = 'var(--font-baloo), cursive';
 const QUICK = 'var(--font-quicksand), sans-serif';
 const NUNITO = 'var(--font-nunito)';
 
-// Contenido ilustrativo: así se van a ver los reportes cuando se puedan bajar.
-const REPORTES: readonly { titulo: string; periodo: string; jurisdiccion: string }[] = [
-  { titulo: 'Avance de aprendizaje por zona', periodo: 'Julio 2026', jurisdiccion: 'Misiones' },
-  { titulo: 'Adopción y uso de la plataforma', periodo: '2° trimestre 2026', jurisdiccion: 'Todas' },
-  { titulo: 'Temas con mayor dificultad', periodo: 'Marzo–Julio 2026', jurisdiccion: 'Corrientes' },
+const CARACTERISTICAS: readonly [string, string][] = [
+  ['Reportes por jurisdicción', 'PDF y CSV por provincia y período.'],
+  ['Siempre anónimos', 'La misma regla de muestra mínima del Observatorio.'],
+  ['Formatos oficiales', 'Las plantillas que pida cada organismo.'],
+  ['Programables', 'Envío periódico automático.'],
 ];
-
-const chipFormato: React.CSSProperties = {
-  background: ADMIN.hover, border: `1.5px solid ${ADMIN.chipBorde}`, color: ADMIN.tinta3,
-  borderRadius: 999, padding: '8px 16px', fontFamily: QUICK, fontWeight: 700, fontSize: 12.5,
-};
 
 export default function ExportacionesPage() {
   return (
@@ -41,19 +38,11 @@ export default function ExportacionesPage() {
         sin exponer jamás el dato de un alumno individual.
       </p>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 760 }}>
-        {REPORTES.map((r) => (
-          <div key={r.titulo} style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 20, padding: '18px 20px' }}>
-            <div style={{ flex: 1, minWidth: 220 }}>
-              <div style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 16, color: ADMIN.ink }}>{r.titulo}</div>
-              <div style={{ fontFamily: NUNITO, fontSize: 13, color: ADMIN.tinta2, fontWeight: 600, marginTop: 2 }}>
-                {r.periodo} · {r.jurisdiccion} · datos agregados y anónimos
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <span style={chipFormato}>PDF</span>
-              <span style={chipFormato}>CSV</span>
-            </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, maxWidth: 900 }}>
+        {CARACTERISTICAS.map(([titulo, linea]) => (
+          <div key={titulo} style={{ background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 22, padding: 22 }}>
+            <div style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 16, color: ADMIN.ink }}>{titulo}</div>
+            <div style={{ fontFamily: NUNITO, fontSize: 13.5, color: ADMIN.tinta2, fontWeight: 600, marginTop: 4, lineHeight: 1.4 }}>{linea}</div>
           </div>
         ))}
       </div>
