@@ -79,6 +79,15 @@ const patchAs = async (tok, table, filtro, body) => {
   return { ok: r.ok, status: r.status, rows };
 };
 
+// Consentimiento REAL de transferencia hacia una escuela (0023: matricula_abrir
+// valida contenido — alumno, destino, alcance, vigencia — y hay FK).
+const nuevoConsentimiento = async (alumnoId, escuelaId, extra = {}) =>
+  (await insSR('consentimiento', {
+    alumno_id: alumnoId, escuela_id: escuelaId, adulto_nombre: 'Madre Test',
+    adulto_vinculo: 'madre', alcance: 'transferencia', via: 'asistida',
+    estado: 'vigente', otorgado_at: new Date().toISOString(), ...extra,
+  })).id;
+
 const abrir = (alumno, escuela, aula, docente, actor, consentimiento = null) =>
   rpcSR('matricula_abrir', {
     p_alumno: alumno, p_escuela: escuela, p_aula: aula, p_docente: docente,
@@ -114,8 +123,10 @@ test('matrícula golondrina: ciclo de vida completo (abrir/cerrar, caché, scopi
     assert.equal(p.escuela_id, m1.escuela_id);
     assert.equal(p.grado, m1.grado);
 
-    // 3. Unicidad: una segunda activa la rechaza el índice parcial de la DB.
-    const a2 = await abrir(alumno.id, escuela.id, aula.id, docente.id, docente.id, crypto.randomUUID());
+    // 3. Unicidad: una segunda activa la rechaza el índice parcial de la DB
+    //    (con consentimiento válido, para que el rechazo sea POR el índice).
+    const a2 = await abrir(alumno.id, escuela.id, aula.id, docente.id, docente.id,
+      await nuevoConsentimiento(alumno.id, escuela.id));
     assert.equal(a2.ok, false, 'segunda matrícula activa rechazada');
     assert.match(JSON.stringify(a2.body), /matricula_una_activa|duplicate/i);
 
@@ -163,9 +174,17 @@ test('matrícula golondrina: ciclo de vida completo (abrir/cerrar, caché, scopi
     assert.equal(a3.ok, false);
     assert.match(JSON.stringify(a3.body), /falta_consentimiento/);
 
-    // 9. Reabrir CON consentimiento (transferencia/reingreso): en_transito → activo
-    //    y el caché se repuebla. (FK real del consentimiento llega en 0023.)
-    const a4 = await abrir(alumno.id, escuela.id, aula.id, docente.id, docente.id, crypto.randomUUID());
+    // 8b. Con consentimiento del alcance EQUIVOCADO ('tratamiento' no autoriza
+    //     una transferencia): también rechazado — la validación es de contenido.
+    const cMalo = await nuevoConsentimiento(alumno.id, escuela.id, { alcance: 'tratamiento' });
+    const a3b = await abrir(alumno.id, escuela.id, aula.id, docente.id, docente.id, cMalo);
+    assert.equal(a3b.ok, false);
+    assert.match(JSON.stringify(a3b.body), /consentimiento_invalido/);
+
+    // 9. Reabrir CON consentimiento vigente de transferencia: en_transito →
+    //    activo y el caché se repuebla.
+    const a4 = await abrir(alumno.id, escuela.id, aula.id, docente.id, docente.id,
+      await nuevoConsentimiento(alumno.id, escuela.id));
     assert.ok(a4.ok, `reapertura falló: ${JSON.stringify(a4.body)}`);
     p = await perfilDe(alumno.id);
     assert.equal(p.estado, 'activo');
@@ -181,12 +200,14 @@ test('matrícula golondrina: ciclo de vida completo (abrir/cerrar, caché, scopi
 
     // 11. Baja ARCO: terminal. Reingreso del egresado → ok; cierre arco_baja →
     //     'baja'; y de ahí NO se vuelve (ni con consentimiento).
-    const a5 = await abrir(alumno.id, escuela.id, aula.id, docente.id, docente.id, crypto.randomUUID());
+    const a5 = await abrir(alumno.id, escuela.id, aula.id, docente.id, docente.id,
+      await nuevoConsentimiento(alumno.id, escuela.id));
     assert.ok(a5.ok, 'egresado puede reingresar');
     const m3 = await matriculaActiva(alumno.id);
     await cerrar(m3.id, 'arco_baja', docente.id);
     assert.equal((await perfilDe(alumno.id)).estado, 'baja');
-    const a6 = await abrir(alumno.id, escuela.id, aula.id, docente.id, docente.id, crypto.randomUUID());
+    const a6 = await abrir(alumno.id, escuela.id, aula.id, docente.id, docente.id,
+      await nuevoConsentimiento(alumno.id, escuela.id));
     assert.equal(a6.ok, false, 'baja es terminal');
     assert.match(JSON.stringify(a6.body), /alumno_dado_de_baja/);
 

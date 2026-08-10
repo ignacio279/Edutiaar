@@ -49,6 +49,7 @@ export const ERRS_MATRICULA: Record<string, string> = {
   alumno_inexistente: 'No encontramos a ese alumno.',
   alumno_dado_de_baja: 'Ese alumno fue dado de baja a pedido de su familia: no se puede rematricular.',
   falta_consentimiento: 'Para rematricular hace falta el consentimiento de la familia (transferencia).',
+  consentimiento_invalido: 'Ese consentimiento no sirve para esta matrícula: tiene que ser del alumno, hacia este colegio y estar vigente.',
   matricula_inexistente_o_cerrada: 'Esa matrícula no existe o ya está cerrada.',
   motivo_invalido: 'Elegí un motivo de cierre válido.',
   transicion_invalida: 'Ese cambio de estado no está permitido.',

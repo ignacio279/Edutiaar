@@ -47,6 +47,27 @@ Deno.serve(async (req) => {
         if (escErr) throw escErr;
         const escuelas = (escData ?? []) as EscuelaAlerta[];
 
+        // Licencia efectiva por colegio (0026): la directa manda; si no hay,
+        // la del pool asignado. Colegio sin ninguna → el detector cae al
+        // trial legacy. Orden por fecha_inicio asc: la más nueva pisa al final.
+        const licPorEscuela: Record<string, { id: string; estado: string; fecha_fin: string | null }> = {};
+        const { data: asigData } = await sb
+          .from('licencia_asignacion')
+          .select('escuela_id, licencia:licencia_id(id, estado, fecha_fin, fecha_inicio)')
+          .order('escuela_id');
+        for (const a of (asigData ?? []) as { escuela_id: string; licencia: { id: string; estado: string; fecha_fin: string | null } | null }[]) {
+          if (a.licencia) licPorEscuela[a.escuela_id] = a.licencia;
+        }
+        const { data: licData } = await sb
+          .from('licencia')
+          .select('id, escuela_id, estado, fecha_fin')
+          .not('escuela_id', 'is', null)
+          .order('fecha_inicio', { ascending: true });
+        for (const l of (licData ?? []) as { id: string; escuela_id: string; estado: string; fecha_fin: string | null }[]) {
+          licPorEscuela[l.escuela_id] = { id: l.id, estado: l.estado, fecha_fin: l.fecha_fin };
+        }
+        for (const e of escuelas) e.licencia = licPorEscuela[e.id] ?? null;
+
         // Última sesión por escuela: max(fecha) de sesion → perfil del alumno.
         // Iterar escuelas está bien para el volumen del MVP (pocas decenas).
         const ultimaSesionPorEscuela: Record<string, string | null> = {};
