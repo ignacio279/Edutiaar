@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { ESTADO_ALUMNO_COPY, copyMotivo } from '@/lib/transferencias';
 import DocenteSidebar from '@/components/DocenteSidebar';
 import { animal, sol, uiIcon, nodeIcon, starBadge, lockBadge } from '@/lib/art';
 import { estadoColor, LEGEND, layoutCamino } from '@/lib/mapa-layout';
@@ -18,7 +19,7 @@ const QUICK = 'var(--font-quicksand), sans-serif';
 const NUNITO = 'var(--font-nunito), sans-serif';
 const solHappy = `${sol('happy')} center/contain no-repeat`;
 
-type Alumno = { nombre: string; avatar: string; grado: number };
+type Alumno = { nombre: string; avatar: string; grado: number; estado?: string };
 type NodoEstado = { nodo_id: string; estado: string; override: boolean; puntaje: number; nombre: string; orden: number; materia: string };
 type Err = { pregunta: string; respondio: string; esperaba: string };
 type Eval = { resumen: string; errores: Err[]; a_reforzar: string[] } | null;
@@ -42,6 +43,13 @@ function duracionTxt(seg: number): string {
   return seg >= 60 ? `${Math.round(seg / 60)} min` : `${seg} s`;
 }
 
+// Recorrido del legajo (alumno golondrina, 0022): la RLS de matricula ya
+// limita a los alumnos propios (es_mi_alumno), así que se lee por cliente.
+type Matricula = {
+  id: string; fecha_inicio: string; fecha_fin: string | null; grado: number | null;
+  motivo_cierre: string | null; escuela: { nombre: string } | null;
+};
+
 export default function DetalleAlumno() {
   const router = useRouter();
   const supabase = createClient();
@@ -53,6 +61,7 @@ export default function DetalleAlumno() {
   const [analisis, setAnalisis] = useState<Eval>(null);
   const [sesiones, setSesiones] = useState<Sesion[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [matriculas, setMatriculas] = useState<Matricula[]>([]);
   const [materiaSel, setMateriaSel] = useState('');
   const [selNode, setSelNode] = useState<string | null>(null);
 
@@ -63,8 +72,15 @@ export default function DetalleAlumno() {
       const { data: yo } = await supabase.from('perfil').select('rol').eq('id', user.id).single();
       if ((yo as { rol?: string } | null)?.rol !== 'docente') { router.replace('/'); return; }
 
-      const { data: a } = await supabase.from('perfil').select('nombre,avatar,grado').eq('id', alumnoId).single();
+      const { data: a } = await supabase.from('perfil').select('nombre,avatar,grado,estado').eq('id', alumnoId).single();
       setAlumno(a as Alumno | null);
+
+      const { data: mats } = await supabase
+        .from('matricula')
+        .select('id, fecha_inicio, fecha_fin, grado, motivo_cierre, escuela:escuela_id(nombre)')
+        .eq('alumno_id', alumnoId)
+        .order('fecha_inicio', { ascending: false });
+      setMatriculas((mats ?? []) as unknown as Matricula[]);
 
       const { data: an } = await supabase
         .from('alumno_nodo')
@@ -295,6 +311,49 @@ export default function DetalleAlumno() {
                 </div>
               </div>
             )}
+          </div>
+
+          {/* ── Recorrido de matrículas (alumno golondrina) ─────────── */}
+          <div style={{ ...card, marginTop: 18 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <h2 style={{ ...cardTitle, margin: 0 }}>Su recorrido</h2>
+              {alumno?.estado && alumno.estado !== 'activo' ? (
+                <span style={{
+                  fontSize: 12.5, fontWeight: 700, color: '#fff', borderRadius: 999, padding: '4px 12px',
+                  background: ESTADO_ALUMNO_COPY[alumno.estado]?.color ?? '#9A8C7E',
+                }}>{ESTADO_ALUMNO_COPY[alumno.estado]?.copy ?? alumno.estado}</span>
+              ) : null}
+            </div>
+            <p style={cardSub}>
+              Por dónde pasó. El legajo es del chico y viaja con él: cuando se muda, nada se borra.
+            </p>
+            {matriculas.length === 0 ? (
+              <p style={{ fontSize: 14, color: '#7A6F5F' }}>Todavía no hay matrículas registradas.</p>
+            ) : matriculas.map((m) => (
+              <div
+                key={m.id}
+                style={{
+                  display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap',
+                  padding: '10px 0', borderTop: '1px solid #EFE3CE',
+                }}
+              >
+                <span style={{
+                  width: 10, height: 10, borderRadius: 999, flexShrink: 0,
+                  background: m.fecha_fin ? '#C9BFAF' : '#7FB069',
+                }} />
+                <span style={{ flex: 1, minWidth: 180, fontSize: 14.5, color: '#3A332A', fontWeight: 600 }}>
+                  {m.escuela?.nombre ?? 'Colegio'}
+                  {m.grado ? <span style={{ fontWeight: 400, color: '#7A6F5F' }}>{` · ${m.grado}° grado`}</span> : null}
+                </span>
+                <span style={{ fontSize: 13, color: '#7A6F5F' }}>
+                  {m.fecha_inicio}{' → '}{m.fecha_fin ?? 'hoy'}
+                </span>
+                <span style={{
+                  fontSize: 12.5, fontWeight: 700, color: m.fecha_fin ? '#7A6F5F' : '#4E7A3A',
+                  background: m.fecha_fin ? '#EFE3CE' : '#E6F0DC', borderRadius: 999, padding: '4px 12px',
+                }}>{copyMotivo(m.motivo_cierre)}</span>
+              </div>
+            ))}
           </div>
         </div>
       </main>
