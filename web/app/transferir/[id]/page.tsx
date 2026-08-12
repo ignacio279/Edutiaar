@@ -13,11 +13,10 @@ import {
   VINCULOS, VINCULO_COPY, copyVencimiento, msgErrTransferencia,
   tokenDelFragmento, validarAutorizacion,
 } from '@/lib/transferencias';
+import { postFn } from '@/lib/edge';
 
 const BALOO = 'var(--font-baloo), cursive';
 const QUICK = 'var(--font-quicksand), sans-serif';
-const URL_SB = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 type Pase = {
   alumno_nombre: string | null;
@@ -26,14 +25,12 @@ type Pase = {
   expira_at: string;
 };
 
+// Esta es la ÚNICA pantalla pública del sistema y la abre una familia desde el
+// celular, muchas veces con señal mala: que un corte de red le muestre un stack
+// trace sería lo peor posible. postFn nunca lanza.
 async function llamar(accion: string, payload: Record<string, unknown>) {
-  const r = await fetch(`${URL_SB}/functions/v1/transferencia-confirmar`, {
-    method: 'POST',
-    headers: { apikey: ANON, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ accion, ...payload }),
-  });
-  const j = await r.json().catch(() => ({}));
-  return { ok: r.ok, j: j as { error?: string; [k: string]: unknown } };
+  const r = await postFn('transferencia-confirmar', { accion, ...payload });
+  return { ok: r.ok, j: r.data as { error?: string; [k: string]: unknown } };
 }
 
 export default function AutorizarPase() {

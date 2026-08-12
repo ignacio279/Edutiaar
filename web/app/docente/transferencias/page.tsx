@@ -11,11 +11,10 @@ import { createClient } from '@/lib/supabase/client';
 import DocenteSidebar from '@/components/DocenteSidebar';
 import { toast } from '@/lib/toast';
 import { copyEstado, copyVencimiento, msgErrTransferencia } from '@/lib/transferencias';
+import { postFn } from '@/lib/edge';
 
 const BALOO = 'var(--font-baloo), cursive';
 const QUICK = 'var(--font-quicksand), sans-serif';
-const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 const supabase = createClient();
 
@@ -33,13 +32,10 @@ type Colegio = { id: string; nombre: string };
 
 async function gestion(accion: string, payload: Record<string, unknown> = {}) {
   const { data: { session } } = await supabase.auth.getSession();
-  const r = await fetch(`${URL}/functions/v1/gestion-transferencias`, {
-    method: 'POST',
-    headers: { apikey: ANON, Authorization: `Bearer ${session?.access_token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ accion, ...payload }),
-  });
-  const j = await r.json().catch(() => ({}));
-  return { ok: r.ok, j: j as { error?: string; [k: string]: unknown } };
+  // postFn no lanza: sin conexión devuelve `sin_conexion` y la pantalla avisa,
+  // en vez de tirarle un error de runtime a la maestra.
+  const r = await postFn('gestion-transferencias', { accion, ...payload }, { token: session?.access_token });
+  return { ok: r.ok, j: r.data as { error?: string; [k: string]: unknown } };
 }
 
 export default function Pases() {

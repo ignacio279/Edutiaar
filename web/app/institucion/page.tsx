@@ -13,12 +13,11 @@ import { ADMIN } from '@/lib/admin/tema';
 import { toast } from '@/lib/toast';
 import { ERRS_LICENCIAS, PLAN_COPY, copyCupos, copyVencimientoLicencia } from '@/lib/admin/licencias';
 import { copyCosto, copyDeuda, copyPrecision, totalesInstitucion, type FilaColegio } from '@/lib/institucion';
+import { postFn } from '@/lib/edge';
 
 const BALOO = 'var(--font-baloo), cursive';
 const QUICK = 'var(--font-quicksand), sans-serif';
 const NUNITO = 'var(--font-nunito), sans-serif';
-const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 const supabase = createClient();
 
@@ -32,13 +31,8 @@ type Resumen = { institucion: { id: string; nombre: string; estado: string }; co
 
 async function panel(accion: string, payload: Record<string, unknown> = {}) {
   const { data: { session } } = await supabase.auth.getSession();
-  const r = await fetch(`${URL}/functions/v1/institucion-panel`, {
-    method: 'POST',
-    headers: { apikey: ANON, Authorization: `Bearer ${session?.access_token ?? ''}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ accion, ...payload }),
-  });
-  const j = await r.json().catch(() => ({}));
-  return { ok: r.ok, j: j as { error?: string; [k: string]: unknown } };
+  const r = await postFn('institucion-panel', { accion, ...payload }, { token: session?.access_token ?? '' });
+  return { ok: r.ok, j: r.data as { error?: string; [k: string]: unknown } };
 }
 
 const copyError = (j: { error?: string }) => ERRS_LICENCIAS[j?.error ?? ''] || j?.error || 'No se pudo.';

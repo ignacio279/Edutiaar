@@ -9,12 +9,11 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { ADMIN } from '@/lib/admin/tema';
+import { postFn } from '@/lib/edge';
 
 const BALOO = 'var(--font-baloo), cursive';
 const NUNITO = 'var(--font-nunito)';
 const QUICK = 'var(--font-quicksand), sans-serif';
-const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 const field: React.CSSProperties = {
   width: '100%', padding: '14px 16px', border: `2px solid ${ADMIN.bordeCalido}`,
@@ -42,21 +41,17 @@ export default function InstitucionLogin() {
 
     // La única forma de saber si es admin de institución es preguntárselo al
     // panel (la tabla es server-only, sin policies: el cliente no la ve).
-    const r = await fetch(`${URL}/functions/v1/institucion-panel`, {
-      method: 'POST',
-      headers: {
-        apikey: ANON, Authorization: `Bearer ${data.session?.access_token ?? ''}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ accion: 'resumen' }),
-    });
+    const r = await postFn('institucion-panel', { accion: 'resumen' }, { token: data.session?.access_token ?? '' });
     if (!r.ok) {
       await supabase.auth.signOut();
       setBusy(false);
-      const j = await r.json().catch(() => ({}));
-      setError((j as { error?: string }).error === 'institucion_suspendida'
-        ? 'La institución está en pausa. Escribinos y lo resolvemos.'
-        : 'Credenciales inválidas.');
+      // Sin conexión NO es una credencial mala: decírselo sería mandarla a
+      // pelearse con su contraseña cuando el problema es la señal.
+      setError(
+        r.data.error === 'sin_conexion' ? 'No pudimos conectarnos. Revisá la conexión y probá de nuevo.'
+          : r.data.error === 'institucion_suspendida' ? 'La institución está en pausa. Escribinos y lo resolvemos.'
+            : 'Credenciales inválidas.',
+      );
       return;
     }
     router.push('/institucion');

@@ -186,6 +186,7 @@ export function nombreArchivoLegajo(alumnoId: string, fechaISO: string): string 
 }
 
 export const ERRS_ARCO: Record<string, string> = {
+  sin_conexion: 'No pudimos conectarnos. Revisá la conexión y probá de nuevo.',
   requiere_super: 'La cancelación definitiva la confirma solo el super-admin.',
   alumno_inexistente: 'No encontramos a ese alumno.',
   caso_inexistente: 'No encontramos ese caso.',

@@ -12,6 +12,7 @@ import { animal, sol, uiIcon } from '@/lib/art';
 import { toast } from '@/lib/toast';
 import { VINCULOS, mensajeDeuda, validarConsentimiento } from '@/lib/consentimientos';
 import { VINCULO_COPY } from '@/lib/transferencias';
+import { postFn } from '@/lib/edge';
 
 const BALOO = 'var(--font-baloo), cursive';
 const QUICK = 'var(--font-quicksand), sans-serif';
@@ -25,6 +26,7 @@ type Aula = { id: string; nombre: string; grado: number | null; codigo: string }
 type Alumno = { id: string; nombre: string; avatar: string; grado: number; aula_id: string | null };
 
 const ERRS: Record<string, string> = {
+  sin_conexion: 'No pudimos conectarnos. Revisá la conexión y probá de nuevo.',
   codigo_duplicado: 'Ya existe un aula con ese nombre. Probá otro.',
   aula_con_alumnos: 'El aula tiene alumnos. Movelos o borralos primero.',
   no_es_tuyo: 'Eso no es tuyo.',
@@ -37,13 +39,10 @@ const supabase = createClient();
 
 async function gestion(accion: string, payload: Record<string, unknown>): Promise<{ ok: boolean; j: { error?: string; [k: string]: unknown } }> {
   const { data: { session } } = await supabase.auth.getSession();
-  const r = await fetch(`${URL}/functions/v1/gestion-alumnos`, {
-    method: 'POST',
-    headers: { apikey: ANON, Authorization: `Bearer ${session?.access_token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ accion, ...payload }),
-  });
-  const j = await r.json().catch(() => ({}));
-  return { ok: r.ok, j };
+  // postFn no lanza: sin conexión devuelve `sin_conexion` y se avisa con un
+  // toast, en vez de romper la pantalla de Mi clase.
+  const r = await postFn('gestion-alumnos', { accion, ...payload }, { token: session?.access_token });
+  return { ok: r.ok, j: r.data as { error?: string; [k: string]: unknown } };
 }
 
 // Consentimientos (alumno golondrina, 0023): la seño registra al adulto
@@ -51,13 +50,8 @@ async function gestion(accion: string, payload: Record<string, unknown>): Promis
 // alumnos cargados antes de esta fase.
 async function consentimientos(accion: string, payload: Record<string, unknown> = {}) {
   const { data: { session } } = await supabase.auth.getSession();
-  const r = await fetch(`${URL}/functions/v1/gestion-consentimientos`, {
-    method: 'POST',
-    headers: { apikey: ANON, Authorization: `Bearer ${session?.access_token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ accion, ...payload }),
-  });
-  const j = await r.json().catch(() => ({}));
-  return { ok: r.ok, j: j as { error?: string; [k: string]: unknown } };
+  const r = await postFn('gestion-consentimientos', { accion, ...payload }, { token: session?.access_token });
+  return { ok: r.ok, j: r.data as { error?: string; [k: string]: unknown } };
 }
 
 type Pendiente = { consentimiento_id: string; alumno_id: string; alumno_nombre?: string | null };

@@ -109,6 +109,7 @@ export const ESTADO_ALUMNO_COPY: Record<string, { copy: string; color: string }>
 // ── Copys de error del backend ──────────────────────────────────────────────
 
 export const ERRS_TRANSFERENCIA: Record<string, string> = {
+  sin_conexion: 'No pudimos conectarnos. Revisá la conexión y probá de nuevo.',
   token_invalido: 'Este link no sirve. Pedile uno nuevo a la escuela.',
   transferencia_bloqueada: 'Probaste muchas veces seguidas. Esperá quince minutos y volvé a intentar.',
   transferencia_expirada: 'Este link ya venció. Pedile uno nuevo a la escuela.',
