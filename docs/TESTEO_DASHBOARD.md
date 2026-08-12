@@ -13,26 +13,25 @@
 ## Punto de partida
 
 > **Actualizado el 2026-08-12.** Este doc se escribió asumiendo que no había
-> nada aplicado, pero **Admin v3 y Observatorio ya se deployaron el 2026-08-10**
-> (verificado contra la base real). Lo que falta es solo la fase golondrina.
+> nada aplicado. **Ya está todo el backend en la base real**: Admin v3 y
+> Observatorio el 2026-08-10, y la fase golondrina el 2026-08-12.
 
 | | Estado |
 |---|---|
-| Código (10 migraciones, 29 funciones, ~26 pantallas admin) | ✅ commiteado y pusheado |
-| 495 tests unitarios | ✅ verdes |
+| Código (10 migraciones, 32 funciones, ~26 pantallas admin) | ✅ commiteado y pusheado |
+| 501 tests unitarios | ✅ verdes |
 | Migraciones **0018 → 0021** | ✅ **aplicadas** (2026-08-10) |
-| Migraciones **0022 → 0027** (golondrina) | ❌ **sin aplicar** |
+| Migraciones **0022 → 0027** (golondrina) | ✅ **aplicadas** (2026-08-12) |
 | Las 23 Edge Functions de Admin v3 + Observatorio | ✅ **deployadas** (2026-08-10) |
-| Las 6 fns de golondrina (`gestion-transferencias`, `transferencia-confirmar`, `gestion-consentimientos`, `admin-arco`, `admin-instituciones`, `institucion-panel`) | ❌ **sin deployar** |
+| Las 9 de golondrina (6 nuevas + `gestion-alumnos`, `admin-jobs`, `admin-observatorio`) | ✅ **deployadas** (2026-08-12) |
 | 27 archivos de tests de integración | ❌ escritos, **nunca corridos** contra la DB real |
-| Front en Vercel | ❌ branch sin mergear |
+| Front en Vercel | ❌ branch sin mergear (se prueba en `localhost:3000`) |
 | Secretos del cron en Vault | ❌ sin sembrar |
 
-**Consecuencia práctica:** en el paso 3 saltá a `0022`; las cuatro primeras ya
-están en `supabase_migrations.schema_migrations`. Hasta que golondrina se
-aplique, `/admin/transferencias`, `/admin/instituciones`, `/admin/licencias`,
-`/admin/arco` y todo `/institucion` no pueden funcionar por más que el front
-esté terminado.
+**Los bloques de instalación (pasos 3 a 5) ya están hechos: saltá directo al
+testeo funcional.** El front se prueba con `npm run dev` en `web/` — no hace
+falta mergear a `main` para nada, y conviene NO hacerlo hasta que este
+checklist pase entero.
 
 **Recomendación fuerte:** hacé los pasos 3 a 5 primero en un proyecto Supabase de prueba. El backfill de 0018 y 0022 toca todos los colegios y todos los alumnos existentes.
 
@@ -94,9 +93,11 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=dummy npx next build
 ### Verificación obligatoria (las cinco consultas dan 0)
 
 ```sql
--- (a) Todo colegio tiene fila de features y de licencia.
-select count(*) from escuela e
-where not exists (select 1 from escuela_feature f where f.escuela_id = e.id);
+-- (a) Todo colegio tiene licencia.
+-- OJO: la versión anterior de este doc también exigía fila en escuela_feature.
+-- Era un invariante FALSO: 0018 crea la tabla y no la backfillea a propósito,
+-- porque admin-features trata "sin fila" como el preset por defecto y hace
+-- upsert al primer guardado. Verificado el 2026-08-12: da 1 y está bien.
 select count(*) from escuela e
 where not exists (select 1 from licencia l where l.escuela_id = e.id);
 
