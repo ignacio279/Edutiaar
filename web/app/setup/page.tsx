@@ -9,6 +9,7 @@ import { callFn } from '@/lib/edge';
 import { setAula } from '@/lib/aula';
 import { toast } from '@/lib/toast';
 import { sol } from '@/lib/art';
+import { textoVacio, type Carga } from '@/lib/setup';
 
 const BALOO = 'var(--font-baloo), cursive';
 const NUNITO = 'var(--font-nunito)';
@@ -38,32 +39,53 @@ export default function Setup() {
   const [aulaId, setAulaId] = useState('');
   const [secreto, setSecreto] = useState('aula2026');
   const [busy, setBusy] = useState(false);
+  const [cargaEscuelas, setCargaEscuelas] = useState<Carga>('cargando');
+  const [cargaAulas, setCargaAulas] = useState<Carga>('cargando');
 
   async function loadAulas(eid: string) {
     // Vista pública (0018): columnas mínimas, sin el resto de la fila de aula.
-    const { data } = await supabase
+    setCargaAulas('cargando');
+    const { data, error } = await supabase
       .from('aula_publica')
       .select('id,nombre,codigo')
       .eq('escuela_id', eid)
       .order('nombre');
+    if (error) {
+      console.error('[setup] aula_publica:', error.message);
+      setAulas([]);
+      setAulaId('');
+      setCargaAulas('error');
+      return;
+    }
     const list = (data as Aula[]) || [];
     setAulas(list);
     setAulaId(list[0]?.id || '');
+    setCargaAulas('listo');
   }
 
   useEffect(() => {
     (async () => {
       // Vista pública (0018): solo id/nombre/zona y solo colegios trial/activos
       // (un colegio archivado o suspendido desaparece del setup).
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('escuela_publica')
         .select('id,nombre')
         .order('nombre');
+      if (error) {
+        console.error('[setup] escuela_publica:', error.message);
+        setCargaEscuelas('error');
+        setCargaAulas('error');
+        toast('No pudimos traer los colegios. Revisá la conexión.');
+        return;
+      }
       const list = (data as Escuela[]) || [];
       setEscuelas(list);
+      setCargaEscuelas('listo');
       if (list.length) {
         setEscuelaId(list[0].id);
         await loadAulas(list[0].id);
+      } else {
+        setCargaAulas('listo');
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -181,7 +203,7 @@ export default function Setup() {
                 </option>
               ))
             ) : (
-              <option>Cargando…</option>
+              <option>{textoVacio(cargaEscuelas, 'No hay colegios disponibles')}</option>
             )}
           </select>
 
@@ -198,7 +220,7 @@ export default function Setup() {
                 </option>
               ))
             ) : (
-              <option>—</option>
+              <option>{textoVacio(cargaAulas, 'Este colegio no tiene aulas')}</option>
             )}
           </select>
 

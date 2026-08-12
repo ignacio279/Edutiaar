@@ -26,7 +26,7 @@ const QUICK = 'var(--font-quicksand), sans-serif';
 
 // Cada cuánto se refresca la home sin tocar nada (feed en vivo).
 const POLLING_MS = 30_000;
-const EVENTOS_FEED = 12;
+const EVENTOS_FEED = 5;
 
 const h2: React.CSSProperties = { fontFamily: QUICK, fontWeight: 700, fontSize: 17, color: ADMIN.oscuro, margin: 0 };
 const carta: React.CSSProperties = {
