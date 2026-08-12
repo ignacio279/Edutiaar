@@ -9,7 +9,8 @@ import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { ADMIN } from '@/lib/admin/tema';
-import { ADMIN_NAV, navActivo } from './nav';
+import { llamarAdmin } from '@/lib/admin/api';
+import { ADMIN_NAV, navActivo, type GrupoNav } from './nav';
 import { AdminContext, type AdminMe } from './admin-context';
 
 const QUICK = 'var(--font-quicksand), sans-serif';
@@ -27,12 +28,21 @@ const chipPronto: React.CSSProperties = {
   background: ADMIN.burbuja, border: `1px solid ${ADMIN.borde}`, color: ADMIN.base,
   borderRadius: 999, padding: '2px 8px', fontSize: 10.5, fontWeight: 800,
 };
+// Badge de pases esperando a la familia: lo único del sidebar que trae número.
+const chipPendientes: React.CSSProperties = {
+  background: ADMIN.warnFondo, border: `1px solid ${ADMIN.warnBorde}`, color: ADMIN.warnTexto,
+  borderRadius: 999, padding: '2px 8px', fontSize: 10.5, fontWeight: 800,
+};
+const tituloGrupo: React.CSSProperties = {
+  fontSize: 11, fontWeight: 800, color: ADMIN.tinta3, letterSpacing: '1.4px', padding: '18px 12px 6px',
+};
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const supabase = createClient();
   const [me, setMe] = useState<AdminMe | null>(null);
+  const [pendientes, setPendientes] = useState(0);
   const esLogin = pathname === '/admin/login';
 
   useEffect(() => {
@@ -52,6 +62,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [esLogin]);
 
+  // Badge de "Pases": los que todavía esperan a la familia. Aparte del gate y
+  // en silencio (si falla, el sidebar no muestra número), y se recalcula al
+  // navegar para que cancelar un pase se vea reflejado.
+  useEffect(() => {
+    if (esLogin || !me) return;
+    (async () => {
+      const r = await llamarAdmin<{ transferencias: unknown[] }>(
+        'gestion-transferencias', 'listar', { estado: 'pendiente' },
+      );
+      if (r.ok) setPendientes((r.data.transferencias ?? []).length);
+    })();
+  }, [esLogin, me, pathname]);
+
   async function signOut() {
     await supabase.auth.signOut();
     router.replace('/admin/login');
@@ -69,8 +92,28 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   const activo = navActivo(pathname);
-  const items = ADMIN_NAV.filter((it) => !it.vision && (!it.soloSuper || me.nivel === 'super'));
-  const vision = ADMIN_NAV.filter((it) => it.vision);
+  const visibles = ADMIN_NAV.filter((it) => !it.soloSuper || me.nivel === 'super');
+  const grupo = (g?: GrupoNav) => visibles.filter((it) => it.grupo === g);
+
+  // Un ítem del sidebar: el activo no es botón (no se navega a donde ya estás)
+  // y el chip de la derecha depende del grupo.
+  const item = (it: (typeof ADMIN_NAV)[number]) => {
+    const chip = it.grupo === 'vision'
+      ? <span style={chipPronto}>Pronto</span>
+      : it.key === 'transferencias' && pendientes > 0
+        ? <span style={chipPendientes}>{pendientes}</span>
+        : null;
+    const cuerpo = chip
+      ? <><span style={{ flex: 1, textAlign: 'left' }}>{it.label}</span>{chip}</>
+      : it.label;
+    return it.key === activo
+      ? <div key={it.key} style={sideActive}>{cuerpo}</div>
+      : (
+        <button key={it.key} onClick={() => router.push(it.ruta)} className="ad-nav" style={sideBtn}>
+          {cuerpo}
+        </button>
+      );
+  };
 
   return (
     <AdminContext.Provider value={me}>
@@ -83,27 +126,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <div style={{ fontSize: 10.5, fontWeight: 800, color: ADMIN.tinta2, letterSpacing: '1.4px' }}>ADMINISTRACIÓN</div>
             </div>
           </div>
-          {items.map((it) =>
-            it.key === activo ? (
-              <div key={it.key} style={sideActive}>{it.label}</div>
-            ) : (
-              <button key={it.key} onClick={() => router.push(it.ruta)} className="ad-nav" style={sideBtn}>{it.label}</button>
-            ),
-          )}
-          <div style={{ fontSize: 11, fontWeight: 800, color: ADMIN.tinta3, letterSpacing: '1.4px', padding: '18px 12px 6px' }}>VISIÓN</div>
-          {vision.map((it) =>
-            it.key === activo ? (
-              <div key={it.key} style={sideActive}>
-                <span style={{ flex: 1, textAlign: 'left' }}>{it.label}</span>
-                <span style={chipPronto}>Pronto</span>
-              </div>
-            ) : (
-              <button key={it.key} onClick={() => router.push(it.ruta)} className="ad-nav" style={sideBtn}>
-                <span style={{ flex: 1, textAlign: 'left' }}>{it.label}</span>
-                <span style={chipPronto}>Pronto</span>
-              </button>
-            ),
-          )}
+          {grupo(undefined).map(item)}
+          <div style={tituloGrupo}>CUSTODIA DE DATOS</div>
+          {grupo('custodia').map(item)}
+          <div style={tituloGrupo}>VISIÓN</div>
+          {grupo('vision').map(item)}
           <div style={{ flex: 1 }} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderRadius: 12, background: ADMIN.burbuja, border: `1px solid ${ADMIN.borde}`, color: ADMIN.oscuro, fontFamily: QUICK, fontWeight: 700, fontSize: 12.5, lineHeight: 1.3 }}>
             {me.nivel === 'super' ? 'Rol: Super admin' : 'Rol: Operativo'}

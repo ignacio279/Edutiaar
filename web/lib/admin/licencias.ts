@@ -108,6 +108,17 @@ export function porVencer(fechaFin: string | null | undefined, ahora: Date, dias
   return d !== null && d <= dias;
 }
 
+// "Extender +30 días" del panel: un click, sin escribir fechas a mano.
+// Si la licencia todavía no venció, los 30 días se SUMAN a lo que le quedaba
+// (nadie pierde días por renovar temprano); si ya venció o no tenía fecha,
+// arrancan desde hoy. Devuelve YYYY-MM-DD.
+export function extenderTreintaDias(fechaFin: string | null | undefined, ahora: Date, dias = 30): string {
+  const restantes = diasHastaFin(fechaFin, ahora);
+  const desde = restantes !== null && restantes > 0 ? restantes : 0;
+  const base = Date.UTC(ahora.getUTCFullYear(), ahora.getUTCMonth(), ahora.getUTCDate());
+  return new Date(base + (desde + dias) * DIA_MS).toISOString().slice(0, 10);
+}
+
 export const ERRS_LICENCIAS: Record<string, string> = {
   sin_cupos: 'Ese pool no tiene cupos libres. Ampliá los cupos o liberá uno.',
   colegio_ya_asignado: 'Ese colegio ya está consumiendo un cupo.',

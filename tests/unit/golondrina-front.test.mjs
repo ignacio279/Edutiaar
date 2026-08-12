@@ -17,7 +17,8 @@ import {
   seccionesDelLegajo, msgErrArco,
 } from '../../web/lib/arco.ts';
 import {
-  copyCupos, copyVencimientoLicencia, cuposDe, diasHastaFin, porVencer, validarFormLicencia,
+  copyCupos, copyVencimientoLicencia, cuposDe, diasHastaFin, extenderTreintaDias, porVencer,
+  validarFormLicencia,
 } from '../../web/lib/admin/licencias.ts';
 import {
   armarSnapshotAnonimo, diffRectificacion, planDeBorrado,
@@ -224,6 +225,17 @@ test('vencimiento de licencia: bordes y ventana de aviso de 7 días', () => {
   assert.equal(porVencer('2026-08-13', NOW), true, 'faltan 7 → avisa');
   assert.equal(porVencer('2026-08-14', NOW), false, 'faltan 8 → todavía no');
   assert.equal(porVencer(null, NOW), false);
+});
+
+test('extenderTreintaDias: suma sobre lo que quedaba, o desde hoy si ya venció', () => {
+  // Le quedaban 10 días → 40 desde hoy: renovar temprano no cuesta días.
+  assert.equal(extenderTreintaDias('2026-08-16', NOW), '2026-09-15');
+  // Vence hoy → 30 días limpios.
+  assert.equal(extenderTreintaDias('2026-08-06', NOW), '2026-09-05');
+  // Ya vencida hace rato → NO arrastra el pasado, arranca de hoy.
+  assert.equal(extenderTreintaDias('2026-06-30', NOW), '2026-09-05');
+  // Sin fecha → también desde hoy.
+  assert.equal(extenderTreintaDias(null, NOW), '2026-09-05');
 });
 
 test('precisionConK: el borde exacto del k-anonimato del panel institucional', () => {
