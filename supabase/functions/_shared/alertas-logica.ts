@@ -8,8 +8,10 @@
 // (tabla admin_alerta_atendida, migración 0019) lo oculta PARA SIEMPRE.
 // Cuando el hecho cambia, cambia la clave y la alerta puede volver — y eso es
 // correcto:
-//   · trial:<escuelaId>:<trial_fin>  — extender el trial cambia la fecha →
-//     clave nueva → vuelve a avisar cerca del nuevo vencimiento.
+//   · licencia:<licenciaId>:<fecha_fin> — extender la licencia cambia la
+//     fecha → clave nueva → vuelve a avisar cerca del nuevo vencimiento.
+//   · trial:<escuelaId>:<trial_fin>  — fallback para colegios sin licencia
+//     (migración 0026): misma mecánica sobre escuela.trial_fin.
 //   · inactivo:<escuelaId>:<yyyy-mm> — mensual: si sigue inactivo el mes que
 //     viene, vuelve.
 //   · costo:<escuelaId>:<yyyy-mm>    — mensual: cada mes disparado es un hecho
@@ -25,11 +27,20 @@ export type AlertaAdmin = {
   detalle: string;
 };
 
+// Licencia efectiva del colegio (migración 0026): null/ausente = colegio sin
+// licencia → los detectores caen al trial legacy de escuela.trial_fin.
+export type LicenciaAlerta = {
+  id: string;
+  estado: string; // prueba | activa | vencida | suspendida
+  fecha_fin: string | null;
+};
+
 export type EscuelaAlerta = {
   id: string;
   nombre: string;
   estado: string;
   trial_fin: string | null;
+  licencia?: LicenciaAlerta | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   limites?: any;
 };
@@ -69,26 +80,49 @@ export function claveMes(now: Date): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
-// (1) Trial por vencer: estado 'trial' con trial_fin en ≤7 días, incluidos el
-// que vence HOY y el ya vencido (el operador tiene que actuar igual: extender
-// o convertir). Alta si faltan ≤3 días o ya venció; media si faltan 4..7.
-function detectarTrial(e: EscuelaAlerta, now: Date): AlertaAdmin | null {
-  if (e.estado !== 'trial' || !e.trial_fin) return null;
-  const dias = diasHasta(e.trial_fin, now);
-  if (dias > TRIAL_DIAS_AVISO) return null;
-  const cuando = dias < 0
+function cuandoVence(dias: number): string {
+  return dias < 0
     ? `venció hace ${-dias} ${-dias === 1 ? 'día' : 'días'}`
     : dias === 0
       ? 'vence HOY'
       : `vence en ${dias} ${dias === 1 ? 'día' : 'días'}`;
+}
+
+// (1) Licencia por vencer (evolución del detector de trials, migración 0026):
+// la licencia efectiva del colegio con fecha_fin en ≤7 días, incluidos la que
+// vence HOY y la ya vencida (el operador tiene que actuar igual: extender o
+// renovar). Alta si faltan ≤3 días o ya venció; media si faltan 4..7.
+// Suspendida no alerta (ya se actuó). Colegio SIN licencia → misma mecánica
+// sobre el trial legacy de escuela (estado 'trial' + trial_fin), con la clave
+// vieja trial:<escuelaId>:<trial_fin> para no re-alertar hechos ya atendidos.
+function detectarLicencia(e: EscuelaAlerta, now: Date): AlertaAdmin | null {
+  const lic = e.licencia ?? null;
+  if (lic === null) {
+    if (e.estado !== 'trial' || !e.trial_fin) return null;
+    const dias = diasHasta(e.trial_fin, now);
+    if (dias > TRIAL_DIAS_AVISO) return null;
+    return {
+      clave: `trial:${e.id}:${e.trial_fin}`,
+      tipo: 'trial_por_vencer',
+      prioridad: dias <= TRIAL_DIAS_URGENTE ? 'alta' : 'media',
+      escuelaId: e.id,
+      escuelaNombre: e.nombre,
+      titulo: `El trial de ${e.nombre} ${cuandoVence(dias)}`,
+      detalle: `Fin del trial: ${e.trial_fin}. Extendelo o convertí el colegio a activo antes de que quede en solo lectura.`,
+    };
+  }
+  if (lic.estado === 'suspendida' || !lic.fecha_fin) return null;
+  const dias = diasHasta(lic.fecha_fin, now);
+  if (dias > TRIAL_DIAS_AVISO) return null;
+  const esPrueba = lic.estado === 'prueba';
   return {
-    clave: `trial:${e.id}:${e.trial_fin}`,
+    clave: `licencia:${lic.id}:${lic.fecha_fin}`,
     tipo: 'trial_por_vencer',
     prioridad: dias <= TRIAL_DIAS_URGENTE ? 'alta' : 'media',
     escuelaId: e.id,
     escuelaNombre: e.nombre,
-    titulo: `El trial de ${e.nombre} ${cuando}`,
-    detalle: `Fin del trial: ${e.trial_fin}. Extendelo o convertí el colegio a activo antes de que quede en solo lectura.`,
+    titulo: `La ${esPrueba ? 'prueba' : 'licencia'} de ${e.nombre} ${cuandoVence(dias)}`,
+    detalle: `Fin: ${lic.fecha_fin}. Extendé la licencia o renovala antes de que el colegio quede en solo lectura.`,
   };
 }
 
@@ -152,7 +186,7 @@ export function evaluarAlertas(
   const alertas: AlertaAdmin[] = [];
   for (const e of input.escuelas) {
     for (const a of [
-      detectarTrial(e, now),
+      detectarLicencia(e, now),
       detectarInactivo(e, input.ultimaSesionPorEscuela[e.id] ?? null, now),
       detectarCosto(e, input.costoMesPorEscuela[e.id] ?? 0, input.costoMesAnteriorPorEscuela[e.id] ?? 0, now),
     ]) if (a && !atendidas.has(a.clave)) alertas.push(a);

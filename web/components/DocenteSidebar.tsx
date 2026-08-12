@@ -25,14 +25,18 @@ const sideActive: React.CSSProperties = {
 // violeta también en estado normal — detalle sutil que distingue la sección).
 const lunaActive: React.CSSProperties = { ...sideActive, background: VIOLETA.claro, color: VIOLETA.oscuro };
 
-const ITEMS: { key: 'alumnos' | 'clase' | 'materias' | 'luna'; label: string; ruta: string; icono: string }[] = [
+// 'transferencias' = Pases (alumno golondrina, ADR-011).
+export type ItemDocente = 'alumnos' | 'clase' | 'materias' | 'transferencias' | 'luna';
+
+const ITEMS: { key: ItemDocente; label: string; ruta: string; icono: string }[] = [
   { key: 'alumnos', label: 'Mis alumnos', ruta: '/docente', icono: 'people' },
   { key: 'clase', label: 'Mi clase', ruta: '/docente/alumnos', icono: 'people' },
   { key: 'materias', label: 'Mis materias', ruta: '/docente/materias', icono: 'mapI' },
+  { key: 'transferencias', label: 'Pases', ruta: '/docente/transferencias', icono: 'people' },
   { key: 'luna', label: 'LUNA', ruta: '/docente/luna', icono: 'moon' },
 ];
 
-export default function DocenteSidebar({ activo }: { activo: 'alumnos' | 'clase' | 'materias' | 'luna' }) {
+export default function DocenteSidebar({ activo }: { activo: ItemDocente }) {
   const router = useRouter();
   const supabase = createClient();
   // Features del colegio (Dashboard admin v3): si LUNA está apagada, su ítem

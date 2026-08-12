@@ -79,3 +79,27 @@ verify_jwt = true
 
 [functions.admin-observatorio]
 verify_jwt = true
+
+# Alumno golondrina (ADR-011). gestion-transferencias y gestion-consentimientos
+# las llaman docentes logueadas (o un admin: guard dual adentro); admin-arco,
+# admin-instituciones e institucion-panel re-chequean su tabla de identidad.
+[functions.gestion-transferencias]
+verify_jwt = true
+
+[functions.gestion-consentimientos]
+verify_jwt = true
+
+[functions.admin-arco]
+verify_jwt = true
+
+[functions.admin-instituciones]
+verify_jwt = true
+
+[functions.institucion-panel]
+verify_jwt = true
+
+# ÚNICA fn pública nueva: la familia confirma una transferencia desde un link,
+# sin cuenta. La auth es el token opaco de un solo uso (+ expiración + lockout);
+# no revela NADA del alumno hasta que el token valida.
+[functions.transferencia-confirmar]
+verify_jwt = false

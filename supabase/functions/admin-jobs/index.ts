@@ -16,6 +16,24 @@ import { planSnapshotAlertas } from './nocturno-logica.ts';
 // Actor sentinel del cron en la auditoría (no hay admin humano detrás).
 const CRON_ACTOR_ID = '00000000-0000-0000-0000-000000000000';
 
+// Vence los pases de transferencia que nadie confirmó a tiempo (0023: el
+// plazo sale de plataforma_config.transferencia_dias_expiracion al crearlos).
+// Devuelve cuántos venció. Idempotente: el .eq('estado','pendiente') hace que
+// dos corridas seguidas no toquen nada la segunda vez.
+async function expirarTransferencias(
+  sb: ReturnType<typeof createClient>,
+  ahora: Date,
+): Promise<number> {
+  const { data, error } = await sb
+    .from('transferencia')
+    .update({ estado: 'expirada', resuelta_at: ahora.toISOString() })
+    .eq('estado', 'pendiente')
+    .lt('expira_at', ahora.toISOString())
+    .select('id');
+  if (error) throw error;
+  return (data as unknown[] | null)?.length ?? 0;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   try {
@@ -46,6 +64,27 @@ Deno.serve(async (req) => {
           .neq('estado', 'archivado');
         if (escErr) throw escErr;
         const escuelas = (escData ?? []) as EscuelaAlerta[];
+
+        // Licencia efectiva por colegio (0026): la directa manda; si no hay,
+        // la del pool asignado. Colegio sin ninguna → el detector cae al
+        // trial legacy. Orden por fecha_inicio asc: la más nueva pisa al final.
+        const licPorEscuela: Record<string, { id: string; estado: string; fecha_fin: string | null }> = {};
+        const { data: asigData } = await sb
+          .from('licencia_asignacion')
+          .select('escuela_id, licencia:licencia_id(id, estado, fecha_fin, fecha_inicio)')
+          .order('escuela_id');
+        for (const a of (asigData ?? []) as { escuela_id: string; licencia: { id: string; estado: string; fecha_fin: string | null } | null }[]) {
+          if (a.licencia) licPorEscuela[a.escuela_id] = a.licencia;
+        }
+        const { data: licData } = await sb
+          .from('licencia')
+          .select('id, escuela_id, estado, fecha_fin')
+          .not('escuela_id', 'is', null)
+          .order('fecha_inicio', { ascending: true });
+        for (const l of (licData ?? []) as { id: string; escuela_id: string; estado: string; fecha_fin: string | null }[]) {
+          licPorEscuela[l.escuela_id] = { id: l.id, estado: l.estado, fecha_fin: l.fecha_fin };
+        }
+        for (const e of escuelas) e.licencia = licPorEscuela[e.id] ?? null;
 
         // Última sesión por escuela: max(fecha) de sesion → perfil del alumno.
         // Iterar escuelas está bien para el volumen del MVP (pocas decenas).
@@ -128,7 +167,28 @@ Deno.serve(async (req) => {
             });
         }
 
-        return json({ ok: true, generadas: upsert.length, borradas: borrar.length, corrida_at: now.toISOString() });
+        // Alumno golondrina (ADR-011): la corrida nocturna también vence los
+        // pases que nadie confirmó. Va al final y no rompe la corrida si
+        // falla — las alertas ya quedaron guardadas arriba.
+        let expiradas = 0;
+        try {
+          expiradas = await expirarTransferencias(sb, now);
+        } catch (e) {
+          console.error('expirar_transferencias_fallo', String((e as Error)?.message ?? e));
+        }
+
+        return json({
+          ok: true, generadas: upsert.length, borradas: borrar.length,
+          transferencias_expiradas: expiradas, corrida_at: now.toISOString(),
+        });
+      }
+
+      // Vencer los pases pendientes cuyo plazo pasó (el link deja de servir:
+      // transferencia-confirmar corta por estado). Se puede correr sola desde
+      // el panel además de venir en la corrida nocturna.
+      case 'expirar_transferencias': {
+        const expiradas = await expirarTransferencias(sb, new Date());
+        return json({ ok: true, transferencias_expiradas: expiradas });
       }
 
       // accion 'luna_nocturno': job de alertas de LUNA (pendiente del ROADMAP) — se cuelga acá.

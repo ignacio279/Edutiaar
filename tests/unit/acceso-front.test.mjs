@@ -78,7 +78,15 @@ test('avisoAcceso: avisa en la ventana de 7 días y calla fuera de ella', () => 
 });
 
 test('hay copy en español para cada código de corte del server', () => {
-  for (const codigo of ['trial_vencido', 'colegio_suspendido', 'cuenta_suspendida', 'feature_apagada', 'tope_excedido']) {
+  for (const codigo of ['trial_vencido', 'licencia_vencida', 'licencia_suspendida', 'colegio_suspendido', 'cuenta_suspendida', 'feature_apagada', 'tope_excedido']) {
     assert.ok(ERRS_ACCESO[codigo]?.length > 10, `falta copy para ${codigo}`);
   }
+});
+
+test('avisoAcceso: licencia paga vencida no dice "período de prueba" (0026)', () => {
+  const lic = avisoAcceso({ estado: 'solo_lectura', motivo: 'licencia_vencida', trial_fin: '2026-08-01', features: FLAGS_COMPLETO }, now);
+  assert.equal(lic?.tipo, 'solo_lectura');
+  assert.match(lic.titulo, /licencia/i);
+  const trial = avisoAcceso({ estado: 'solo_lectura', motivo: 'trial_vencido', trial_fin: '2026-08-01', features: FLAGS_COMPLETO }, now);
+  assert.match(trial.titulo, /prueba/i);
 });

@@ -63,9 +63,12 @@ export function avisoAcceso(acceso: Acceso | null, now: Date): AvisoAcceso {
     };
   }
   if (acceso.estado === 'solo_lectura') {
+    // 0026: la licencia paga vencida no es un "período de prueba" — mismo
+    // corte suave, copy distinto.
+    const esLicencia = acceso.motivo === 'licencia_vencida';
     return {
       tipo: 'solo_lectura',
-      titulo: 'Terminó el período de prueba',
+      titulo: esLicencia ? 'La licencia del colegio venció' : 'Terminó el período de prueba',
       detalle: 'Podés seguir viendo todo lo de tus chicos, pero por ahora no se genera contenido nuevo.',
     };
   }
@@ -84,6 +87,8 @@ export function avisoAcceso(acceso: Acceso | null, now: Date): AvisoAcceso {
 // Copys de los códigos que devuelven las Edge Functions con el corte puesto.
 export const ERRS_ACCESO: Record<string, string> = {
   trial_vencido: 'Terminó el período de prueba: podés ver todo, pero no generar contenido nuevo.',
+  licencia_vencida: 'La licencia del colegio venció: podés ver todo, pero no generar contenido nuevo.',
+  licencia_suspendida: 'La licencia del colegio está en pausa. Escribinos y lo resolvemos.',
   colegio_suspendido: 'El colegio está en pausa. Escribinos y lo resolvemos.',
   cuenta_suspendida: 'Tu cuenta está en pausa. Escribinos y lo resolvemos.',
   feature_apagada: 'Esta sección no está habilitada en tu colegio.',

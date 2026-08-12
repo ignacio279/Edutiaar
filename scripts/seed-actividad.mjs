@@ -152,9 +152,18 @@ async function main() {
     if (!porNombre[n]) throw new Error(`Falta el alumno semilla ${n}: corré antes scripts/seed.mjs`);
   }
 
-  // 1) plurigrado: Mateo y Lucía a 5°, Benja a 1° (Sofía y Tomás quedan en 3°)
+  // 1) plurigrado: Mateo y Lucía a 5°, Benja a 1° (Sofía y Tomás quedan en 3°).
+  // Alumno golondrina (0022): el grado es del VÍNCULO → se escribe en la
+  // matrícula activa y su trigger sincroniza perfil.grado (un update directo
+  // de perfil.grado lo rechaza perfil_guard).
   for (const [nombre, grado] of [['Mateo', 5], ['Lucía', 5], ['Benja', 1]]) {
-    await upsert('perfil', [{ id: porNombre[nombre], rol: 'alumno', nombre, grado }]);
+    const r = await fetch(`${URL}/rest/v1/matricula?alumno_id=eq.${porNombre[nombre]}&fecha_fin=is.null`, {
+      method: 'PATCH', headers: { ...H, Prefer: 'return=representation' }, body: JSON.stringify({ grado }),
+    });
+    const filas = await r.json().catch(() => []);
+    if (!r.ok || !Array.isArray(filas) || filas.length === 0) {
+      throw new Error(`No se pudo poner a ${nombre} en ${grado}°: ¿tiene matrícula activa? (corré scripts/seed.mjs post-0022)`);
+    }
   }
   console.log('✓ aula plurigrado (Benja 1° · Sofía y Tomás 3° · Mateo y Lucía 5°)');
 
