@@ -120,7 +120,8 @@ export function extenderTreintaDias(fechaFin: string | null | undefined, ahora: 
 }
 
 export const ERRS_LICENCIAS: Record<string, string> = {
-  sin_conexion: 'No pudimos conectarnos. Revisá la conexión y probá de nuevo.',
+  sin_conexion: 'Parece que estás sin internet. Revisá la conexión y probá de nuevo.',
+  sin_respuesta: 'No pudimos conectarnos con EDUTIA. Probá de nuevo en un ratito.',
   sin_cupos: 'Ese pool no tiene cupos libres. Ampliá los cupos o liberá uno.',
   colegio_ya_asignado: 'Ese colegio ya está consumiendo un cupo.',
   email_en_uso: 'Ya hay una cuenta con ese email.',

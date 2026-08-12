@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
 // inlinea en build; acá hay que ponerlas ANTES del import, por eso es dinámico.
 process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://proyecto.supabase.co';
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon-de-prueba';
-const { postFn, ERR_RED } = await import('../../web/lib/edge.ts');
+const { postFn, ERR_RED, ERR_SIN_RESPUESTA } = await import('../../web/lib/edge.ts');
 
 const conFetchFalso = async (impl, fn) => {
   const original = globalThis.fetch;
@@ -20,28 +20,62 @@ const conFetchFalso = async (impl, fn) => {
   try { return await fn(); } finally { globalThis.fetch = original; }
 };
 
-test('postFn: la red caída NO lanza, vuelve como sin_conexion', async () => {
-  const r = await conFetchFalso(
-    () => Promise.reject(new TypeError('Failed to fetch')),
-    () => postFn('gestion-transferencias', { accion: 'listar' }),
-  );
+// El navegador reporta el estado de la red por `navigator.onLine`. En Node no
+// existe, así que se simula para poder testear las dos ramas.
+const conRed = async (online, fn) => {
+  const previo = globalThis.navigator;
+  Object.defineProperty(globalThis, 'navigator', { value: { onLine: online }, configurable: true });
+  try { return await fn(); } finally {
+    if (previo === undefined) delete globalThis.navigator;
+    else Object.defineProperty(globalThis, 'navigator', { value: previo, configurable: true });
+  }
+};
+
+const revienta = () => Promise.reject(new TypeError('Failed to fetch'));
+
+test('postFn: sin internet NO lanza, y lo dice: sin_conexion', async () => {
+  const r = await conRed(false, () => conFetchFalso(
+    revienta, () => postFn('gestion-transferencias', { accion: 'listar' }),
+  ));
   assert.equal(r.ok, false);
   assert.equal(r.data.error, ERR_RED);
   // status 0 = ni siquiera hubo respuesta. El caller lo distingue de un 4xx.
   assert.equal(r.status, 0);
 });
 
-test('postFn: una función sin deployar tampoco lanza', async () => {
-  // Supabase responde 404 sin headers CORS → el navegador tira TypeError.
-  const r = await conFetchFalso(
-    () => Promise.reject(new TypeError('NetworkError when attempting to fetch resource.')),
-    () => postFn('funcion-que-no-existe', {}),
-  );
+test('postFn: con internet, una función sin deployar NO se disfraza de "revisá tu conexión"', async () => {
+  // Supabase responde 404 sin headers CORS → el navegador tira el mismo
+  // TypeError que si no hubiera red. Lo único que los separa es navigator.onLine.
+  const r = await conRed(true, () => conFetchFalso(
+    revienta, () => postFn('funcion-que-no-existe', {}),
+  ));
   assert.equal(r.ok, false);
-  assert.equal(r.data.error, ERR_RED);
+  assert.equal(r.data.error, ERR_SIN_RESPUESTA,
+    'con conexión buena, mandar a revisar el cable es mandar a buscar un problema inexistente');
 });
 
-test('postFn: un error del server pasa derecho, sin disfrazarse de sin_conexion', async () => {
+test('los dos códigos de red tienen copy en TODOS los mapas que los muestran', async () => {
+  const mapas = await Promise.all([
+    import('../../web/lib/admin/errores.ts').then((m) => ['ERRS_ADMIN', m.ERRS_ADMIN]),
+    import('../../web/lib/admin/errores.ts').then((m) => ['ERRS_RED_ADMIN', m.ERRS_RED_ADMIN]),
+    import('../../web/lib/transferencias.ts').then((m) => ['ERRS_TRANSFERENCIA', m.ERRS_TRANSFERENCIA]),
+    import('../../web/lib/admin/licencias.ts').then((m) => ['ERRS_LICENCIAS', m.ERRS_LICENCIAS]),
+    import('../../web/lib/arco.ts').then((m) => ['ERRS_ARCO', m.ERRS_ARCO]),
+  ]);
+  for (const [nombre, mapa] of mapas) {
+    for (const codigo of [ERR_RED, ERR_SIN_RESPUESTA]) {
+      assert.ok(mapa[codigo], `${nombre} no tiene copy para ${codigo}: el usuario vería el código crudo`);
+    }
+  }
+  // La pantalla que ve una FAMILIA no puede hablar de deploys ni de servidores.
+  const { ERRS_TRANSFERENCIA } = await import('../../web/lib/transferencias.ts');
+  for (const jerga of ['Edge Function', 'deploy', 'servidor']) {
+    assert.ok(!ERRS_TRANSFERENCIA[ERR_SIN_RESPUESTA].includes(jerga),
+      `"${jerga}" no va en el copy que lee una familia en /transferir`);
+  }
+});
+
+test('un error del server pasa derecho, sin disfrazarse de un problema de red', async () => {
   const r = await conFetchFalso(
     () => Promise.resolve({ ok: false, status: 403, json: () => Promise.resolve({ error: 'solo_admin' }) }),
     () => postFn('gestion-transferencias', { accion: 'listar' }),

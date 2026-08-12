@@ -19,10 +19,6 @@ export async function llamarAdmin<T = Record<string, unknown>>(
   return postFn<T>(fn, { accion, ...payload }, { token: session?.access_token ?? '' });
 }
 
-// Copys de los errores comunes del guard (cada página suma los suyos).
-export const ERRS_ADMIN: Record<string, string> = {
-  no_autenticado: 'Tu sesión venció. Entrá de nuevo.',
-  no_admin: 'Tu cuenta no tiene acceso al panel de administración.',
-  requiere_super: 'Esta acción es solo para el super-admin.',
-  sin_conexion: 'No se pudo conectar con el servidor. Revisá la conexión y probá de nuevo.',
-};
+// Los copys viven en `errores.ts` (módulo puro, testeable sin bundler) y se
+// re-exportan acá para que las pantallas los sigan importando de un solo lugar.
+export { ERRS_ADMIN, ERRS_RED_ADMIN } from './errores';

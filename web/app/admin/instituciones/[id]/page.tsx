@@ -9,7 +9,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { llamarAdmin, ERRS_ADMIN } from '@/lib/admin/api';
+import { llamarAdmin, ERRS_ADMIN, ERRS_RED_ADMIN } from '@/lib/admin/api';
 import { ADMIN, CAMPO, ETIQUETA, ESTADO_INSTITUCION_PILL, ESTADO_LICENCIA_PILL } from '@/lib/admin/tema';
 import { toast } from '@/lib/toast';
 import Pill from '@/components/admin/Pill';
@@ -30,7 +30,7 @@ type Ficha = { institucion: Institucion; colegios: Colegio[]; admins: AdminInst[
 type Invitacion = { email: string; password: string; link: string | null };
 
 const ERRS: Record<string, string> = {
-  ...ERRS_ADMIN, ...ERRS_LICENCIAS,
+  ...ERRS_ADMIN, ...ERRS_LICENCIAS, ...ERRS_RED_ADMIN,
   no_existe: 'Esa institución ya no existe.',
   email_invalido: 'Ese email no parece válido.',
   estado_invalido: 'Ese estado no es válido.',

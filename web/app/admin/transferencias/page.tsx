@@ -8,7 +8,7 @@
 // token_hash ni contadores de lockout), y el copy se lo dice al operador.
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { llamarAdmin, ERRS_ADMIN } from '@/lib/admin/api';
+import { llamarAdmin, ERRS_ADMIN, ERRS_RED_ADMIN } from '@/lib/admin/api';
 import { ADMIN, CAMPO, ETIQUETA, ESTADO_PASE } from '@/lib/admin/tema';
 import { toast } from '@/lib/toast';
 import Pill from '@/components/admin/Pill';
@@ -31,7 +31,9 @@ type Transferencia = {
 };
 type EscuelaOpcion = { id: string; nombre: string };
 
-const ERRS: Record<string, string> = { ...ERRS_ADMIN, ...ERRS_TRANSFERENCIA };
+// ERRS_RED_ADMIN va al final: los mapas de dominio traen el copy para
+// maestras y familias, y en el panel queremos el diagnóstico técnico.
+const ERRS: Record<string, string> = { ...ERRS_ADMIN, ...ERRS_TRANSFERENCIA, ...ERRS_RED_ADMIN };
 const copyError = (c?: string) => ERRS[c ?? ''] ?? 'Algo salió mal. Probá de nuevo.';
 
 const FILTROS = [

@@ -4,12 +4,23 @@
 const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-// Código de error cuando la llamada NO llegó a destino: no hay internet, se
-// cortó, la función no está deployada (404 sin headers CORS → el fetch tira
-// TypeError). Es un error del mismo tipo que los del server, no una excepción:
-// esto corre en escuelas rurales, y una conexión que se cae no puede tumbarle
-// la pantalla a la maestra con un stack trace.
-export const ERR_RED = 'sin_conexion';
+// Cuando la llamada no llega a destino, el `fetch` tira TypeError y no dice por
+// qué: estar sin internet y pegarle a una función que no existe (404 sin
+// headers CORS) se ven EXACTAMENTE igual desde el cliente. Lo único que los
+// separa es preguntarle al navegador si tiene red.
+//
+// Se distinguen porque la salida es distinta: sin internet, esperar; con
+// internet, el problema está del lado del servidor y no lo arregla el usuario.
+// Decirle "revisá tu conexión" a alguien que tiene conexión perfecta lo manda a
+// buscar un problema que no existe.
+export const ERR_RED = 'sin_conexion'; // el navegador dice que no hay red
+export const ERR_SIN_RESPUESTA = 'sin_respuesta'; // hay red, pero nadie contestó
+
+// `navigator.onLine` en false es confiable (el SO sabe que no hay interfaz);
+// en true NO garantiza internet, por eso es el único caso que afirmamos.
+function pareceSinRed(): boolean {
+  return typeof navigator !== 'undefined' && navigator.onLine === false;
+}
 
 // POST a una Edge Function que NUNCA lanza. `token` es el access_token del
 // usuario cuando la función tiene guard propio; sin él va la anon key.
@@ -36,9 +47,10 @@ export async function postFn<T = Record<string, unknown>>(
     }
     return { ok: r.ok, status: r.status, data };
   } catch {
-    // Red caída, timeout o función inexistente. status 0 = ni siquiera hubo
-    // respuesta, así que el caller puede distinguirlo de un 4xx del server.
-    return { ok: false, status: 0, data: { error: ERR_RED } as T & { error?: string } };
+    // status 0 = ni siquiera hubo respuesta, así que el caller lo distingue de
+    // un 4xx del server.
+    const error = pareceSinRed() ? ERR_RED : ERR_SIN_RESPUESTA;
+    return { ok: false, status: 0, data: { error } as T & { error?: string } };
   }
 }
 

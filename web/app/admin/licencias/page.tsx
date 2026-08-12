@@ -8,7 +8,7 @@
 // suspendida = bloqueado. Nunca se borra nada por falta de pago.
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { llamarAdmin, ERRS_ADMIN } from '@/lib/admin/api';
+import { llamarAdmin, ERRS_ADMIN, ERRS_RED_ADMIN } from '@/lib/admin/api';
 import { ADMIN, CAMPO, ETIQUETA, ESTADO_LICENCIA_PILL } from '@/lib/admin/tema';
 import { toast } from '@/lib/toast';
 import Pill from '@/components/admin/Pill';
@@ -32,7 +32,7 @@ type Licencia = {
 type Opcion = { id: string; nombre: string };
 
 const ERRS: Record<string, string> = {
-  ...ERRS_ADMIN, ...ERRS_LICENCIAS,
+  ...ERRS_ADMIN, ...ERRS_LICENCIAS, ...ERRS_RED_ADMIN,
   no_existe: 'Esa licencia ya no existe. Actualizá la lista.',
   cupos_solo_pool: 'Los cupos son solo para las licencias de una institución.',
   licencia_no_es_pool: 'Esa licencia no es un pool: no tiene cupos para asignar.',

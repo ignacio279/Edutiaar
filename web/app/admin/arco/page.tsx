@@ -8,7 +8,7 @@
 // DOS pasos con el dry-run a la vista y confirmación tipeada. Nada de un botón
 // rojo suelto. Confirmar es solo del super — lo corta la fn, no el menú.
 import { useEffect, useState } from 'react';
-import { llamarAdmin, ERRS_ADMIN } from '@/lib/admin/api';
+import { llamarAdmin, ERRS_ADMIN, ERRS_RED_ADMIN } from '@/lib/admin/api';
 import {
   ADMIN, CAMPO, ETIQUETA, ESTADO_ALUMNO_PILL, ESTADO_ARCO_PILL, TIPO_ARCO_PILL,
 } from '@/lib/admin/tema';
@@ -38,7 +38,7 @@ type Caso = {
 };
 type Legajo = Record<string, unknown>;
 
-const ERRS: Record<string, string> = { ...ERRS_ADMIN, ...ERRS_ARCO };
+const ERRS: Record<string, string> = { ...ERRS_ADMIN, ...ERRS_ARCO, ...ERRS_RED_ADMIN };
 const copyError = (c?: string) => ERRS[c ?? ''] ?? (c?.startsWith('campo_no_rectificable')
   ? 'Solo se pueden rectificar el nombre y el avatar.' : 'Algo salió mal. Probá de nuevo.');
 

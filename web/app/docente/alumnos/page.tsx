@@ -26,7 +26,8 @@ type Aula = { id: string; nombre: string; grado: number | null; codigo: string }
 type Alumno = { id: string; nombre: string; avatar: string; grado: number; aula_id: string | null };
 
 const ERRS: Record<string, string> = {
-  sin_conexion: 'No pudimos conectarnos. Revisá la conexión y probá de nuevo.',
+  sin_conexion: 'Parece que estás sin internet. Revisá la conexión y probá de nuevo.',
+  sin_respuesta: 'No pudimos conectarnos con EDUTIA. Probá de nuevo en un ratito.',
   codigo_duplicado: 'Ya existe un aula con ese nombre. Probá otro.',
   aula_con_alumnos: 'El aula tiene alumnos. Movelos o borralos primero.',
   no_es_tuyo: 'Eso no es tuyo.',
