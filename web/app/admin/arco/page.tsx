@@ -18,7 +18,7 @@ import Pill from '@/components/admin/Pill';
 import { useAdmin } from '../admin-context';
 import {
   ERRS_ARCO, TIPO_ARCO_COPY, confirmacionValida, lineasDelPlan,
-  nombreArchivoLegajo, seccionesDelLegajo, type ItemBorrado,
+  nombreArchivoLegajo, resumenAnonimo, seccionesDelLegajo, type ItemBorrado,
 } from '@/lib/arco';
 
 const BALOO = 'var(--font-baloo), cursive';
@@ -151,8 +151,12 @@ export default function AdminArco() {
     setBusy(false);
     if (!r.ok) { toast(copyError(r.data.error)); return; }
     setDiff(cambios.nombre ? `Nombre: «${nombre}» → «${cambios.nombre}»` : `Avatar: «${perfil?.avatar}» → «${cambios.avatar}»`);
+    // El legajo se parchea en memoria a propósito: `exportar_legajo` REGISTRA un
+    // caso ARCO de acceso cada vez que se llama, así que refrescar por ahí
+    // inventaría pedidos de acceso que la familia nunca hizo.
+    setLegajo({ ...legajo, perfil: { ...perfil, ...cambios } });
     toast('Corrección guardada. Queda el diff en el caso.');
-    await Promise.all([cargarCasos(), exportar()]);
+    await cargarCasos();
   }
 
   async function oponer(valor: boolean) {
@@ -161,8 +165,10 @@ export default function AdminArco() {
     const r = await llamarAdmin('admin-arco', 'oponer', { alumno_id: alumnoId.trim(), excluido: valor });
     setBusy(false);
     if (!r.ok) { toast(copyError(r.data.error)); return; }
+    // Mismo motivo que en rectificar: no se re-exporta el legajo, se parchea.
+    setLegajo({ ...legajo, perfil: { ...perfil, excluido_procesamiento: valor } });
     toast(valor ? 'Listo: queda fuera de los agregados.' : 'Listo: vuelve a contarse en los agregados.');
-    await Promise.all([cargarCasos(), exportar()]);
+    await cargarCasos();
   }
 
   async function verQueSeBorraria() {
@@ -298,13 +304,18 @@ export default function AdminArco() {
               {busy ? 'Buscando…' : 'Traer el legajo'}
             </button>
           </div>
+          {/* Traer el legajo ES el derecho de acceso: la fn deja el caso
+              registrado. Que el operador sepa que no es una consulta gratis. */}
+          <div style={{ fontSize: 12, color: ADMIN.tinta2, fontWeight: 600, marginTop: 6 }}>
+            Traerlo queda asentado como un pedido de acceso de la familia.
+          </div>
         </div>
         {listo && (
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
             <Pill tupla={ESTADO_ALUMNO_PILL[String(perfil?.estado ?? '')]} />
-            {ultimaMatricula?.escuela_nombre != null && (
+            {ultimaMatricula?.escuela != null && (
               <span style={{ background: ADMIN.hover, border: `1px solid ${ADMIN.chipBorde}`, color: ADMIN.tinta2, borderRadius: 999, padding: '5px 13px', fontSize: 12.5, fontWeight: 800 }}>
-                {String(ultimaMatricula.escuela_nombre)}
+                {String(ultimaMatricula.escuela)}
               </span>
             )}
             {ultimoConsentimiento?.adulto_nombre != null && (
@@ -505,7 +516,9 @@ export default function AdminArco() {
                     : `Alumno ${c.alumno_id.slice(0, 8)}…`}
                 </div>
                 <div style={{ fontSize: 12.5, color: ADMIN.tinta2, fontWeight: 600, marginTop: 2 }}>
-                  {c.detalle?.texto || TIPO_ARCO_COPY[c.tipo]?.detalle || ''}
+                  {/* De un caso ejecutado se muestra el agregado anónimo: es
+                      literalmente todo lo que sobrevivió al borrado. */}
+                  {borrado ? resumenAnonimo(c.agregado) : (c.detalle?.texto || TIPO_ARCO_COPY[c.tipo]?.detalle || '')}
                 </div>
               </div>
               <Pill tupla={ESTADO_ARCO_PILL[c.estado]} />

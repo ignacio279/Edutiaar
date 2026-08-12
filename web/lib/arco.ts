@@ -95,20 +95,25 @@ export function seccionesDelLegajo(legajo: Record<string, unknown> | null | unde
     vacio: Object.keys(perfil).length === 0,
     filas: [
       { etiqueta: 'Nombre', valor: texto(perfil.nombre) },
-      { etiqueta: 'Identificador EDUTIA', valor: texto(perfil.id) },
       { etiqueta: 'Avatar', valor: texto(perfil.avatar) },
+      { etiqueta: 'Grado actual', valor: texto(perfil.grado) },
       { etiqueta: 'Estado', valor: texto(perfil.estado) },
       { etiqueta: 'Excluido de procesamiento no esencial', valor: texto(perfil.excluido_procesamiento) },
+      // No hay "identificador EDUTIA" a propósito: el legajo se le entrega a la
+      // familia y el UUID interno no le sirve para nada.
+      { etiqueta: 'Documentos o identificadores', valor: 'EDUTIA no registra ninguno' },
     ],
   });
 
+  // `admin-arco` manda el nombre de la escuela en `escuela` (join aplanado);
+  // se leen los alias viejos por si el shape cambia de vuelta.
   const matriculas = arr('matriculas');
   secciones.push({
     titulo: 'Recorrido escolar',
     vacio: matriculas.length === 0,
     filas: matriculas.map((m, i) => ({
       etiqueta: `Matrícula ${i + 1}`,
-      valor: `${texto(m.escuela_nombre ?? m.escuela_id)} · ${fecha(m.fecha_inicio)} → ${m.fecha_fin ? fecha(m.fecha_fin) : 'en curso'}${m.motivo_cierre ? ` · ${texto(m.motivo_cierre)}` : ''}`,
+      valor: `${texto(m.escuela ?? m.escuela_nombre ?? m.escuela_id)}${m.grado ? ` · ${texto(m.grado)}° grado` : ''} · ${fecha(m.fecha_inicio)} → ${m.fecha_fin ? fecha(m.fecha_fin) : 'en curso'}${m.motivo_cierre ? ` · ${texto(m.motivo_cierre)}` : ''}`,
     })),
   });
 
@@ -124,7 +129,8 @@ export function seccionesDelLegajo(legajo: Record<string, unknown> | null | unde
 
   const sesiones = arr('sesiones');
   const respuestas = arr('respuestas');
-  const nodos = arr('alumno_nodo');
+  // La fn devuelve el progreso por nodo bajo `progreso`, no `alumno_nodo`.
+  const nodos = arr('progreso').length > 0 ? arr('progreso') : arr('alumno_nodo');
   secciones.push({
     titulo: 'Actividad de aprendizaje',
     vacio: sesiones.length === 0 && respuestas.length === 0 && nodos.length === 0,
@@ -146,6 +152,31 @@ export function seccionesDelLegajo(legajo: Record<string, unknown> | null | unde
   });
 
   return secciones;
+}
+
+// ── Lo que sobrevive a una cancelación ──────────────────────────────────────
+// `arco_caso.agregado` es el snapshot que arma `armarSnapshotAnonimo` en el
+// backend: números y jurisdicción, cero identificadores. Esta función lo vuelve
+// una línea legible para la pantalla de pedidos. Si algún día el snapshot
+// llegara con un nombre o un id, este texto NO lo mostraría: solo lee las
+// claves conocidas.
+export function resumenAnonimo(agregado: Record<string, unknown> | null | undefined): string {
+  if (!agregado || typeof agregado !== 'object') return 'Del chico no queda ningún dato.';
+  const a = agregado as Record<string, unknown>;
+  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+  const partes: string[] = [];
+  if (typeof a.grado === 'number') partes.push(`${a.grado}° grado`);
+  if (typeof a.provincia === 'string' && a.provincia.trim()) partes.push(a.provincia);
+
+  const sesiones = num(a.sesiones);
+  const respuestas = num(a.respuestas);
+  partes.push(`${sesiones} ${sesiones === 1 ? 'sesión' : 'sesiones'} y ${respuestas} ${respuestas === 1 ? 'respuesta' : 'respuestas'}`);
+
+  const r = a.rango_fechas as { desde?: unknown; hasta?: unknown } | null | undefined;
+  if (r && typeof r.desde === 'string' && typeof r.hasta === 'string') {
+    partes.push(`entre ${r.desde} y ${r.hasta}`);
+  }
+  return partes.join(' · ');
 }
 
 // Nombre de archivo del export JSON. Sin nombre del chico: el archivo puede

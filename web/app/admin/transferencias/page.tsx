@@ -73,11 +73,13 @@ export default function AdminTransferencias() {
   const [registrada, setRegistrada] = useState('');
   const ahora = new Date();
 
-  async function cargar(estado = filtro) {
+  // Se trae SIEMPRE la lista completa (la fn ya topea en 200) y el filtro es en
+  // memoria: si filtrara en el server, los tres tiles de arriba pasarían a
+  // contar sobre lo filtrado y "esperando a la familia" daría 0 apenas mirás
+  // las autorizadas. Los tiles son el resumen del total, no del filtro.
+  async function cargar() {
     setTransferencias(null);
-    const r = await llamarAdmin<{ transferencias: Transferencia[] }>(
-      'gestion-transferencias', 'listar', estado ? { estado } : {},
-    );
+    const r = await llamarAdmin<{ transferencias: Transferencia[] }>('gestion-transferencias', 'listar', {});
     if (!r.ok) { toast(copyError(r.data.error)); setTransferencias([]); return; }
     setTransferencias(r.data.transferencias ?? []);
   }
@@ -121,8 +123,9 @@ export default function AdminTransferencias() {
     await cargar();
   }
 
-  const filas = transferencias ?? [];
-  const cuenta = (...estados: string[]) => filas.filter((t) => estados.includes(t.estado)).length;
+  const todas = transferencias ?? [];
+  const filas = filtro ? todas.filter((t) => t.estado === filtro) : todas;
+  const cuenta = (...estados: string[]) => todas.filter((t) => estados.includes(t.estado)).length;
 
   return (
     <div>
@@ -142,7 +145,7 @@ export default function AdminTransferencias() {
       </div>
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
-        <FiltroChips opciones={FILTROS} valor={filtro} onCambio={(k) => { setFiltro(k); cargar(k); }} />
+        <FiltroChips opciones={FILTROS} valor={filtro} onCambio={setFiltro} />
         <span style={{ marginLeft: 'auto', fontSize: 12.5, color: ADMIN.tinta2, fontWeight: 700 }}>
           El link del pase nunca se muestra en este panel
         </span>
@@ -273,13 +276,18 @@ export default function AdminTransferencias() {
 
       {cancelar && (
         <Modal
-          titulo="Cancelar el pase"
-          descripcion={`El link de ${cancelar.alumno?.nombre ?? 'este chico'} deja de servir y el pase no avanza. La familia puede pedir uno nuevo cuando quiera.`}
+          titulo={`Cancelar el pase de ${cancelar.alumno?.nombre ?? 'este chico'}`}
+          descripcion="El link deja de funcionar y la familia no va a poder autorizar con ese pedido. Si igual se muda, se genera un pase nuevo."
           verbo="Cancelar el pase"
+          verboCerrar="Dejarlo como está"
           peligro busy={busy}
           confirmar={denegar}
           onCerrar={() => setCancelar(null)}
-        />
+        >
+          <div style={{ background: ADMIN.okFondo, border: `1.5px solid ${ADMIN.okBorde}`, borderRadius: 14, padding: '13px 15px', fontSize: 13.5, fontWeight: 700, color: ADMIN.okTexto, lineHeight: 1.45 }}>
+            El recorrido de {cancelar.alumno?.nombre ?? 'este chico'} no se toca: sigue completo en su legajo.
+          </div>
+        </Modal>
       )}
     </div>
   );

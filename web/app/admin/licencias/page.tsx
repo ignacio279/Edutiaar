@@ -72,7 +72,8 @@ export default function AdminLicencias() {
   const [filtro, setFiltro] = useState('');
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({
-    tipo: 'escuela', escuela_id: '', institucion_id: '', plan: 'docente', cupos: '10', fecha_fin: '',
+    tipo: 'escuela', escuela_id: '', institucion_id: '', plan: 'docente', cupos: '10',
+    fecha_fin: '', estado: 'activa',
   });
   const [cupo, setCupo] = useState<{ licencia: Licencia; escuela_id: string } | null>(null);
   const ahora = new Date();
@@ -114,7 +115,7 @@ export default function AdminLicencias() {
       plan: form.plan,
       ...(payload.cupos ? { cupos: payload.cupos } : {}),
       ...(form.fecha_fin ? { fecha_fin: form.fecha_fin } : {}),
-      estado: 'activa',
+      estado: form.estado,
     });
     setBusy(false);
     if (!r.ok) { toast(copyError(r.data.error)); return; }
@@ -326,6 +327,17 @@ export default function AdminLicencias() {
               Una licencia de colegio no lleva cupos: habilita ese colegio y nada más.
             </div>
           )}
+
+          {/* El mock da por hecho que toda licencia nace activa, pero el alta ya
+              permitía nacer "en prueba" y eso se usa: no se saca. */}
+          <label style={ETIQUETA}>Estado inicial</label>
+          <select
+            value={form.estado} onChange={(e) => setForm({ ...form, estado: e.target.value })}
+            style={{ ...CAMPO, fontWeight: 700, marginBottom: 14, cursor: 'pointer' }}
+          >
+            <option value="activa">Activa</option>
+            <option value="prueba">En prueba</option>
+          </select>
 
           <label style={ETIQUETA}>Vence el</label>
           <input

@@ -14,7 +14,7 @@ import {
 } from '../../web/lib/consentimientos.ts';
 import {
   confirmacionValida, lineasDelPlan, nombreArchivoLegajo, resumenDelPlan,
-  seccionesDelLegajo, msgErrArco,
+  seccionesDelLegajo, msgErrArco, resumenAnonimo,
 } from '../../web/lib/arco.ts';
 import {
   copyCupos, copyVencimientoLicencia, cuposDe, diasHastaFin, extenderTreintaDias, porVencer,
@@ -167,11 +167,15 @@ test('confirmacionValida: freno tipeado tolerante a mayúsculas y espacios', () 
   assert.equal(confirmacionValida('', ''), false, 'sin esperado nunca confirma');
 });
 
+// OJO: este fixture copia el shape REAL que arma `exportar_legajo` en
+// supabase/functions/admin-arco/index.ts (`escuela` aplanado, `progreso`, y un
+// perfil sin `id`). El fixture anterior inventaba `escuela_nombre`/`alumno_nodo`
+// y por eso el test pasaba en verde mientras la hoja del legajo mostraba "—".
 test('seccionesDelLegajo: siempre las 5 secciones, marcando las vacías', () => {
   const secciones = seccionesDelLegajo({
-    perfil: { id: 'x', nombre: 'Wanda', estado: 'activo', excluido_procesamiento: false },
-    matriculas: [{ escuela_nombre: 'El Chañar', fecha_inicio: '2026-03-01', fecha_fin: '2026-06-30', motivo_cierre: 'migracion' }],
-    sesiones: [{}, {}], respuestas: [{}], alumno_nodo: [],
+    perfil: { nombre: 'Wanda', avatar: 'sheep', grado: 3, estado: 'activo', excluido_procesamiento: false },
+    matriculas: [{ escuela: 'El Chañar', grado: 2, fecha_inicio: '2026-03-01', fecha_fin: '2026-06-30', motivo_cierre: 'migracion' }],
+    sesiones: [{}, {}], respuestas: [{}], progreso: [],
     consentimientos: [], boletines: [],
   });
   assert.equal(secciones.length, 5);
@@ -181,7 +185,13 @@ test('seccionesDelLegajo: siempre las 5 secciones, marcando las vacías', () => 
   assert.equal(secciones[1].vacio, false);
   assert.equal(secciones[2].vacio, true, 'sin consentimientos → vacía');
   assert.match(secciones[1].filas[0].valor, /El Chañar/);
+  assert.match(secciones[1].filas[0].valor, /2° grado/);
   assert.equal(secciones[3].filas[0].valor, '2');
+  // El legajo se entrega a la familia: nada de UUIDs internos, y se dice
+  // explícitamente que no guardamos documentos.
+  const identidad = secciones[0].filas.map((f) => f.etiqueta);
+  assert.ok(!identidad.includes('Identificador EDUTIA'), 'el UUID no va en el legajo');
+  assert.match(secciones[0].filas.at(-1).valor, /no registra ninguno/);
   // Con legajo nulo no explota: todas vacías.
   assert.equal(seccionesDelLegajo(null).every((s, i) => (i === 0 ? true : s.vacio)), true);
 });
@@ -225,6 +235,29 @@ test('vencimiento de licencia: bordes y ventana de aviso de 7 días', () => {
   assert.equal(porVencer('2026-08-13', NOW), true, 'faltan 7 → avisa');
   assert.equal(porVencer('2026-08-14', NOW), false, 'faltan 8 → todavía no');
   assert.equal(porVencer(null, NOW), false);
+});
+
+test('resumenAnonimo: describe lo que sobrevivió al borrado y NADA más', () => {
+  const snapshot = {
+    sesiones: 41, respuestas: 512, nodos_dominados: 6, grado: 3, provincia: 'Corrientes',
+    rango_fechas: { desde: '2025-03-10', hasta: '2026-08-04' },
+  };
+  const linea = resumenAnonimo(snapshot);
+  assert.match(linea, /3° grado/);
+  assert.match(linea, /Corrientes/);
+  assert.match(linea, /41 sesiones y 512 respuestas/);
+  assert.match(linea, /entre 2025-03-10 y 2026-08-04/);
+
+  // El punto del test: si el snapshot llegara contaminado con identificadores,
+  // la línea NO los filtra a la pantalla (solo lee las claves conocidas).
+  const sucio = { ...snapshot, nombre: 'Wanda', alumno_id: 'a41f-b2', email: 'x@y.z' };
+  const limpia = resumenAnonimo(sucio);
+  for (const fuga of ['Wanda', 'a41f-b2', 'x@y.z']) {
+    assert.ok(!limpia.includes(fuga), `se filtró "${fuga}" al resumen anónimo`);
+  }
+
+  assert.equal(resumenAnonimo(null), 'Del chico no queda ningún dato.');
+  assert.match(resumenAnonimo({ sesiones: 1, respuestas: 1 }), /1 sesión y 1 respuesta/, 'singular');
 });
 
 test('extenderTreintaDias: suma sobre lo que quedaba, o desde hoy si ya venció', () => {

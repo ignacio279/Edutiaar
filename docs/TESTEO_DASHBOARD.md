@@ -12,17 +12,27 @@
 
 ## Punto de partida
 
-**Toda la branch está commiteada pero nada está aplicado ni deployado.** Las tres fases se construyeron sobre la misma rama sin mergear, así que se prueban juntas:
+> **Actualizado el 2026-08-12.** Este doc se escribió asumiendo que no había
+> nada aplicado, pero **Admin v3 y Observatorio ya se deployaron el 2026-08-10**
+> (verificado contra la base real). Lo que falta es solo la fase golondrina.
 
 | | Estado |
 |---|---|
-| Código (10 migraciones, 29 funciones, ~25 pantallas admin) | ✅ commiteado y pusheado |
-| 489 tests unitarios | ✅ verdes |
-| Migraciones **0018 → 0027** en la base real | ❌ **sin aplicar** |
-| Las 29 Edge Functions | ❌ **sin deployar** |
+| Código (10 migraciones, 29 funciones, ~26 pantallas admin) | ✅ commiteado y pusheado |
+| 495 tests unitarios | ✅ verdes |
+| Migraciones **0018 → 0021** | ✅ **aplicadas** (2026-08-10) |
+| Migraciones **0022 → 0027** (golondrina) | ❌ **sin aplicar** |
+| Las 23 Edge Functions de Admin v3 + Observatorio | ✅ **deployadas** (2026-08-10) |
+| Las 6 fns de golondrina (`gestion-transferencias`, `transferencia-confirmar`, `gestion-consentimientos`, `admin-arco`, `admin-instituciones`, `institucion-panel`) | ❌ **sin deployar** |
 | 27 archivos de tests de integración | ❌ escritos, **nunca corridos** contra la DB real |
 | Front en Vercel | ❌ branch sin mergear |
 | Secretos del cron en Vault | ❌ sin sembrar |
+
+**Consecuencia práctica:** en el paso 3 saltá a `0022`; las cuatro primeras ya
+están en `supabase_migrations.schema_migrations`. Hasta que golondrina se
+aplique, `/admin/transferencias`, `/admin/instituciones`, `/admin/licencias`,
+`/admin/arco` y todo `/institucion` no pueden funcionar por más que el front
+esté terminado.
 
 **Recomendación fuerte:** hacé los pasos 3 a 5 primero en un proyecto Supabase de prueba. El backfill de 0018 y 0022 toca todos los colegios y todos los alumnos existentes.
 
@@ -45,7 +55,7 @@ export SUPABASE_SERVICE_ROLE_KEY=...
 cd /home/user/Edutiaar && npm test
 ```
 
-**Esperado:** `# tests 489 · # pass 489 · # fail 0`
+**Esperado:** `# tests 495 · # pass 495 · # fail 0`
 
 **Test estrella:** hay uno que compara la implementación del front (`web/lib/acceso.ts`) contra la del servidor (`_shared/acceso-logica.ts`) y falla si divergen. Ya cazó un bug real: el front y el backend interpretaban distinto el apagado de LUNA.
 
@@ -56,7 +66,7 @@ cd web && NEXT_PUBLIC_SUPABASE_URL=https://dummy.supabase.co \
 NEXT_PUBLIC_SUPABASE_ANON_KEY=dummy npx next build
 ```
 
-**Esperado:** `✓ Compiled successfully` y **33 rutas**, entre ellas las ~25 de `/admin`, más `/institucion`, `/institucion/login` y `/transferir/[id]`.
+**Esperado:** `✓ Compiled successfully` y **34 rutas**, entre ellas las ~26 de `/admin` (incluida la ficha `/admin/instituciones/[id]`), más `/institucion`, `/institucion/login` y `/transferir/[id]`.
 
 ---
 

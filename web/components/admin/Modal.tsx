@@ -10,13 +10,16 @@ const NUNITO = 'var(--font-nunito)';
 const QUICK = 'var(--font-quicksand), sans-serif';
 
 export default function Modal({
-  titulo, descripcion, children, confirmar, verbo, busy, puede = true, peligro, onCerrar,
+  titulo, descripcion, children, confirmar, verbo, verboCerrar = 'Cancelar', busy, puede = true, peligro, onCerrar,
 }: {
   titulo: string;
   descripcion?: string;
   children?: React.ReactNode;
   confirmar: () => void;
   verbo: string;
+  // Ojo con el default: en un modal que YA es "cancelar algo", "Cancelar"
+  // significa dos cosas opuestas. Ahí se pasa "Dejarlo como está".
+  verboCerrar?: string;
   busy?: boolean;
   puede?: boolean; // el CTA arranca apagado hasta que el form esté completo
   peligro?: boolean;
@@ -45,7 +48,7 @@ export default function Modal({
             className="ad-ghost-warm"
             style={{ background: ADMIN.carta, border: `1.5px solid ${ADMIN.bordeCalido}`, color: ADMIN.tinta2, borderRadius: 999, padding: '11px 20px', fontFamily: QUICK, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}
           >
-            Cancelar
+            {verboCerrar}
           </button>
           <button
             onClick={() => habilitado && confirmar()}
