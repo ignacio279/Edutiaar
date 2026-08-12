@@ -1,5 +1,9 @@
 # Guía de testeo — Fase "Alumno golondrina"
 
+> Detalle fino de la fase golondrina. Para probar **el dashboard completo**
+> (Admin v3 + Observatorio + esta fase) empezá por `TESTEO_DASHBOARD.md`, que
+> ordena las tres fases juntas y remite acá para los pasos 7 a 9.
+>
 > Cómo verificar, paso a paso, que todo lo de esta fase funciona.
 > Cada paso dice **qué se testea**, **cómo** y **qué tiene que pasar**.
 > Si un paso falla, no sigas al siguiente: los de abajo dependen de los de arriba.
