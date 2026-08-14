@@ -9,15 +9,15 @@
 // de alumnos — hay un test que congela eso (anonimato estructural).
 //
 // EJES (D-OA4): el primario es materia × grado × provincia. `nodo.nombre` no
-// es comparable entre colegios → el nivel "tema" va solo como top-N con nombre
-// normalizado, piso de MIN_RESPUESTAS_TEMA respuestas y flag `aproximado`.
+// es comparable entre colegios, así que el nivel "tema" ya NO sale de un
+// top-N por nombre normalizado (ese best-effort, `topTemasQueCuestan`, se
+// retiró): ahora `desempenoPorEje` mide contra el marco NAP, que sí es un
+// vocabulario compartido entre colegios (ver más abajo).
 //
 // Determinístico: nada de new Date() acá adentro — las sesiones vienen YA
 // filtradas por rango desde index.ts. Listas vacías → vacío/ceros, nunca NaN.
 
 export const K_ANONIMATO = 5;
-export const MIN_RESPUESTAS_TEMA = 20;
-export const TOP_TEMAS = 10;
 
 // ── Tipos de entrada (shapes de las filas que trae index.ts) ────────────────
 export type EscuelaObs = { id: string; provincia?: string | null };
@@ -52,7 +52,6 @@ export type FilaMateria = {
   dominioPromedio: number | null; // promedio de alumno_nodo.puntaje (0-100), redondeado
   muestraInsuficiente: boolean;
 };
-export type TemaAgregado = { tema: string; alumnos: number; respuestas: number; precision: number };
 
 // Tipos para desempenoPorEje (marco NAP).
 export type NodoNap = { id: string; nap_tema_id?: string | null };
@@ -284,68 +283,6 @@ export function agregarPorMateria(
   });
   filas.sort((a, b) => a.materia.localeCompare(b.materia, 'es') || a.grado - b.grado);
   return filas;
-}
-
-// Top de "temas que más cuestan" dentro de una celda materia + grado
-// (opcionalmente acotado a una provincia). Best-effort HONESTO (D-OA4): los
-// nombres de tema los escribe cada docente, así que se agrupan por texto
-// normalizado y la respuesta lleva `aproximado: true` SIEMPRE. Un tema entra
-// solo con respuestas totales >= MIN_RESPUESTAS_TEMA Y alumnos distintos >= k;
-// se ordena por precisión ascendente (lo que más cuesta primero) y se corta
-// en TOP_TEMAS.
-export function topTemasQueCuestan(
-  datos: {
-    sesiones: SesionObs[];
-    nodos: NodoObs[];
-    curriculo: Map<string, InfoNodo>;
-    provinciaDeAlumno: Map<string, string | null | undefined>;
-  },
-  filtro: { materia: string; grado: number; provincia?: string },
-  k: number = K_ANONIMATO,
-): { temas: TemaAgregado[]; aproximado: true } {
-  const { sesiones, nodos, curriculo, provinciaDeAlumno } = datos;
-  const materiaBuscada = normalizarTema(filtro.materia);
-
-  const nombreDeNodo = new Map<string, string>();
-  for (const n of nodos) {
-    if (typeof n.nombre === 'string' && n.nombre.trim()) nombreDeNodo.set(n.id, n.nombre);
-  }
-
-  type Acum = { alumnos: Set<string>; aciertos: number; total: number };
-  const temas = new Map<string, Acum>();
-  for (const s of sesiones) {
-    if (!s.nodo_id) continue;
-    const info = curriculo.get(s.nodo_id);
-    if (!info || info.grado !== filtro.grado) continue;
-    if (normalizarTema(info.materia) !== materiaBuscada) continue;
-    if (filtro.provincia && provinciaDeAlumno.get(s.alumno_id) !== filtro.provincia) continue;
-    const nombre = nombreDeNodo.get(s.nodo_id);
-    if (!nombre) continue;
-    const tema = normalizarTema(nombre);
-    let t = temas.get(tema);
-    if (!t) {
-      t = { alumnos: new Set(), aciertos: 0, total: 0 };
-      temas.set(tema, t);
-    }
-    t.alumnos.add(s.alumno_id);
-    t.aciertos += num(s.aciertos);
-    t.total += num(s.total);
-  }
-
-  const lista: TemaAgregado[] = [];
-  for (const [tema, t] of temas) {
-    if (t.total < MIN_RESPUESTAS_TEMA || t.alumnos.size < k) continue;
-    lista.push({
-      tema,
-      alumnos: t.alumnos.size,
-      respuestas: t.total,
-      precision: pct(t.aciertos, t.total) ?? 0, // total >= MIN > 0: nunca cae al 0
-    });
-  }
-  lista.sort(
-    (a, b) => a.precision - b.precision || b.respuestas - a.respuestas || a.tema.localeCompare(b.tema, 'es'),
-  );
-  return { temas: lista.slice(0, TOP_TEMAS), aproximado: true };
 }
 
 // Desempeño contra el marco NAP (D-NAP1..D-NAP8). A diferencia de

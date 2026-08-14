@@ -1,8 +1,8 @@
 // admin-observatorio (WP-A — fase "Observatorio y avisos"): agregados
 // educativos ANÓNIMOS para /admin/observatorio — por jurisdicción (provincia),
-// por materia × grado y top de "temas que más cuestan". Solo LECTURAS (por eso
-// no audita: "toda mutación audita" no aplica acá). Guard verificarAdmin
-// (plataforma_admin) + service_role.
+// por materia × grado y desempeño contra el marco curricular NAP (por eje y
+// tema). Solo LECTURAS (por eso no audita: "toda mutación audita" no aplica
+// acá). Guard verificarAdmin (plataforma_admin) + service_role.
 //
 // DÓNDE SE CALCULA: acá, SERVER-SIDE (a diferencia de admin-metricas, que
 // manda filas crudas al front). Motivo (D-OA3): las filas crudas de sesiones
@@ -21,9 +21,10 @@ import { cors, json } from '../_shared/cors.ts';
 import { verificarAdmin } from '../_shared/admin.ts';
 import { esProvinciaValida } from '../_shared/provincias.ts';
 import {
-  agregarPorMateria, agregarPorProvincia, indexarCurriculo, topTemasQueCuestan,
-  type AlumnoNodoObs, type AlumnoObs, type EscuelaObs, type MateriaObs,
-  type NodoObs, type ProgramaObs, type SesionObs,
+  agregarPorMateria, agregarPorProvincia, desempenoPorEje, indexarCurriculo,
+  type AlumnoNodoObs, type AlumnoNodoNap, type AlumnoObs, type EjeCat,
+  type EscuelaObs, type MateriaObs, type NodoNap, type NodoObs,
+  type ProgramaObs, type SesionObs, type TemaCat,
 } from './observatorio-logica.ts';
 
 const DIA_MS = 86_400_000;
@@ -128,6 +129,47 @@ Deno.serve(async (req) => {
       return { nodos, curriculo: indexarCurriculo(nodos, programas, materias) };
     };
 
+    // ── Lecturas del marco NAP (desempenoPorEje) ────────────────────────────
+    const traerNodosNap = () => traerTabla<NodoNap>('nodo', 'id, nap_tema_id');
+
+    const traerAlumnoNodo = () =>
+      traerTabla<AlumnoNodoNap>('alumno_nodo', 'alumno_id, nodo_id, puntaje, estado');
+
+    // Ejes del marco NAP de una materia (nap_eje.materia acota directo).
+    const traerEjes = async (materia: string): Promise<EjeCat[]> => {
+      const { data, error } = await sb
+        .from('nap_eje')
+        .select('id, materia, nombre, orden')
+        .eq('materia', materia)
+        .limit(MAX_FILAS);
+      if (error) throw error;
+      return (data ?? []) as EjeCat[];
+    };
+
+    // Temas del marco NAP de una materia + grado. nap_tema no tiene columna
+    // materia propia (cuelga de nap_eje), así que el filtro va por join.
+    const traerTemas = async (materia: string, grado: number): Promise<TemaCat[]> => {
+      const { data, error } = await sb
+        .from('nap_tema')
+        .select('id, eje_id, nombre, grado, orden, nap_eje!inner(materia)')
+        .eq('grado', grado)
+        .eq('nap_eje.materia', materia)
+        .limit(MAX_FILAS);
+      if (error) throw error;
+      return (data ?? []) as TemaCat[];
+    };
+
+    // Map alumnoId → escuela_id, para colegiosConTema/colegiosTotal de
+    // desempenoPorEje (a diferencia de armarProvinciaDeAlumno, acá no hace
+    // falta pasar por escuela: perfil.escuela_id ya es el dato).
+    const armarEscuelaDeAlumno = (alumnos: AlumnoObs[]): Map<string, string> => {
+      const escuelaDeAlumno = new Map<string, string>();
+      for (const a of alumnos) {
+        if (a.escuela_id) escuelaDeAlumno.set(a.id, a.escuela_id);
+      }
+      return escuelaDeAlumno;
+    };
+
     switch (accion) {
       // Vista "Por jurisdicción": agregado por provincia + bucket de colegios
       // sin provincia asignada (solo conteo).
@@ -175,10 +217,10 @@ Deno.serve(async (req) => {
         return json({ rango_dias: rango, filas });
       }
 
-      // Top "temas que más cuestan" de una celda materia + grado (best-effort,
-      // SIEMPRE marcado `aproximado`: los nombres de tema los escribe cada
-      // docente y se agrupan por texto normalizado).
-      case 'temas': {
+      // Desempeño contra el marco NAP (D-NAP1..D-NAP8). `grado` OBLIGATORIO:
+      // los temas de los NAP se definen por grado, mezclarlos juntaría
+      // contenidos distintos bajo un mismo nombre.
+      case 'desempeno': {
         const materia = body?.materia;
         if (!noVacio(materia)) return json({ error: 'falta_materia' }, 400);
         const grado = body?.grado;
@@ -189,18 +231,24 @@ Deno.serve(async (req) => {
         if (provincia !== undefined && provincia !== null && !esProvinciaValida(provincia)) {
           return json({ error: 'provincia_invalida' }, 400);
         }
-        const [escuelas, alumnos, sesiones, { nodos, curriculo }] = await Promise.all([
-          traerEscuelas(),
-          traerAlumnos(),
-          traerSesiones(),
-          traerCurriculo(),
+        const [escuelas, alumnos, sesiones, nodos, alumnoNodo, ejes, temas] = await Promise.all([
+          traerEscuelas(), traerAlumnos(), traerSesiones(), traerNodosNap(),
+          traerAlumnoNodo(), traerEjes(materia), traerTemas(materia, grado),
         ]);
-        const provinciaDeAlumno = armarProvinciaDeAlumno(escuelas, alumnos);
-        const { temas, aproximado } = topTemasQueCuestan(
-          { sesiones: soloIncluidos(sesiones, alumnos), nodos, curriculo, provinciaDeAlumno },
+        const incluidos = soloIncluidos(sesiones, alumnos);
+        const ejesOut = desempenoPorEje(
+          {
+            sesiones: incluidos,
+            alumnoNodo: soloIncluidos(alumnoNodo, alumnos),
+            nodos,
+            ejes,
+            temas,
+            escuelaDeAlumno: armarEscuelaDeAlumno(alumnos),
+            provinciaDeAlumno: armarProvinciaDeAlumno(escuelas, alumnos),
+          },
           { materia, grado, provincia: esProvinciaValida(provincia) ? provincia : undefined },
         );
-        return json({ rango_dias: rango, temas, aproximado });
+        return json({ rango_dias: rango, ejes: ejesOut });
       }
 
       default:

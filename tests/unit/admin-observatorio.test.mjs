@@ -8,9 +8,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  K_ANONIMATO, MIN_RESPUESTAS_TEMA, TOP_TEMAS,
+  K_ANONIMATO,
   normalizarTema, indexarCurriculo, agregarPorProvincia, agregarPorMateria,
-  topTemasQueCuestan,
 } from '../../supabase/functions/admin-observatorio/observatorio-logica.ts';
 
 // ── Fixtures chicos y reutilizables ─────────────────────────────────────────
@@ -238,80 +237,6 @@ test('agregarPorMateria: sin sesiones → [] (celda vacía no existe, nunca NaN)
   assert.deepEqual(filas, []);
 });
 
-// ── topTemasQueCuestan ──────────────────────────────────────────────────────
-
-const NODOS = [
-  { id: 'n1', nombre: 'Sustantivos comunes', programa_id: 'p1' },
-  { id: 'n2', nombre: 'Verbos', programa_id: 'p1' },
-];
-const FILTRO = { materia: 'Lengua', grado: 3 };
-
-test('topTemasQueCuestan: piso de respuestas (< MIN_RESPUESTAS_TEMA queda afuera)', () => {
-  const r = topTemasQueCuestan({
-    // n1: 5 alumnos × 4 respuestas = 20 (entra justo); n2: 5 × 3 = 15 (afuera).
-    sesiones: [...sesionesDe(5, 'a', 'n1', 2, 4), ...sesionesDe(5, 'a', 'n2', 2, 3)],
-    nodos: NODOS,
-    curriculo: CURRICULO,
-    provinciaDeAlumno: SIN_PROVINCIAS,
-  }, FILTRO, K_ANONIMATO);
-  assert.equal(r.temas.length, 1);
-  assert.equal(r.temas[0].tema, 'sustantivos comunes');
-  assert.equal(r.temas[0].respuestas, MIN_RESPUESTAS_TEMA);
-});
-
-test('topTemasQueCuestan: piso de k alumnos distintos', () => {
-  const r = topTemasQueCuestan({
-    // 4 alumnos con muchas respuestas: pasa el piso de respuestas pero no el k.
-    sesiones: sesionesDe(4, 'a', 'n1', 5, 10),
-    nodos: NODOS,
-    curriculo: CURRICULO,
-    provinciaDeAlumno: SIN_PROVINCIAS,
-  }, FILTRO, K_ANONIMATO);
-  assert.deepEqual(r.temas, []);
-});
-
-test('topTemasQueCuestan: ordena por precisión ASCENDENTE y marca aproximado', () => {
-  const r = topTemasQueCuestan({
-    sesiones: [
-      ...sesionesDe(5, 'a', 'n1', 9, 10), // 90%: cuesta poco
-      ...sesionesDe(5, 'a', 'n2', 3, 10), // 30%: cuesta mucho → primero
-    ],
-    nodos: NODOS,
-    curriculo: CURRICULO,
-    provinciaDeAlumno: SIN_PROVINCIAS,
-  }, FILTRO, K_ANONIMATO);
-  assert.equal(r.aproximado, true);
-  assert.deepEqual(r.temas.map((t) => t.tema), ['verbos', 'sustantivos comunes']);
-  assert.equal(r.temas[0].precision, 30);
-  assert.equal(r.temas[0].alumnos, 5);
-});
-
-test('topTemasQueCuestan: corta en TOP_TEMAS', () => {
-  const cantidad = TOP_TEMAS + 3;
-  const nodos = Array.from({ length: cantidad }, (_, i) => ({ id: `t${i}`, nombre: `Tema ${i}`, programa_id: 'p1' }));
-  const curriculo = indexarCurriculo(nodos, [{ id: 'p1', materia_id: 'm1', grado: 3 }], [{ id: 'm1', nombre: 'Lengua' }]);
-  const sesiones = nodos.flatMap((n, i) => sesionesDe(5, 'a', n.id, i, 20)); // precisiones distintas
-  const r = topTemasQueCuestan({ sesiones, nodos, curriculo, provinciaDeAlumno: SIN_PROVINCIAS }, FILTRO, K_ANONIMATO);
-  assert.equal(r.temas.length, TOP_TEMAS);
-  assert.equal(r.temas[0].tema, 'tema 0', 'el de menor precisión primero');
-});
-
-test('topTemasQueCuestan: agrupa por nombre normalizado entre colegios', () => {
-  const nodos = [
-    { id: 'x1', nombre: '  Sustantivos   comunes ', programa_id: 'p1' },
-    { id: 'x2', nombre: 'SUSTANTIVOS COMUNES', programa_id: 'p1' },
-  ];
-  const curriculo = indexarCurriculo(nodos, [{ id: 'p1', materia_id: 'm1', grado: 3 }], [{ id: 'm1', nombre: 'Lengua' }]);
-  const r = topTemasQueCuestan({
-    sesiones: [...sesionesDe(3, 'a', 'x1', 2, 10), ...sesionesDe(3, 'b', 'x2', 2, 10)],
-    nodos, curriculo, provinciaDeAlumno: SIN_PROVINCIAS,
-  }, FILTRO, K_ANONIMATO);
-  assert.equal(r.temas.length, 1, 'las dos escrituras son el mismo tema');
-  assert.equal(r.temas[0].tema, 'sustantivos comunes');
-  assert.equal(r.temas[0].alumnos, 6);
-  assert.equal(r.temas[0].respuestas, 60);
-});
-
 // ── Anonimato estructural (D-OA3) ───────────────────────────────────────────
 
 test('anonimato estructural: ningún agregador devuelve claves nombre / alumno_id / perfil_id', () => {
@@ -324,10 +249,6 @@ test('anonimato estructural: ningún agregador devuelve claves nombre / alumno_i
       alumnoNodo: [{ alumno_id: 'a0', nodo_id: 'n1', puntaje: 50 }],
       provinciaDeAlumno: SIN_PROVINCIAS,
     }, K_ANONIMATO),
-    topTemasQueCuestan(
-      { sesiones: sesionesDe(6, 'a', 'n1', 5, 10), nodos: NODOS, curriculo: CURRICULO, provinciaDeAlumno: SIN_PROVINCIAS },
-      FILTRO, K_ANONIMATO,
-    ),
   ];
   const texto = JSON.stringify(salidas);
   for (const prohibida of ['"nombre"', '"alumno_id"', '"perfil_id"']) {
