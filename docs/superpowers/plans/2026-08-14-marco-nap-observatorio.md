@@ -547,12 +547,17 @@ export function desempenoPorEje(
   const nuevo = (): Acum => ({ alumnos: new Set(), escuelas: new Set(), aciertos: 0, total: 0, puntajes: [], dominados: new Set() });
   const porTema = new Map<string, Acum>();
 
+  // CORREGIDO tras la review de la Task 3: el gate va ANTES de sumar a
+  // colegiosUniverso, y exige que el tema pertenezca a ESTE filtro. Sin las dos
+  // cosas, el denominador de la cobertura se infla con colegios que no dan nada
+  // de esta materia y grado.
+  const temasDelFiltro = new Set(temasFiltro.map((t) => t.id));
   for (const s of sesiones) {
     if (!s.nodo_id || !pasaFiltro(s.alumno_id)) continue;
     const temaId = temaDeNodo.get(s.nodo_id);
+    if (!temaId || !temasDelFiltro.has(temaId)) continue;
     const escuela = escuelaDeAlumno.get(s.alumno_id);
     if (escuela) colegiosUniverso.add(escuela);
-    if (!temaId) continue;
     let a = porTema.get(temaId);
     if (!a) { a = nuevo(); porTema.set(temaId, a); }
     a.alumnos.add(s.alumno_id);
@@ -568,7 +573,13 @@ export function desempenoPorEje(
     const temaId = temaDeNodo.get(an.nodo_id);
     if (!temaId) continue;
     const a = porTema.get(temaId);
-    if (!a) continue;
+    // CORREGIDO tras la review de la Task 3: el alumno tiene que estar en la
+    // población de la ventana. `a.alumnos` sale de las sesiones (con rango);
+    // `alumnoNodo` es la foto actual, SIN rango. Sin este guard, un chico que
+    // dominó antes de la ventana entra al numerador sin estar en el
+    // denominador y `dominados` puede pasar el 100% — y como `dominado` es
+    // hito pegajoso, ese es el caso normal, no un borde raro.
+    if (!a || !a.alumnos.has(an.alumno_id)) continue;
     if (typeof an.puntaje === 'number' && Number.isFinite(an.puntaje)) a.puntajes.push(an.puntaje);
     if (an.estado === 'dominado') a.dominados.add(an.alumno_id);
   }

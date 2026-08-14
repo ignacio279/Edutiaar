@@ -191,10 +191,15 @@ que pasaron k, más su propia cobertura.
 `/admin/observatorio` suma la sección **"Desempeño por materia"**: cuatro chips
 de materia, selector de grado, y el selector de provincia que ya existe.
 
-Filas = ejes, cada uno con su número grande, su cobertura y una barra. Click en
-un eje → despliega sus temas con el mismo formato. Las celdas sin muestra
-suficiente dicen "muestra insuficiente" en vez de un número, como ya hace el
-resto del Observatorio.
+Filas = ejes. Cada fila lleva **las tres métricas de la tabla de arriba**:
+`dominioPromedio` como número grande **rotulado "Dominio"**, con su barra, y
+`precision` y `dominados` como stats secundarias al lado. El rótulo no es
+opcional: en esta misma pantalla la tarjeta "Aprendizaje por zona" muestra un
+número rotulado "Precisión", así que un número pelado acá se lee como esa otra
+cosa. Y al lado, siempre, la cobertura. Click en un eje → despliega sus temas
+con el mismo formato. Las celdas sin muestra suficiente dicen "muestra
+insuficiente" en vez de un número — las tres juntas, nunca una sí y otra no —
+como ya hace el resto del Observatorio.
 
 El drill-down actual de "temas que más cuestan" se retira (D-NAP8).
 
