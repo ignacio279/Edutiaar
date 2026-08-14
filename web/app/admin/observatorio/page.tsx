@@ -106,20 +106,36 @@ function BarraDominio({ valor }: { valor: number }) {
   );
 }
 
+// Texto de una métrica secundaria del NAP (precisión, dominaron), con la
+// MISMA regla de k-anonimato que el número grande de dominio: alumnos===0 →
+// "sin datos todavía"; fila suprimida o la métrica puntual en null →
+// "muestra insuficiente" (nunca un cero ni un número inventado); si no, el
+// valor.
+function textoMetrica(sinDatos: boolean, muestraInsuficiente: boolean, valor: number | null): string {
+  if (sinDatos) return 'sin datos todavía';
+  if (muestraInsuficiente || valor === null) return 'muestra insuficiente';
+  return `${valor}%`;
+}
+
 // Fila de eje o de tema del marco NAP (misma pinta; el tema va indentado). La
 // cobertura ("N de M colegios") va SIEMPRE al lado del número, nunca en un
 // tooltip (D-NAP5): sin ella, un tema que da un solo colegio se lee como dato
 // provincial. `alumnos === 0` es "sin datos todavía" (nadie lo practicó
 // todavía, no es un error); `muestraInsuficiente` con alumnos > 0 es la pill
-// gris de k-anonimato.
+// gris de k-anonimato. Tres métricas, jerarquía clara: DOMINIO es el número
+// grande (rotulado, para no confundirlo con la "Precisión: X%" de la tarjeta
+// de al lado) con su barra; precisión y "dominaron" van como stats
+// secundarias, sin competir con el número grande.
 function FilaEjeTema({
-  nombre, alumnos, respuestas, dominioPromedio, muestraInsuficiente,
+  nombre, alumnos, respuestas, dominioPromedio, precision, dominados, muestraInsuficiente,
   colegiosConTema, colegiosTotal, indentado, expandible, abierto, onClick,
 }: {
   nombre: string;
   alumnos: number;
   respuestas?: number;
   dominioPromedio: number | null;
+  precision: number | null;
+  dominados: number | null;
   muestraInsuficiente: boolean;
   colegiosConTema: number;
   colegiosTotal: number;
@@ -129,6 +145,7 @@ function FilaEjeTema({
   onClick?: () => void;
 }) {
   const sinDatos = alumnos === 0;
+  const dominioSuprimido = muestraInsuficiente || dominioPromedio === null;
   const contenido = (
     <>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
@@ -144,16 +161,30 @@ function FilaEjeTema({
           </span>
           {sinDatos ? (
             <span style={{ fontSize: 12, fontWeight: 700, color: ADMIN.tinta3 }}>sin datos todavía</span>
-          ) : muestraInsuficiente || dominioPromedio === null ? (
+          ) : dominioSuprimido ? (
             pillInsuf
           ) : (
-            <span style={{ fontFamily: QUICK, fontWeight: 800, fontSize: indentado ? 16 : 20, color: ADMIN.oscuro }}>{dominioPromedio}%</span>
+            // Rotulado "Dominio" a propósito: es la misma pantalla donde
+            // "Aprendizaje por zona" rotula su número "Precisión: X%" — sin
+            // etiqueta, este número se lee como esa otra métrica.
+            <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: 1.15 }}>
+              <span style={{ fontFamily: QUICK, fontWeight: 800, fontSize: indentado ? 16 : 20, color: ADMIN.oscuro }}>{dominioPromedio}%</span>
+              <span style={{ fontSize: 9.5, fontWeight: 800, color: ADMIN.tinta2, textTransform: 'uppercase', letterSpacing: 0.4 }}>Dominio</span>
+            </span>
           )}
         </span>
       </div>
-      {!sinDatos && !muestraInsuficiente && dominioPromedio !== null && <BarraDominio valor={dominioPromedio} />}
-      <div style={{ fontSize: 11.5, color: ADMIN.tinta2, fontWeight: 600, marginTop: 6 }}>
-        {alumnos} {alumnos === 1 ? 'alumno' : 'alumnos'}{typeof respuestas === 'number' ? ` · ${respuestas} respuestas` : ''}
+      {!sinDatos && !dominioSuprimido && <BarraDominio valor={dominioPromedio as number} />}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8 }}>
+        <span style={{ fontSize: 11.5, color: ADMIN.tinta2, fontWeight: 600 }}>
+          {alumnos} {alumnos === 1 ? 'alumno' : 'alumnos'}{typeof respuestas === 'number' ? ` · ${respuestas} respuestas` : ''}
+        </span>
+        <span style={{ fontSize: 11.5, color: ADMIN.tinta2, fontWeight: 700 }}>
+          Precisión: {textoMetrica(sinDatos, muestraInsuficiente, precision)}
+        </span>
+        <span style={{ fontSize: 11.5, color: ADMIN.tinta2, fontWeight: 700 }}>
+          Dominaron: {textoMetrica(sinDatos, muestraInsuficiente, dominados)}
+        </span>
       </div>
     </>
   );
@@ -526,6 +557,8 @@ export default function Page() {
                   nombre={eje.eje}
                   alumnos={eje.alumnos}
                   dominioPromedio={eje.dominioPromedio}
+                  precision={eje.precision}
+                  dominados={eje.dominados}
                   muestraInsuficiente={eje.muestraInsuficiente}
                   colegiosConTema={eje.colegiosConTema}
                   colegiosTotal={eje.colegiosTotal}
@@ -547,6 +580,8 @@ export default function Page() {
                           alumnos={t.alumnos}
                           respuestas={t.respuestas}
                           dominioPromedio={t.dominioPromedio}
+                          precision={t.precision}
+                          dominados={t.dominados}
                           muestraInsuficiente={t.muestraInsuficiente}
                           colegiosConTema={t.colegiosConTema}
                           colegiosTotal={t.colegiosTotal}
