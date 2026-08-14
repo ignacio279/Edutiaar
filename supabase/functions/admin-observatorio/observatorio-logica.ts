@@ -383,7 +383,10 @@ export function desempenoPorEje(
   const temaDeNodo = new Map<string, string>();
   for (const n of nodos) if (n.nap_tema_id) temaDeNodo.set(n.id, n.nap_tema_id);
 
-  // Universo: colegios con actividad en el filtro (denominador de la cobertura).
+  // Solo los temas del filtro (materia + grado) cuentan en la cobertura.
+  const temasDelFiltro = new Set(temasFiltro.map((t) => t.id));
+
+  // Universo: colegios con actividad en temas del filtro (denominador de la cobertura).
   const colegiosUniverso = new Set<string>();
   type Acum = { alumnos: Set<string>; escuelas: Set<string>; aciertos: number; total: number; puntajes: number[]; dominados: Set<string> };
   const nuevo = (): Acum => ({ alumnos: new Set(), escuelas: new Set(), aciertos: 0, total: 0, puntajes: [], dominados: new Set() });
@@ -392,9 +395,9 @@ export function desempenoPorEje(
   for (const s of sesiones) {
     if (!s.nodo_id || !pasaFiltro(s.alumno_id)) continue;
     const temaId = temaDeNodo.get(s.nodo_id);
+    if (!temaId || !temasDelFiltro.has(temaId)) continue;
     const escuela = escuelaDeAlumno.get(s.alumno_id);
     if (escuela) colegiosUniverso.add(escuela);
-    if (!temaId) continue;
     let a = porTema.get(temaId);
     if (!a) { a = nuevo(); porTema.set(temaId, a); }
     a.alumnos.add(s.alumno_id);
@@ -403,14 +406,15 @@ export function desempenoPorEje(
     a.total += num(s.total);
   }
 
-  // Dominio y estado: SOLO sobre temas que ya tienen sesiones (D-NAP5: un nodo
-  // publicado y nunca practicado no cuenta como dar el tema).
+  // Dominio y estado: SOLO sobre alumnos que tienen sesiones EN LA VENTANA
+  // (D-NAP5: un nodo publicado y nunca practicado no cuenta como dar el tema).
+  // Los puntajes y estados describen LA MISMA población que `alumnos` (de sesiones).
   for (const an of alumnoNodo) {
     if (!pasaFiltro(an.alumno_id)) continue;
     const temaId = temaDeNodo.get(an.nodo_id);
     if (!temaId) continue;
     const a = porTema.get(temaId);
-    if (!a) continue;
+    if (!a || !a.alumnos.has(an.alumno_id)) continue;
     if (typeof an.puntaje === 'number' && Number.isFinite(an.puntaje)) a.puntajes.push(an.puntaje);
     if (an.estado === 'dominado') a.dominados.add(an.alumno_id);
   }

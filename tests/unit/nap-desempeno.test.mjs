@@ -42,11 +42,17 @@ test('un tema del catálogo sin práctica aparece igual, con 0 alumnos', () => {
 
 test('los nodos fuera del marco no entran en ningún agregado', () => {
   const datos = base({
-    sesiones: sesiones(6, 'a', 'n3', 'esc1'), // nodo sin tema NAP
-    escuelaDeAlumno: mapaEscuela([6, 'a', 'esc1']),
+    sesiones: [
+      ...sesiones(6, 'a', 'n1', 'esc1'), // nodo CON tema NAP
+      ...sesiones(6, 'b', 'n3', 'esc2'), // nodo SIN tema NAP
+    ],
+    escuelaDeAlumno: mapaEscuela([6, 'a', 'esc1'], [6, 'b', 'esc2']),
   });
   const [eje] = desempenoPorEje(datos, { materia: 'Matemática', grado: 4 });
-  assert.equal(eje.alumnos, 0, 'un nodo sin nap_tema_id no debe sumar');
+  assert.equal(eje.alumnos, 6, 'solo los de n1 cuentan');
+  const t1 = eje.temas.find((t) => t.temaId === 't1');
+  assert.equal(t1.colegiosTotal, 1, 'esc2 no cuenta en el denominador de cobertura');
+  assert.equal(t1.colegiosConTema, 1, 'solo esc1 practica el tema');
 });
 
 test('un tema con menos de k alumnos no publica métricas', () => {
@@ -138,6 +144,29 @@ test('otro grado o materia no devuelve filas', () => {
   assert.deepEqual(vacio, []);
   const otroGrado = desempenoPorEje(base(), { materia: 'Matemática', grado: 7 });
   assert.deepEqual(otroGrado, []);
+});
+
+test('dominados nunca supera el 100% ni mezcla poblaciones', () => {
+  // 5 alumnos con sesión en ventana: a0..a4
+  // Solo a0 dominó en la ventana
+  // PERO hay un sexto alumno viejo0 que dominó EN OTRO MOMENTO (sin sesión en ventana)
+  const datos = base({
+    sesiones: sesiones(K_ANONIMATO, 'a', 'n1', 'esc1', 7, 10),
+    alumnoNodo: [
+      // 5 alumnos con sesión: solo a0 dominó
+      ...Array.from({ length: K_ANONIMATO }, (_, i) => ({
+        alumno_id: `a${i}`, nodo_id: 'n1', puntaje: 60, estado: i === 0 ? 'dominado' : 'en_progreso',
+      })),
+      // 1 alumno VIEJO que dominó pero NO tiene sesiones en ventana
+      { alumno_id: 'viejo0', nodo_id: 'n1', puntaje: 60, estado: 'dominado' },
+    ],
+    escuelaDeAlumno: mapaEscuela([K_ANONIMATO, 'a', 'esc1'], [1, 'viejo', 'esc1']),
+  });
+  const [eje] = desempenoPorEje(datos, { materia: 'Matemática', grado: 4 });
+  const t1 = eje.temas.find((t) => t.temaId === 't1');
+  assert.equal(t1.alumnos, K_ANONIMATO, 'solo los de sesiones cuentan en la población');
+  assert.equal(t1.dominados, 20, '1 de 5 = 20%, no 2 de 6 = 33%');
+  assert(t1.dominados <= 100, 'dominados nunca puede superar 100%');
 });
 
 test('ninguna respuesta lleva ids ni nombres de alumnos', () => {
