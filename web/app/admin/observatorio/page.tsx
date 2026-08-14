@@ -1,17 +1,22 @@
 'use client';
 // Observatorio educativo (WP-A — fase "Observatorio y avisos"; restyle 2026-08
 // al mock Admin.dc.html): agregados de aprendizaje SIEMPRE anónimos por
-// jurisdicción (provincia) y por materia × grado, más el top de "temas que más
-// cuestan" (best-effort, marcado "aproximado"). Todo sale YA AGREGADO de
-// admin-observatorio (a diferencia de métricas: mandar sesiones crudas al
-// browser rompería el anonimato, D-OA3); acá solo se formatea.
+// jurisdicción (provincia), por materia × grado y, desde la fase "marco NAP",
+// por eje y tema del marco curricular (Núcleos de Aprendizajes Prioritarios) —
+// la vara común entre colegios, a diferencia de `nodo.nombre` que cada
+// docente escribe distinto. Todo sale YA AGREGADO de admin-observatorio (a
+// diferencia de métricas: mandar sesiones crudas al browser rompería el
+// anonimato, D-OA3); acá solo se formatea.
 // El diseño reemplaza las tablas densas por tarjetas: "Aprendizaje por zona"
-// con chips Fuerte/Cuesta y "Tendencias por tema" con mini-barras por grado.
+// con chips Fuerte/Cuesta, "Tendencias por tema" con mini-barras por grado y
+// "Desempeño por eje y tema (NAP)" con chips de materia + selector de grado.
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ADMIN } from '@/lib/admin/tema';
+import { ADMIN, CAMPO, ETIQUETA } from '@/lib/admin/tema';
 import { ERRS_ADMIN, llamarAdmin } from '@/lib/admin/api';
 import { PROVINCIAS } from '@/lib/admin/provincias';
+import { MATERIAS_NAP } from '@/lib/admin/nap';
+import FiltroChips from '@/components/admin/FiltroChips';
 
 const BALOO = 'var(--font-baloo), cursive';
 const QUICK = 'var(--font-quicksand), sans-serif';
@@ -19,6 +24,8 @@ const NUNITO = 'var(--font-nunito), sans-serif';
 
 // Rangos del selector (días). El backend acota igual (máximo 90).
 const RANGOS = [30, 60, 90] as const;
+// Grados del marco NAP (nivel primario completo, D-NAP1).
+const GRADOS = [1, 2, 3, 4, 5, 6, 7] as const;
 
 const h2: React.CSSProperties = { fontFamily: QUICK, fontWeight: 700, fontSize: 17, color: ADMIN.oscuro, margin: '0 0 12px' };
 const carta: React.CSSProperties = { background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 22, padding: 22 };
@@ -48,11 +55,31 @@ type FilaMateria = {
   dominioPromedio: number | null;
   muestraInsuficiente: boolean;
 };
-type Tema = { tema: string; alumnos: number; respuestas: number; precision: number };
+
+// Espejo de EjeDesempeno/TemaDesempeno de
+// supabase/functions/admin-observatorio/observatorio-logica.ts (la verdad
+// vive ahí; acá solo se replica la forma para tipar la respuesta del front).
+// `precision`, `dominioPromedio` y `dominados` en null = no se publica por
+// k-anonimato, NUNCA cero.
+type TemaDesempeno = {
+  temaId: string; tema: string;
+  alumnos: number; respuestas: number;
+  precision: number | null; dominioPromedio: number | null; dominados: number | null;
+  colegiosConTema: number; colegiosTotal: number;
+  muestraInsuficiente: boolean;
+};
+type EjeDesempeno = {
+  ejeId: string; eje: string;
+  alumnos: number;
+  precision: number | null; dominioPromedio: number | null; dominados: number | null;
+  colegiosConTema: number; colegiosTotal: number;
+  muestraInsuficiente: boolean;
+  temas: TemaDesempeno[];
+};
 
 type RespResumen = { rango_dias: number; generado_en: string; provincias: FilaProvincia[]; sinProvincia: { colegios: number } };
 type RespMaterias = { filas: FilaMateria[] };
-type RespTemas = { temas: Tema[]; aproximado: boolean };
+type RespDesempeno = { rango_dias: number; ejes: EjeDesempeno[] };
 
 // Materia más fuerte y más floja de una jurisdicción, sobre las filas con
 // muestra suficiente: si no hay al menos dos, no se muestran chips.
@@ -68,6 +95,88 @@ function fuerteYFloja(filas: FilaMateria[]): { fuerte: string | null; cuesta: st
   };
 }
 
+// Barra de dominio (0-100): mismo esquema de color que el resto del panel
+// (verde ≥70, ámbar ≥50, rojo cálido debajo).
+function BarraDominio({ valor }: { valor: number }) {
+  const color = valor >= 70 ? ADMIN.okCheck : valor >= 50 ? ADMIN.sol : ADMIN.danger;
+  return (
+    <div style={{ height: 8, background: ADMIN.divisor, borderRadius: 999, overflow: 'hidden', marginTop: 8 }}>
+      <div style={{ width: `${Math.min(100, Math.max(0, valor))}%`, height: '100%', background: color, borderRadius: 999 }} />
+    </div>
+  );
+}
+
+// Fila de eje o de tema del marco NAP (misma pinta; el tema va indentado). La
+// cobertura ("N de M colegios") va SIEMPRE al lado del número, nunca en un
+// tooltip (D-NAP5): sin ella, un tema que da un solo colegio se lee como dato
+// provincial. `alumnos === 0` es "sin datos todavía" (nadie lo practicó
+// todavía, no es un error); `muestraInsuficiente` con alumnos > 0 es la pill
+// gris de k-anonimato.
+function FilaEjeTema({
+  nombre, alumnos, respuestas, dominioPromedio, muestraInsuficiente,
+  colegiosConTema, colegiosTotal, indentado, expandible, abierto, onClick,
+}: {
+  nombre: string;
+  alumnos: number;
+  respuestas?: number;
+  dominioPromedio: number | null;
+  muestraInsuficiente: boolean;
+  colegiosConTema: number;
+  colegiosTotal: number;
+  indentado?: boolean;
+  expandible?: boolean;
+  abierto?: boolean;
+  onClick?: () => void;
+}) {
+  const sinDatos = alumnos === 0;
+  const contenido = (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+          {expandible && (
+            <span style={{ display: 'inline-block', transform: abierto ? 'rotate(90deg)' : 'none', transition: 'transform .15s ease', color: ADMIN.tinta2, fontSize: 11 }}>▸</span>
+          )}
+          <span style={{ fontFamily: QUICK, fontWeight: indentado ? 600 : 700, fontSize: indentado ? 14 : 15, color: ADMIN.ink }}>{nombre}</span>
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+          <span style={{ fontSize: 12, color: ADMIN.tinta2, fontWeight: 700, whiteSpace: 'nowrap' }}>
+            {colegiosConTema} de {colegiosTotal} {colegiosTotal === 1 ? 'colegio' : 'colegios'}
+          </span>
+          {sinDatos ? (
+            <span style={{ fontSize: 12, fontWeight: 700, color: ADMIN.tinta3 }}>sin datos todavía</span>
+          ) : muestraInsuficiente || dominioPromedio === null ? (
+            pillInsuf
+          ) : (
+            <span style={{ fontFamily: QUICK, fontWeight: 800, fontSize: indentado ? 16 : 20, color: ADMIN.oscuro }}>{dominioPromedio}%</span>
+          )}
+        </span>
+      </div>
+      {!sinDatos && !muestraInsuficiente && dominioPromedio !== null && <BarraDominio valor={dominioPromedio} />}
+      <div style={{ fontSize: 11.5, color: ADMIN.tinta2, fontWeight: 600, marginTop: 6 }}>
+        {alumnos} {alumnos === 1 ? 'alumno' : 'alumnos'}{typeof respuestas === 'number' ? ` · ${respuestas} respuestas` : ''}
+      </div>
+    </>
+  );
+
+  const paddingLeft = indentado ? 34 : 14;
+  if (expandible) {
+    return (
+      <button
+        onClick={onClick}
+        className="ad-flat"
+        style={{ display: 'block', width: '100%', textAlign: 'left', background: 'transparent', border: 'none', borderRadius: 12, padding: `12px 14px 12px ${paddingLeft}px`, cursor: 'pointer', font: 'inherit' }}
+      >
+        {contenido}
+      </button>
+    );
+  }
+  return (
+    <div style={{ padding: `10px 14px 10px ${paddingLeft}px` }}>
+      {contenido}
+    </div>
+  );
+}
+
 export default function Page() {
   const router = useRouter();
   const [rango, setRango] = useState<number>(30);
@@ -80,19 +189,24 @@ export default function Page() {
   // Fuerte/Cuesta por jurisdicción: una llamada de `materias` por provincia con
   // datos (son pocas y el agregado ya viene del server).
   const [porZona, setPorZona] = useState<Record<string, { fuerte: string | null; cuesta: string | null }>>({});
-  const [celda, setCelda] = useState<{ materia: string; grado: number } | null>(null);
-  const [temas, setTemas] = useState<Tema[] | null>(null);
-  const [cargandoTemas, setCargandoTemas] = useState(false);
+
+  // Desempeño contra el marco NAP: chips de materia + selector de grado,
+  // filtrados también por la provincia y el rango de arriba (misma llamada
+  // que el resto de la pantalla, acción propia).
+  const [materiaSel, setMateriaSel] = useState<string>(MATERIAS_NAP[0]);
+  const [gradoSel, setGradoSel] = useState<number>(1);
+  const [cargandoNap, setCargandoNap] = useState(true);
+  const [errorNap, setErrorNap] = useState('');
+  const [ejesNap, setEjesNap] = useState<EjeDesempeno[]>([]);
+  const [ejeAbierto, setEjeAbierto] = useState<string | null>(null);
 
   // Resumen por provincia + materias (la segunda depende también del select de
-  // provincia). Cambiar rango o provincia cierra el panel de temas.
+  // provincia).
   useEffect(() => {
     let vivo = true;
     (async () => {
       setCargando(true);
       setError('');
-      setCelda(null);
-      setTemas(null);
       const [rRes, rMat] = await Promise.all([
         llamarAdmin<RespResumen>('admin-observatorio', 'resumen', { rango_dias: rango }),
         llamarAdmin<RespMaterias>('admin-observatorio', 'materias', {
@@ -125,19 +239,32 @@ export default function Page() {
     return () => { vivo = false; };
   }, [rango, provSel]);
 
-  const verTemas = async (materia: string, grado: number) => {
-    setCelda({ materia, grado });
-    setTemas(null);
-    setCargandoTemas(true);
-    const r = await llamarAdmin<RespTemas>('admin-observatorio', 'temas', {
-      rango_dias: rango,
-      materia,
-      grado,
-      ...(provSel ? { provincia: provSel } : {}),
-    });
-    setTemas(r.ok ? (r.data.temas ?? []) : []);
-    setCargandoTemas(false);
-  };
+  // Desempeño NAP: acción propia, independiente del resumen/materias de
+  // arriba (así una falla en una no tapa a la otra). Catálogo vacío → `ejes`
+  // vuelve `[]`, que NO es un error (ver estado vacío más abajo).
+  useEffect(() => {
+    let vivo = true;
+    (async () => {
+      setCargandoNap(true);
+      setErrorNap('');
+      setEjeAbierto(null);
+      const r = await llamarAdmin<RespDesempeno>('admin-observatorio', 'desempeno', {
+        rango_dias: rango,
+        materia: materiaSel,
+        grado: gradoSel,
+        ...(provSel ? { provincia: provSel } : {}),
+      });
+      if (!vivo) return;
+      if (!r.ok) {
+        setErrorNap(ERRS_ADMIN[r.data.error ?? ''] ?? 'No se pudo cargar el desempeño por eje y tema. Probá de nuevo.');
+        setCargandoNap(false);
+        return;
+      }
+      setEjesNap(r.data.ejes ?? []);
+      setCargandoNap(false);
+    })();
+    return () => { vivo = false; };
+  }, [rango, provSel, materiaSel, gradoSel]);
 
   const vacioGlobal = !cargando && !error && provincias.length === 0 && materias.length === 0 && sinProvincia === 0;
 
@@ -207,174 +334,233 @@ export default function Page() {
       )}
 
       {!cargando && !error && !vacioGlobal && (
-        <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 18, alignItems: 'start' }}>
-            {/* ── Aprendizaje por zona ──────────────────────────────────── */}
-            <div style={carta}>
-              <h2 style={h2}>Aprendizaje por zona</h2>
-              {provincias.length === 0 ? (
-                <p style={{ fontFamily: NUNITO, fontSize: 14.5, color: ADMIN.tinta2, fontWeight: 600, margin: 0 }}>
-                  Todavía no hay colegios con provincia asignada.
-                </p>
-              ) : (
-                provincias.map((f, i) => {
-                  const zona = porZona[f.provincia];
-                  return (
-                    <div key={f.provincia} style={{ padding: '13px 0', borderBottom: i === provincias.length - 1 ? 'none' : `1px solid ${ADMIN.divisor}` }}>
-                      <div style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 15, color: ADMIN.ink }}>
-                        {f.provincia}{' '}
-                        <span style={{ fontSize: 12, color: ADMIN.tinta2, fontWeight: 700 }}>
-                          · {f.colegios} {f.colegios === 1 ? 'colegio' : 'colegios'} · {f.alumnosActivos} {f.alumnosActivos === 1 ? 'alumno activo' : 'alumnos activos'} · {f.sesiones} sesiones
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginTop: 7 }}>
-                        {f.muestraInsuficiente ? (
-                          pillInsuf
-                        ) : (
-                          <>
-                            {f.precision !== null && (
-                              <span style={{ background: ADMIN.burbuja, color: ADMIN.oscuro, borderRadius: 999, padding: '4px 12px', fontSize: 12, fontWeight: 800 }}>
-                                Precisión: {f.precision}%
-                              </span>
-                            )}
-                            {zona?.fuerte && (
-                              <span style={{ background: ADMIN.okFondo, color: ADMIN.okTexto, borderRadius: 999, padding: '4px 12px', fontSize: 12, fontWeight: 800 }}>
-                                Fuerte: {zona.fuerte}
-                              </span>
-                            )}
-                            {zona?.cuesta && (
-                              <span style={{ background: ADMIN.dangerFondo, color: ADMIN.danger, borderRadius: 999, padding: '4px 12px', fontSize: 12, fontWeight: 800 }}>
-                                Cuesta: {zona.cuesta}
-                              </span>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-              {sinProvincia > 0 && (
-                <div style={{ marginTop: 12, fontSize: 13, color: ADMIN.tinta2, fontFamily: QUICK, fontWeight: 700 }}>
-                  {sinProvincia === 1 ? '1 colegio sin provincia asignada' : `${sinProvincia} colegios sin provincia asignada`} —{' '}
-                  <button
-                    onClick={() => router.push('/admin/colegios')}
-                    style={{ background: 'none', border: 'none', padding: 0, color: ADMIN.base, fontFamily: QUICK, fontWeight: 800, fontSize: 13, cursor: 'pointer', textDecoration: 'underline' }}
-                  >
-                    asignala desde Colegios
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* ── Tendencias por tema (materia × grado) ─────────────────── */}
-            <div style={carta}>
-              <h2 style={{ ...h2, margin: '0 0 4px' }}>Tendencias por tema</h2>
-              <p style={{ fontFamily: NUNITO, fontSize: 13, color: ADMIN.tinta2, fontWeight: 600, margin: '0 0 16px' }}>
-                Dominio promedio por grado{provSel ? ` en ${provSel}` : ''}. Tocá una barra para ver los temas que más cuestan.
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 18, alignItems: 'start' }}>
+          {/* ── Aprendizaje por zona ──────────────────────────────────── */}
+          <div style={carta}>
+            <h2 style={h2}>Aprendizaje por zona</h2>
+            {provincias.length === 0 ? (
+              <p style={{ fontFamily: NUNITO, fontSize: 14.5, color: ADMIN.tinta2, fontWeight: 600, margin: 0 }}>
+                Todavía no hay colegios con provincia asignada.
               </p>
-              {porMateria.size === 0 ? (
-                <p style={{ fontFamily: NUNITO, fontSize: 14.5, color: ADMIN.tinta2, fontWeight: 600, margin: 0 }}>
-                  Sin actividad en este rango{provSel ? ` en ${provSel}` : ''}.
-                </p>
-              ) : (
-                [...porMateria.entries()].map(([materia, filas]) => {
-                  const ordenadas = [...filas].sort((a, b) => a.grado - b.grado);
-                  const valores = ordenadas.map((f) => f.dominioPromedio ?? f.precision ?? 0);
-                  const max = Math.max(1, ...valores);
-                  const mejor = Math.max(...valores);
-                  // Con k-anonimato todos los valores llegan en null: dibujar
-                  // barras planas mentiría ("cero dominio"), así que se dice.
-                  const sinMuestra = ordenadas.every((f) => f.muestraInsuficiente);
-                  if (sinMuestra) {
-                    return (
-                      <div key={materia} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
-                        <span style={{ fontSize: 13.5, fontWeight: 700, color: ADMIN.ink }}>
-                          {materia}{' '}
-                          <span style={{ fontSize: 12, color: ADMIN.tinta2 }}>
-                            · {ordenadas.map((f) => `${f.grado}°`).join(' · ')}
-                          </span>
-                        </span>
-                        {pillInsuf}
-                      </div>
-                    );
-                  }
-                  return (
-                    <div key={materia} style={{ marginBottom: 14 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13.5, fontWeight: 700, color: ADMIN.ink, marginBottom: 6 }}>
-                        <span>{materia}</span>
-                        <span style={{ color: ADMIN.oscuro }}>{Math.round(mejor)}%</span>
-                      </div>
-                      <div style={{ display: 'flex', gap: 5, alignItems: 'flex-end', height: 44 }}>
-                        {ordenadas.map((f, i) => {
-                          const valor = valores[i];
-                          const activa = celda?.materia === f.materia && celda?.grado === f.grado;
-                          return (
-                            <button
-                              key={`${f.materia}|${f.grado}`}
-                              onClick={() => verTemas(f.materia, f.grado)}
-                              title={`${f.grado}° · ${f.alumnos} alumnos · ${f.sesiones} sesiones`}
-                              aria-label={`${materia}, ${f.grado}° grado`}
-                              style={{
-                                flex: 1, height: `${Math.max(8, Math.round((valor / max) * 100))}%`,
-                                background: activa || valor === mejor ? ADMIN.base : ADMIN.borde,
-                                border: 'none', borderRadius: '6px 6px 3px 3px', cursor: 'pointer', padding: 0,
-                              }}
-                            />
-                          );
-                        })}
-                      </div>
-                      <div style={{ display: 'flex', gap: 5, marginTop: 4 }}>
-                        {ordenadas.map((f) => (
-                          <span key={`lbl-${f.materia}|${f.grado}`} style={{ flex: 1, textAlign: 'center', fontSize: 11.5, color: ADMIN.tinta2, fontWeight: 700 }}>
-                            {f.grado}°
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-
-          {/* ── Temas que más cuestan (celda seleccionada) ────────────────── */}
-          {celda && (
-            <div style={{ ...carta, marginTop: 18, maxWidth: 640 }}>
-              <h2 style={{ ...h2, margin: '0 0 4px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                Temas que más cuestan — {celda.materia} · {celda.grado}°{provSel ? ` · ${provSel}` : ''}
-                <span style={{ background: ADMIN.warnFondo, color: ADMIN.warnTexto, border: `1px solid ${ADMIN.warnBorde}`, borderRadius: 999, padding: '3px 10px', fontWeight: 800, fontSize: 11.5 }}>
-                  aproximado
-                </span>
-              </h2>
-              <p style={{ fontFamily: NUNITO, fontSize: 13, color: ADMIN.tinta2, fontWeight: 600, margin: '0 0 12px' }}>
-                Los nombres de tema los escribe cada docente; se agrupan por texto normalizado.
-              </p>
-              {cargandoTemas ? (
-                <div style={{ color: ADMIN.tinta2, fontFamily: QUICK, fontWeight: 700, fontSize: 14 }}>Cargando…</div>
-              ) : !temas || temas.length === 0 ? (
-                <div style={{ fontFamily: NUNITO, color: ADMIN.tinta2, fontWeight: 600, fontSize: 14 }}>
-                  Ningún tema junta todavía muestra suficiente (mínimo 20 respuestas y 5 alumnos).
-                </div>
-              ) : (
-                temas.map((t, i) => (
-                  <div key={t.tema} style={{ marginBottom: i === temas.length - 1 ? 0 : 14 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13.5, fontWeight: 700, color: ADMIN.ink, marginBottom: 6 }}>
-                      <span>{t.tema}</span>
-                      <span style={{ color: ADMIN.oscuro }}>
-                        {t.precision}% <span style={{ color: ADMIN.tinta2, fontWeight: 600 }}>· {t.alumnos} alumnos · {t.respuestas} respuestas</span>
+            ) : (
+              provincias.map((f, i) => {
+                const zona = porZona[f.provincia];
+                return (
+                  <div key={f.provincia} style={{ padding: '13px 0', borderBottom: i === provincias.length - 1 ? 'none' : `1px solid ${ADMIN.divisor}` }}>
+                    <div style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 15, color: ADMIN.ink }}>
+                      {f.provincia}{' '}
+                      <span style={{ fontSize: 12, color: ADMIN.tinta2, fontWeight: 700 }}>
+                        · {f.colegios} {f.colegios === 1 ? 'colegio' : 'colegios'} · {f.alumnosActivos} {f.alumnosActivos === 1 ? 'alumno activo' : 'alumnos activos'} · {f.sesiones} sesiones
                       </span>
                     </div>
-                    <div style={{ height: 10, background: ADMIN.divisor, borderRadius: 999, overflow: 'hidden' }}>
-                      <div style={{ width: `${Math.min(100, t.precision)}%`, height: '100%', background: t.precision >= 70 ? ADMIN.okCheck : t.precision >= 50 ? ADMIN.sol : ADMIN.danger, borderRadius: 999 }} />
+                    <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginTop: 7 }}>
+                      {f.muestraInsuficiente ? (
+                        pillInsuf
+                      ) : (
+                        <>
+                          {f.precision !== null && (
+                            <span style={{ background: ADMIN.burbuja, color: ADMIN.oscuro, borderRadius: 999, padding: '4px 12px', fontSize: 12, fontWeight: 800 }}>
+                              Precisión: {f.precision}%
+                            </span>
+                          )}
+                          {zona?.fuerte && (
+                            <span style={{ background: ADMIN.okFondo, color: ADMIN.okTexto, borderRadius: 999, padding: '4px 12px', fontSize: 12, fontWeight: 800 }}>
+                              Fuerte: {zona.fuerte}
+                            </span>
+                          )}
+                          {zona?.cuesta && (
+                            <span style={{ background: ADMIN.dangerFondo, color: ADMIN.danger, borderRadius: 999, padding: '4px 12px', fontSize: 12, fontWeight: 800 }}>
+                              Cuesta: {zona.cuesta}
+                            </span>
+                          )}
+                        </>
+                      )}
                     </div>
                   </div>
-                ))
-              )}
-            </div>
-          )}
-        </>
+                );
+              })
+            )}
+            {sinProvincia > 0 && (
+              <div style={{ marginTop: 12, fontSize: 13, color: ADMIN.tinta2, fontFamily: QUICK, fontWeight: 700 }}>
+                {sinProvincia === 1 ? '1 colegio sin provincia asignada' : `${sinProvincia} colegios sin provincia asignada`} —{' '}
+                <button
+                  onClick={() => router.push('/admin/colegios')}
+                  style={{ background: 'none', border: 'none', padding: 0, color: ADMIN.base, fontFamily: QUICK, fontWeight: 800, fontSize: 13, cursor: 'pointer', textDecoration: 'underline' }}
+                >
+                  asignala desde Colegios
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* ── Tendencias por tema (materia × grado) ─────────────────── */}
+          <div style={carta}>
+            <h2 style={{ ...h2, margin: '0 0 4px' }}>Tendencias por tema</h2>
+            <p style={{ fontFamily: NUNITO, fontSize: 13, color: ADMIN.tinta2, fontWeight: 600, margin: '0 0 16px' }}>
+              Dominio promedio por grado{provSel ? ` en ${provSel}` : ''}.
+            </p>
+            {porMateria.size === 0 ? (
+              <p style={{ fontFamily: NUNITO, fontSize: 14.5, color: ADMIN.tinta2, fontWeight: 600, margin: 0 }}>
+                Sin actividad en este rango{provSel ? ` en ${provSel}` : ''}.
+              </p>
+            ) : (
+              [...porMateria.entries()].map(([materia, filas]) => {
+                const ordenadas = [...filas].sort((a, b) => a.grado - b.grado);
+                const valores = ordenadas.map((f) => f.dominioPromedio ?? f.precision ?? 0);
+                const max = Math.max(1, ...valores);
+                const mejor = Math.max(...valores);
+                // Con k-anonimato todos los valores llegan en null: dibujar
+                // barras planas mentiría ("cero dominio"), así que se dice.
+                const sinMuestra = ordenadas.every((f) => f.muestraInsuficiente);
+                if (sinMuestra) {
+                  return (
+                    <div key={materia} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
+                      <span style={{ fontSize: 13.5, fontWeight: 700, color: ADMIN.ink }}>
+                        {materia}{' '}
+                        <span style={{ fontSize: 12, color: ADMIN.tinta2 }}>
+                          · {ordenadas.map((f) => `${f.grado}°`).join(' · ')}
+                        </span>
+                      </span>
+                      {pillInsuf}
+                    </div>
+                  );
+                }
+                return (
+                  <div key={materia} style={{ marginBottom: 14 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13.5, fontWeight: 700, color: ADMIN.ink, marginBottom: 6 }}>
+                      <span>{materia}</span>
+                      <span style={{ color: ADMIN.oscuro }}>{Math.round(mejor)}%</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 5, alignItems: 'flex-end', height: 44 }}>
+                      {ordenadas.map((f, i) => {
+                        const valor = valores[i];
+                        return (
+                          <div
+                            key={`${f.materia}|${f.grado}`}
+                            title={`${f.grado}° · ${f.alumnos} alumnos · ${f.sesiones} sesiones`}
+                            style={{
+                              flex: 1, height: `${Math.max(8, Math.round((valor / max) * 100))}%`,
+                              background: valor === mejor ? ADMIN.base : ADMIN.borde,
+                              borderRadius: '6px 6px 3px 3px',
+                            }}
+                          />
+                        );
+                      })}
+                    </div>
+                    <div style={{ display: 'flex', gap: 5, marginTop: 4 }}>
+                      {ordenadas.map((f) => (
+                        <span key={`lbl-${f.materia}|${f.grado}`} style={{ flex: 1, textAlign: 'center', fontSize: 11.5, color: ADMIN.tinta2, fontWeight: 700 }}>
+                          {f.grado}°
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
       )}
+
+      {/* ── Desempeño por eje y tema (marco NAP) ──────────────────────── */}
+      <div style={{ ...carta, marginTop: 18 }}>
+        <h2 style={{ ...h2, margin: '0 0 4px' }}>Desempeño por eje y tema (NAP)</h2>
+        <p style={{ fontFamily: NUNITO, fontSize: 13, color: ADMIN.tinta2, fontWeight: 600, margin: '0 0 16px' }}>
+          Núcleos de Aprendizajes Prioritarios: la misma vara para todos los colegios, sin importar cómo cada docente nombró sus temas.
+        </p>
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'flex-end', marginBottom: 18 }}>
+          <div>
+            <label style={ETIQUETA}>Materia</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              <FiltroChips
+                opciones={MATERIAS_NAP.map((m) => ({ key: m, label: m }))}
+                valor={materiaSel}
+                onCambio={setMateriaSel}
+              />
+            </div>
+          </div>
+          <div>
+            <label style={ETIQUETA}>Grado</label>
+            <select
+              value={gradoSel}
+              onChange={(e) => setGradoSel(Number(e.target.value))}
+              style={{ ...CAMPO, width: 'auto', minWidth: 120, cursor: 'pointer' }}
+            >
+              {GRADOS.map((g) => (
+                <option key={g} value={g}>{g}° grado</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {cargandoNap && (
+          <div style={{ color: ADMIN.tinta2, fontFamily: QUICK, fontWeight: 700 }}>Cargando…</div>
+        )}
+
+        {!cargandoNap && errorNap && (
+          <div style={{ background: ADMIN.warnFondo, border: `2px solid ${ADMIN.warnBorde}`, borderRadius: 16, padding: '14px 18px', color: ADMIN.warnTexto, fontWeight: 700, fontSize: 14 }}>
+            {errorNap}
+          </div>
+        )}
+
+        {/* Estado vacío OBLIGATORIO (no un error genérico): el catálogo NAP
+            todavía no llegó a esta materia y grado — muy distinto de "algo se
+            rompió", y quien lo lee no puede distinguirlas si el copy no lo dice. */}
+        {!cargandoNap && !errorNap && ejesNap.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+            <div style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 16, color: ADMIN.ink }}>
+              Todavía no hay catálogo NAP cargado para {materiaSel} · {gradoSel}°
+            </div>
+            <div style={{ fontSize: 13.5, color: ADMIN.tinta2, fontWeight: 600, marginTop: 6, maxWidth: 440, marginLeft: 'auto', marginRight: 'auto' }}>
+              Los núcleos de aprendizaje se transcriben de las resoluciones oficiales a medida que están disponibles. No es un error: esta materia y grado todavía no tienen ejes cargados.
+            </div>
+          </div>
+        )}
+
+        {!cargandoNap && !errorNap && ejesNap.length > 0 && (
+          <div>
+            {ejesNap.map((eje, i) => (
+              <div key={eje.ejeId} style={{ borderBottom: i === ejesNap.length - 1 ? 'none' : `1px solid ${ADMIN.divisor}` }}>
+                <FilaEjeTema
+                  nombre={eje.eje}
+                  alumnos={eje.alumnos}
+                  dominioPromedio={eje.dominioPromedio}
+                  muestraInsuficiente={eje.muestraInsuficiente}
+                  colegiosConTema={eje.colegiosConTema}
+                  colegiosTotal={eje.colegiosTotal}
+                  expandible
+                  abierto={ejeAbierto === eje.ejeId}
+                  onClick={() => setEjeAbierto(ejeAbierto === eje.ejeId ? null : eje.ejeId)}
+                />
+                {ejeAbierto === eje.ejeId && (
+                  <div style={{ paddingBottom: 10 }}>
+                    {eje.temas.length === 0 ? (
+                      <div style={{ padding: '4px 14px 10px 34px', fontSize: 13, color: ADMIN.tinta2, fontWeight: 600 }}>
+                        Este eje todavía no tiene temas cargados para {gradoSel}°.
+                      </div>
+                    ) : (
+                      eje.temas.map((t) => (
+                        <FilaEjeTema
+                          key={t.temaId}
+                          nombre={t.tema}
+                          alumnos={t.alumnos}
+                          respuestas={t.respuestas}
+                          dominioPromedio={t.dominioPromedio}
+                          muestraInsuficiente={t.muestraInsuficiente}
+                          colegiosConTema={t.colegiosConTema}
+                          colegiosTotal={t.colegiosTotal}
+                          indentado
+                        />
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
