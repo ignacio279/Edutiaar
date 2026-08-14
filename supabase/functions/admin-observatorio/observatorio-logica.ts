@@ -54,6 +54,28 @@ export type FilaMateria = {
 };
 export type TemaAgregado = { tema: string; alumnos: number; respuestas: number; precision: number };
 
+// Tipos para desempenoPorEje (marco NAP).
+export type NodoNap = { id: string; nap_tema_id?: string | null };
+export type TemaCat = { id: string; eje_id: string; nombre: string; grado: number; orden: number };
+export type EjeCat = { id: string; materia: string; nombre: string; orden: number };
+export type AlumnoNodoNap = { alumno_id: string; nodo_id: string; puntaje?: number | null; estado?: string | null };
+
+export type TemaDesempeno = {
+  temaId: string; tema: string;
+  alumnos: number; respuestas: number;
+  precision: number | null; dominioPromedio: number | null; dominados: number | null;
+  colegiosConTema: number; colegiosTotal: number;
+  muestraInsuficiente: boolean;
+};
+export type EjeDesempeno = {
+  ejeId: string; eje: string;
+  alumnos: number;
+  precision: number | null; dominioPromedio: number | null; dominados: number | null;
+  colegiosConTema: number; colegiosTotal: number;
+  muestraInsuficiente: boolean;
+  temas: TemaDesempeno[];
+};
+
 // Nombre de tema comparable entre colegios (best-effort, D-OA4): trim +
 // lowercase + colapsar espacios múltiples. Los acentos quedan como están (la
 // docente los escribe igual en su idioma; normalizarlos "arreglaría" de más).
@@ -324,4 +346,137 @@ export function topTemasQueCuestan(
     (a, b) => a.precision - b.precision || b.respuestas - a.respuestas || a.tema.localeCompare(b.tema, 'es'),
   );
   return { temas: lista.slice(0, TOP_TEMAS), aproximado: true };
+}
+
+// Desempeño contra el marco NAP (D-NAP1..D-NAP8). A diferencia de
+// agregarPorMateria, las filas nacen del CATÁLOGO y no de las sesiones: un tema
+// del marco que nadie practicó aparece igual, en cero — que un tema no se esté
+// enseñando es información. Los nodos con nap_tema_id null quedan afuera de
+// todo (así lo que está fuera del marco desaparece sin regla especial).
+export function desempenoPorEje(
+  datos: {
+    sesiones: SesionObs[];
+    alumnoNodo: AlumnoNodoNap[];
+    nodos: NodoNap[];
+    ejes: EjeCat[];
+    temas: TemaCat[];
+    escuelaDeAlumno: Map<string, string | null | undefined>;
+    provinciaDeAlumno: Map<string, string | null | undefined>;
+  },
+  filtro: { materia: string; grado: number; provincia?: string },
+  k: number = K_ANONIMATO,
+): EjeDesempeno[] {
+  const { sesiones, alumnoNodo, nodos, ejes, temas, escuelaDeAlumno, provinciaDeAlumno } = datos;
+  const pasaFiltro = (alumnoId: string) =>
+    !filtro.provincia || provinciaDeAlumno.get(alumnoId) === filtro.provincia;
+
+  const ejesMateria = ejes.filter(
+    (e) => normalizarTema(e.materia) === normalizarTema(filtro.materia),
+  );
+  if (ejesMateria.length === 0) return [];
+  const ejeIds = new Set(ejesMateria.map((e) => e.id));
+  const temasFiltro = temas.filter((t) => t.grado === filtro.grado && ejeIds.has(t.eje_id));
+  if (temasFiltro.length === 0) return [];
+
+  // nodo → tema. Un nodo sin nap_tema_id no entra al mapa y por lo tanto no
+  // existe para el resto de la función.
+  const temaDeNodo = new Map<string, string>();
+  for (const n of nodos) if (n.nap_tema_id) temaDeNodo.set(n.id, n.nap_tema_id);
+
+  // Universo: colegios con actividad en el filtro (denominador de la cobertura).
+  const colegiosUniverso = new Set<string>();
+  type Acum = { alumnos: Set<string>; escuelas: Set<string>; aciertos: number; total: number; puntajes: number[]; dominados: Set<string> };
+  const nuevo = (): Acum => ({ alumnos: new Set(), escuelas: new Set(), aciertos: 0, total: 0, puntajes: [], dominados: new Set() });
+  const porTema = new Map<string, Acum>();
+
+  for (const s of sesiones) {
+    if (!s.nodo_id || !pasaFiltro(s.alumno_id)) continue;
+    const temaId = temaDeNodo.get(s.nodo_id);
+    const escuela = escuelaDeAlumno.get(s.alumno_id);
+    if (escuela) colegiosUniverso.add(escuela);
+    if (!temaId) continue;
+    let a = porTema.get(temaId);
+    if (!a) { a = nuevo(); porTema.set(temaId, a); }
+    a.alumnos.add(s.alumno_id);
+    if (escuela) a.escuelas.add(escuela);
+    a.aciertos += num(s.aciertos);
+    a.total += num(s.total);
+  }
+
+  // Dominio y estado: SOLO sobre temas que ya tienen sesiones (D-NAP5: un nodo
+  // publicado y nunca practicado no cuenta como dar el tema).
+  for (const an of alumnoNodo) {
+    if (!pasaFiltro(an.alumno_id)) continue;
+    const temaId = temaDeNodo.get(an.nodo_id);
+    if (!temaId) continue;
+    const a = porTema.get(temaId);
+    if (!a) continue;
+    if (typeof an.puntaje === 'number' && Number.isFinite(an.puntaje)) a.puntajes.push(an.puntaje);
+    if (an.estado === 'dominado') a.dominados.add(an.alumno_id);
+  }
+
+  const colegiosTotal = colegiosUniverso.size;
+  const promedio = (xs: number[]) =>
+    xs.length ? Math.round(xs.reduce((s, x) => s + x, 0) / xs.length) : null;
+
+  const filasDeEje = (ejeId: string): TemaDesempeno[] =>
+    temasFiltro
+      .filter((t) => t.eje_id === ejeId)
+      .sort((x, y) => x.orden - y.orden || x.nombre.localeCompare(y.nombre, 'es'))
+      .map((t) => {
+        const a = porTema.get(t.id) ?? nuevo();
+        const insuficiente = a.alumnos.size < k;
+        return {
+          temaId: t.id,
+          tema: t.nombre,
+          alumnos: a.alumnos.size,
+          respuestas: a.total,
+          precision: insuficiente ? null : pct(a.aciertos, a.total),
+          dominioPromedio: insuficiente ? null : promedio(a.puntajes),
+          dominados: insuficiente ? null : Math.round((a.dominados.size / a.alumnos.size) * 100),
+          colegiosConTema: a.escuelas.size,
+          colegiosTotal,
+          muestraInsuficiente: insuficiente,
+        };
+      });
+
+  // El eje pondera por alumnos con dato, SOLO sobre los temas que pasaron k
+  // (un tema suprimido no puede mover el titular).
+  const ponderar = (ts: TemaDesempeno[], campo: 'precision' | 'dominioPromedio' | 'dominados') => {
+    let peso = 0, suma = 0;
+    for (const t of ts) {
+      const v = t[campo];
+      if (v === null) continue;
+      suma += v * t.alumnos;
+      peso += t.alumnos;
+    }
+    return peso ? Math.round(suma / peso) : null;
+  };
+
+  return ejesMateria
+    .sort((x, y) => x.orden - y.orden || x.nombre.localeCompare(y.nombre, 'es'))
+    .map((e) => {
+      const ts = filasDeEje(e.id);
+      const publicables = ts.filter((t) => !t.muestraInsuficiente);
+      const alumnos = new Set<string>();
+      for (const t of temasFiltro.filter((t) => t.eje_id === e.id)) {
+        for (const al of porTema.get(t.id)?.alumnos ?? []) alumnos.add(al);
+      }
+      const escuelas = new Set<string>();
+      for (const t of temasFiltro.filter((t) => t.eje_id === e.id)) {
+        for (const es of porTema.get(t.id)?.escuelas ?? []) escuelas.add(es);
+      }
+      return {
+        ejeId: e.id,
+        eje: e.nombre,
+        alumnos: alumnos.size,
+        precision: ponderar(publicables, 'precision'),
+        dominioPromedio: ponderar(publicables, 'dominioPromedio'),
+        dominados: ponderar(publicables, 'dominados'),
+        colegiosConTema: escuelas.size,
+        colegiosTotal,
+        muestraInsuficiente: publicables.length === 0,
+        temas: ts,
+      };
+    });
 }
