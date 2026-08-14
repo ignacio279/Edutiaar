@@ -39,3 +39,33 @@ test('el espejo del front es idéntico al del server', () => {
   assert.deepEqual(ESPEJO, CATALOGO_NAP);
   assert.deepEqual([...ESPEJO_MATERIAS], [...MATERIAS_NAP]);
 });
+
+test('todo tema tiene texto oficial, fuente y etiqueta corta', () => {
+  for (const eje of CATALOGO_NAP) {
+    for (const t of eje.temas) {
+      assert.ok(t.textoOficial.trim().length > 20, `texto oficial vacío o muy corto: ${t.nombre}`);
+      assert.ok(/^https?:\/\//.test(t.fuente), `fuente sin URL: ${t.nombre}`);
+      assert.ok(t.nombre.split(/\s+/).length <= 6, `etiqueta demasiado larga: ${t.nombre}`);
+      assert.ok(t.nombre !== t.textoOficial, `la etiqueta no puede ser el texto oficial: ${t.nombre}`);
+    }
+  }
+});
+
+test('ningún texto oficial quedó con guiones de corte del PDF', () => {
+  for (const eje of CATALOGO_NAP) {
+    for (const t of eje.temas) {
+      assert.equal(/[a-záéíóúñ]-\s/.test(t.textoOficial), false,
+        `guion de corte sin unir en: ${t.nombre} → ${t.textoOficial.slice(0, 80)}`);
+      assert.equal(/\n/.test(t.textoOficial), false, `salto de línea sin colapsar en: ${t.nombre}`);
+    }
+  }
+});
+
+test('el primer ciclo cubre los grados 1 a 3 en las cuatro materias', () => {
+  for (const materia of MATERIAS_NAP) {
+    for (const grado of [1, 2, 3]) {
+      const hay = CATALOGO_NAP.some((e) => e.materia === materia && e.temas.some((t) => t.grado === grado));
+      assert.ok(hay, `falta ${materia} en ${grado}°`);
+    }
+  }
+});
