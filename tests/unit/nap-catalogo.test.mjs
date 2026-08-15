@@ -61,9 +61,9 @@ test('ningún texto oficial quedó con guiones de corte del PDF', () => {
   }
 });
 
-test('el primer ciclo cubre los grados 1 a 3 en las cuatro materias', () => {
+test('el catálogo cubre los grados 1 a 7 en las cuatro materias', () => {
   for (const materia of MATERIAS_NAP) {
-    for (const grado of [1, 2, 3]) {
+    for (let grado = 1; grado <= 7; grado++) {
       const hay = CATALOGO_NAP.some((e) => e.materia === materia && e.temas.some((t) => t.grado === grado));
       assert.ok(hay, `falta ${materia} en ${grado}°`);
     }
