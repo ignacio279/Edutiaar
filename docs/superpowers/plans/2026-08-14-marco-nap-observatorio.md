@@ -1018,7 +1018,11 @@ git commit -m "feat(nap): desempeño por eje y tema en el observatorio"
 
 - [ ] **Step 1: Extender el seed**
 
-Agregar al colegio demo alumnos suficientes por grado para pasar `k=5` con margen (8 por grado), y sembrar práctica en **Lengua y Matemática** — hoy Matemática tiene 40 nodos y cero sesiones, por eso no aparece en ningún agregado. Repartir la práctica entre varios temas para que haya filas con datos y filas en cero, que es como se va a ver en la realidad.
+Agregar al colegio demo alumnos suficientes por grado para pasar `k=5` con margen (8 por grado), y sembrar práctica en **Lengua y Matemática**. Repartir la práctica entre varios temas para que haya filas con datos y filas en cero, que es como se va a ver en la realidad.
+
+**El contenido de Matemática hay que CREARLO, no solo sembrarle práctica.** El smoke de la Task 5 borró la materia "Matematicas" preexistente y el cascade se llevó su programa de 4° con todos sus nodos (43 → 26 nodos; ningún progreso de alumno se perdió, esos nodos tenían cero práctica). Ese contenido nunca estuvo en un seeder: se había cargado a mano. Así que esta tarea lo repone **como seed versionado**, que es mejor de lo que había: reproducible, y clasificado contra el marco NAP al crearse.
+
+**Regla de datos de prueba, que este incidente dejó clara:** `dividir-nodos` hace get-or-create de la materia POR NOMBRE. Cualquier prueba que publique una materia debe usar un nombre con marca propia (`QA-…`), nunca uno real, y limpiar por id creado, nunca por nombre.
 
 **Los umbrales de anonimato no se tocan.** Se arregla el dato, no la vara.
 
