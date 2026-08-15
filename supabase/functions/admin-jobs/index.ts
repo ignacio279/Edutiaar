@@ -10,11 +10,25 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { cors, json } from '../_shared/cors.ts';
 import { verificarAdmin, type AdminCtx } from '../_shared/admin.ts';
 import { registrarAuditoria } from '../_shared/auditoria.ts';
+import { registrarUso } from '../_shared/uso.ts';
+import { runToolLoop, type LlamarClaude } from '../_shared/loop.ts';
 import { costosPorMes, evaluarAlertas, type AlertaAdmin, type EscuelaAlerta } from '../_shared/alertas-logica.ts';
 import { planSnapshotAlertas } from './nocturno-logica.ts';
+// Task 6 (backfill NAP): reusa TAL CUAL la tool y la validación de la
+// publicación (dividir-nodos/dividir.ts) — ver nap-backfill-logica.ts para el
+// porqué de no escribir un prompt ni una validación paralelos.
+import { TOOL_GUARDAR_DIVISION, type TemaCatalogo } from '../dividir-nodos/dividir.ts';
+import {
+  agruparPorPrograma, construirPromptBackfill, emparejarResultado, esMateriaDeTest,
+} from './nap-backfill-logica.ts';
 
 // Actor sentinel del cron en la auditoría (no hay admin humano detrás).
 const CRON_ACTOR_ID = '00000000-0000-0000-0000-000000000000';
+
+// Mismo modelo que dividir-nodos (Regla 4: costo/calidad OK para clasificar).
+const MODELO_NAP = 'claude-sonnet-4-6';
+// Un puñado de nodos por programa (no un programa entero de cero): alcanza de sobra.
+const MAX_TOKENS_NAP = 4096;
 
 // Vence los pases de transferencia que nadie confirmó a tiempo (0023: el
 // plazo sale de plataforma_config.transferencia_dias_expiracion al crearlos).
@@ -50,7 +64,8 @@ Deno.serve(async (req) => {
     }
     const sb = ctx?.sb ?? createClient(url, srKey);
 
-    const { accion } = await req.json();
+    const body = await req.json();
+    const { accion } = body;
     switch (accion) {
       // Corrida nocturna (o "Recalcular ahora"): junta los MISMOS insumos que
       // juntaba admin-crm alertas_listar cuando calculaba on-demand, corre la
@@ -192,6 +207,210 @@ Deno.serve(async (req) => {
       }
 
       // accion 'luna_nocturno': job de alertas de LUNA (pendiente del ROADMAP) — se cuelga acá.
+
+      // Backfill del mapeo NAP (Task 6): clasifica contra el marco curricular
+      // los nodos que quedaron publicados ANTES de que dividir-nodos empezara
+      // a proponer el tema al publicar (Task 5). Corre acá — no como script
+      // local — porque la API key de Claude vive SOLO del lado del servidor
+      // (Regla 1): sacarla de Supabase para correr un script la habría puesto
+      // en una máquina donde no tiene por qué estar.
+      //
+      // PROCESA UN SOLO PROGRAMA POR LLAMADA (default `limite=1`, tope 5): el
+      // generador-ejercicios ya chocó con 504 IDLE_TIMEOUT (150s) y 546
+      // WORKER_RESOURCE_LIMIT tratando de hacer trabajo multi-nodo en una sola
+      // invocación (ver CLAUDE.md) — acá el riesgo es el mismo con 7
+      // programas en una sola llamada a Sonnet cada uno. El caller (humano o
+      // script) itera con `offset` creciente hasta que `programas_restantes`
+      // llegue a 0. `dry_run: true` hace TODO lo mismo (incluida la llamada
+      // real a Claude, para poder mostrar la propuesta) pero no escribe nada
+      // — por eso también respeta `offset`, ya que nada se "consume" solo.
+      case 'nap_backfill': {
+        const dryRun = Boolean(body.dry_run);
+        const limite = Math.max(1, Math.min(5, Number(body.limite ?? 1) || 1));
+        const offset = Math.max(0, Number(body.offset ?? 0) || 0);
+        const key = Deno.env.get('ANTHROPIC_API_KEY');
+        if (!key) return json({ error: 'falta_anthropic_api_key' }, 500);
+
+        // Único filtro de selección (Regla de idempotencia): correrlo de
+        // nuevo no reclasifica lo ya hecho.
+        const { data: nodosRaw, error: nErr } = await sb
+          .from('nodo')
+          .select('id, nombre, descripcion, orden, programa_id, programa:programa_id(grado, materia:materia_id(nombre))')
+          .is('nap_tema_id', null)
+          .eq('nap_revisado', false)
+          .order('orden', { ascending: true });
+        if (nErr) throw nErr;
+
+        type NodoFila = {
+          id: string; nombre: string; descripcion: string | null; orden: number; programa_id: string;
+          programa: { grado: number; materia: { nombre: string } };
+        };
+        const todos = (nodosRaw ?? []) as unknown as NodoFila[];
+        const reales = todos.filter((n) => !esMateriaDeTest(n.programa?.materia?.nombre));
+        const excluidosTest = todos.length - reales.length;
+
+        const programas = agruparPorPrograma(reales); // orden estable por programa_id
+        const programasTotales = programas.length;
+        const nodosTotales = reales.length;
+        const aProcesar = programas.slice(offset, offset + limite);
+
+        const catalogoPorGrado = new Map<number, TemaCatalogo[]>();
+        async function catalogoDeGrado(grado: number): Promise<TemaCatalogo[]> {
+          const cacheado = catalogoPorGrado.get(grado);
+          if (cacheado) return cacheado;
+          // Sin filtrar por materia (Regla 4 del brief de Task 6): las
+          // CUATRO materias del grado, igual que dividir-nodos al publicar.
+          const { data: filasNap, error: napErr } = await sb
+            .from('nap_tema')
+            .select('id, nombre, texto_oficial, nap_eje(materia, nombre)')
+            .eq('grado', grado);
+          if (napErr) throw napErr;
+          const temas: TemaCatalogo[] = (filasNap ?? []).map((t: Record<string, unknown>) => {
+            const eje = (t.nap_eje ?? {}) as Record<string, unknown>;
+            return {
+              id: String(t.id),
+              nombre: String(t.nombre ?? ''),
+              texto_oficial: (t.texto_oficial as string | null) ?? null,
+              materia: String(eje.materia ?? ''),
+              eje: String(eje.nombre ?? ''),
+            };
+          });
+          catalogoPorGrado.set(grado, temas);
+          return temas;
+        }
+
+        const procesados: unknown[] = [];
+        const updates: { id: string; nap_tema_id: string | null; nap_confianza: number | null }[] = [];
+        let totalMapeados = 0;
+        let totalSinTema = 0;
+
+        for (const [programaId, nodosDePrograma] of aProcesar) {
+          const grado = nodosDePrograma[0].programa.grado;
+          const materiaLabel = nodosDePrograma[0].programa.materia.nombre;
+          const temas = await catalogoDeGrado(grado);
+
+          if (temas.length === 0) {
+            const resultados = nodosDePrograma.map((n) => ({
+              nodo_id: n.id, nombre: n.nombre, nap_tema_id: null, nap_confianza: null,
+            }));
+            procesados.push({
+              programa_id: programaId, materia: materiaLabel, grado,
+              nodos: resultados, mapeados: 0, sin_tema: resultados.length,
+              motivo: 'sin_catalogo_para_este_grado',
+            });
+            totalSinTema += resultados.length;
+            if (!dryRun) for (const r of resultados) updates.push({ id: r.nodo_id, nap_tema_id: null, nap_confianza: null });
+            continue;
+          }
+
+          // escuela_id/docente_id del programa (vía sol_materia) para que el
+          // gasto de uso_api quede atribuido a un colegio en la pantalla de Costos.
+          const { data: smData } = await sb
+            .from('sol_materia').select('escuela_id, docente_id').eq('programa_id', programaId).limit(1).maybeSingle();
+          const escuelaId = (smData as { escuela_id?: string } | null)?.escuela_id ?? null;
+          // OJO: NO usar ctx.user.id acá. El admin de plataforma no tiene fila
+          // en `perfil` (ADR-009) y uso_api.perfil_id tiene FK a perfil(id) —
+          // meter el id del admin rompe el insert con foreign key violation
+          // (silencioso antes de awaitear registrarUso, ver commit). El único
+          // perfil_id válido acá es el docente dueño del programa; si no se
+          // pudo resolver sol_materia, se deja null (la columna lo permite).
+          const perfilId = (smData as { docente_id?: string } | null)?.docente_id ?? null;
+
+          const nodosInput = nodosDePrograma.map((n) => ({ id: n.id, nombre: n.nombre, descripcion: n.descripcion }));
+          const { system, user: userMsg } = construirPromptBackfill(materiaLabel, grado, nodosInput, temas);
+
+          let capturado: unknown = null;
+          let ultimoStopReason: string | null = null;
+          const callClaude: LlamarClaude = async (req2) => {
+            const t0 = Date.now();
+            const r = await fetch('https://api.anthropic.com/v1/messages', {
+              method: 'POST',
+              headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+              body: JSON.stringify({ model: MODELO_NAP, max_tokens: MAX_TOKENS_NAP, system: req2.system, messages: req2.messages, tools: req2.tools }),
+            });
+            if (!r.ok) {
+              // Awaiteada (a diferencia de las otras 7 funciones): esto es un
+              // job de fondo, no una respuesta interactiva — sin awaitear, el
+              // insert fire-and-forget se corta cuando el handler responde y
+              // el gasto queda invisible en Costos (ver _shared/uso.ts).
+              await registrarUso(sb, {
+                escuela_id: escuelaId, perfil_id: perfilId, funcion: 'admin-jobs:nap_backfill',
+                modelo: MODELO_NAP, latencia_ms: Date.now() - t0, ok: false, error_codigo: `claude_${r.status}`,
+              });
+              throw new Error(`claude_${r.status}: ${await r.text()}`);
+            }
+            const data = await r.json();
+            ultimoStopReason = data.stop_reason ?? null;
+            await registrarUso(sb, {
+              escuela_id: escuelaId, perfil_id: perfilId, funcion: 'admin-jobs:nap_backfill',
+              modelo: MODELO_NAP, usage: data.usage, latencia_ms: Date.now() - t0, ok: true,
+            });
+            return data;
+          };
+
+          try {
+            await runToolLoop({
+              callClaude,
+              toolImpls: { guardar_division: (input) => { capturado = input; return 'ok'; } },
+              tools: [TOOL_GUARDAR_DIVISION],
+              system,
+              userMessage: userMsg,
+              maxIters: 3,
+            });
+            if (capturado === null) {
+              throw new Error(ultimoStopReason === 'max_tokens' ? 'division_truncada: se cortó por tokens' : 'Claude no llamó a la tool guardar_division');
+            }
+            const { resultados, avisos } = emparejarResultado(nodosInput, capturado, materiaLabel, grado, temas);
+            const mapeados = resultados.filter((r) => r.nap_tema_id).length;
+            const sinTema = resultados.length - mapeados;
+            totalMapeados += mapeados;
+            totalSinTema += sinTema;
+            procesados.push({
+              programa_id: programaId, materia: materiaLabel, grado,
+              nodos: resultados, mapeados, sin_tema: sinTema,
+              ...(avisos.length ? { avisos } : {}),
+            });
+            if (!dryRun) for (const r of resultados) updates.push({ id: r.nodo_id, nap_tema_id: r.nap_tema_id, nap_confianza: r.nap_confianza });
+          } catch (e) {
+            procesados.push({
+              programa_id: programaId, materia: materiaLabel, grado,
+              error: String((e as Error)?.message ?? e),
+            });
+          }
+        }
+
+        // Escribir: SOLO UPDATE de nap_tema_id/nap_confianza sobre nodo, uno
+        // por uno. Nunca INSERT ni DELETE — ni acá ni en ninguna otra tabla.
+        if (!dryRun) {
+          for (const u of updates) {
+            const { error: upErr } = await sb.from('nodo').update({ nap_tema_id: u.nap_tema_id, nap_confianza: u.nap_confianza }).eq('id', u.id);
+            if (upErr) throw upErr;
+          }
+          if (ctx && updates.length > 0) {
+            // Awaiteada por el mismo motivo que registrarUso más arriba: nada
+            // queda pendiente después de esto, así que sin awaitear se corre
+            // el riesgo de que el insert se corte al responder.
+            await registrarAuditoria(sb, ctx, {
+              accion: 'nap_backfill',
+              detalle: { programas: aProcesar.length, mapeados: totalMapeados, sin_tema: totalSinTema },
+            });
+          }
+        }
+
+        return json({
+          ok: true,
+          dry_run: dryRun,
+          excluidos_test: excluidosTest,
+          programas_totales: programasTotales,
+          nodos_totales: nodosTotales,
+          offset,
+          limite,
+          programas_en_esta_llamada: aProcesar.length,
+          programas_restantes: Math.max(0, programasTotales - offset - aProcesar.length),
+          procesados,
+          resumen: { mapeados: totalMapeados, sin_tema: totalSinTema },
+        });
+      }
 
       default:
         return json({ error: 'accion_desconocida' }, 400);

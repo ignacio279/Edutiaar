@@ -128,6 +128,20 @@ export function parseDivision(
   return { perfil, nodos };
 }
 
+// Instrucción de clasificación NAP — el criterio en sí (comparar contra el
+// texto_oficial, preferir null antes que forzar un encaje). Exportada para que
+// el backfill de los nodos ya publicados (Task 6, scripts/backfill-nap.mjs) la
+// reuse tal cual: si el backfill clasificara con una redacción distinta a la
+// de publicar, el catálogo terminaría con dos criterios y nadie sabría cuál
+// mapeo mirar.
+export const NAP_INSTRUCCION = [
+  'Además, para cada nodo proponé a qué tema del marco curricular NAP corresponde',
+  '(nap_tema_id) junto con tu confianza de 0 a 1 (nap_confianza). Elegí comparando lo que el',
+  'nodo enseña contra el "NAP" (texto oficial) de cada tema listado abajo — esa cita manda,',
+  'no la etiqueta corta. Si un nodo no corresponde con claridad a ninguno de estos temas,',
+  'devolvé nap_tema_id: null. Es preferible dejarlo sin clasificar antes que forzar un encaje.',
+].join(' ');
+
 // Prompt del modo real (cuando haya API key): método dividir-en-nodos + tono +
 // (Task 5) clasificación de cada nodo contra el catálogo NAP del grado.
 export function construirPromptDivision(
@@ -140,14 +154,7 @@ export function construirPromptDivision(
     'respetando los prerrequisitos. Cada nodo lleva un nombre corto y una descripción de qué cubre.',
     'Tono: español rioplatense, cálido. Devolvé el resultado llamando a la tool guardar_division.',
   ].join(' ');
-  const napInstruccion = [
-    'Además, para cada nodo proponé a qué tema del marco curricular NAP corresponde',
-    '(nap_tema_id) junto con tu confianza de 0 a 1 (nap_confianza). Elegí comparando lo que el',
-    'nodo enseña contra el "NAP" (texto oficial) de cada tema listado abajo — esa cita manda,',
-    'no la etiqueta corta. Si un nodo no corresponde con claridad a ninguno de estos temas,',
-    'devolvé nap_tema_id: null. Es preferible dejarlo sin clasificar antes que forzar un encaje.',
-  ].join(' ');
-  const system = [intro, napInstruccion, catalogoParaPrompt(m, grado, temas)].join('\n\n');
+  const system = [intro, NAP_INSTRUCCION, catalogoParaPrompt(m, grado, temas)].join('\n\n');
   // Sin texto pegado (la seño subió solo un PDF): el contenido va como bloque document.
   const user = (contenido ?? '').trim()
     ? `Contenido del programa a dividir en nodos:\n\n${contenido}`

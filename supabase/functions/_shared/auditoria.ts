@@ -11,8 +11,13 @@ export type EventoAuditoria = {
   detalle?: Record<string, unknown>;
 };
 
-export function registrarAuditoria(sb: SupabaseClient, ctx: AdminCtx, ev: EventoAuditoria): void {
-  sb.from('auditoria')
+// Devuelve la promesa del insert (antes era `void`): los call sites de
+// siempre la siguen llamando sin awaitear (fire-and-forget, cero cambio para
+// ellos). admin-jobs SÍ la awaitea en su tramo final (nap_backfill): si nada
+// queda pendiente después del insert de auditoría, el runtime puede cortar
+// la invocación al responder antes de que el fire-and-forget llegue a viajar.
+export function registrarAuditoria(sb: SupabaseClient, ctx: AdminCtx, ev: EventoAuditoria): Promise<void> {
+  return sb.from('auditoria')
     .insert({
       actor_id: ctx.user.id,
       actor_email: ctx.user.email ?? null,

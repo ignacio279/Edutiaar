@@ -33,10 +33,18 @@ export type EventoUso = {
   error_codigo?: string | null;
 };
 
-export function registrarUso(sb: SupabaseClient, ev: EventoUso): void {
+// Devuelve la promesa del insert (antes era `void`): las 7 funciones
+// originales la siguen llamando SIN awaitear — fire-and-forget, cero cambio
+// de comportamiento para ellas. admin-jobs SÍ la awaitea (ver nap_backfill):
+// un job de fondo sin usuario esperando en la pantalla puede permitirse el
+// costo de latencia, y a cambio el registro queda garantizado antes de que
+// la función corte la ejecución al responder — un `insert` fire-and-forget
+// que nunca se espera puede quedar cortado a mitad de camino cuando el
+// handler devuelve la respuesta y el runtime da por terminada la invocación.
+export function registrarUso(sb: SupabaseClient, ev: EventoUso): Promise<void> {
   const entrada = ev.usage?.input_tokens ?? 0;
   const salida = ev.usage?.output_tokens ?? 0;
-  sb.from('uso_api')
+  return sb.from('uso_api')
     .insert({
       escuela_id: ev.escuela_id ?? null,
       perfil_id: ev.perfil_id ?? null,
