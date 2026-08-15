@@ -66,6 +66,10 @@ test('navActivo resuelve por prefijo, con ver-como → maestras', () => {
   assert.equal(navActivo('/admin/licencias'), 'licencias');
   assert.equal(navActivo('/admin/transferencias'), 'transferencias');
   assert.equal(navActivo('/admin/arco'), 'arco');
+  // Revisión NAP cuelga de /admin/observatorio pero es su propio ítem: no
+  // puede quedar marcando "observatorio" en el sidebar.
+  assert.equal(navActivo('/admin/observatorio'), 'observatorio');
+  assert.equal(navActivo('/admin/observatorio/revision'), 'revision');
 });
 
 // ── Sidebar en tres grupos (restyle 2026-08 al mock Admin.dc.html) ──────────
@@ -73,7 +77,7 @@ test('navActivo resuelve por prefijo, con ver-como → maestras', () => {
 test('ADMIN_NAV: los tres grupos del sidebar están completos y sin sobras', () => {
   const claves = (g) => ADMIN_NAV.filter((it) => it.grupo === g).map((it) => it.key);
   assert.deepEqual(claves('custodia'), ['transferencias', 'arco', 'auditoria']);
-  assert.deepEqual(claves('vision'), ['observatorio', 'capacitacion', 'exportaciones']);
+  assert.deepEqual(claves('vision'), ['observatorio', 'revision', 'capacitacion', 'exportaciones']);
   // Todo lo demás cae en el bloque operativo de arriba: ningún ítem queda
   // huérfano con un grupo que el layout no pinta.
   const grupos = new Set(ADMIN_NAV.map((it) => it.grupo));

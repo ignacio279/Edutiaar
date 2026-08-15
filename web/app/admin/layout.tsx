@@ -43,6 +43,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const supabase = createClient();
   const [me, setMe] = useState<AdminMe | null>(null);
   const [pendientes, setPendientes] = useState(0);
+  const [revisionPend, setRevisionPend] = useState(0);
   const esLogin = pathname === '/admin/login';
 
   useEffect(() => {
@@ -75,6 +76,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     })();
   }, [esLogin, me, pathname]);
 
+  // Badge de "Revisión NAP": nodos esperando confirmación humana. Mismo
+  // patrón que el de Pases — silencioso si falla, se recalcula al navegar.
+  useEffect(() => {
+    if (esLogin || !me) return;
+    (async () => {
+      const r = await llamarAdmin<{ nodos: unknown[] }>('admin-colegios', 'nap_revision_listar', {});
+      if (r.ok) setRevisionPend((r.data.nodos ?? []).length);
+    })();
+  }, [esLogin, me, pathname]);
+
   async function signOut() {
     await supabase.auth.signOut();
     router.replace('/admin/login');
@@ -98,11 +109,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   // Un ítem del sidebar: el activo no es botón (no se navega a donde ya estás)
   // y el chip de la derecha depende del grupo.
   const item = (it: (typeof ADMIN_NAV)[number]) => {
-    const chip = it.grupo === 'vision'
-      ? <span style={chipPronto}>Pronto</span>
-      : it.key === 'transferencias' && pendientes > 0
-        ? <span style={chipPendientes}>{pendientes}</span>
-        : null;
+    // Revisión NAP vive en el grupo `vision` pero, a diferencia de sus
+    // hermanas (Capacitación/Exportaciones, "Próximamente"), YA funciona: se
+    // excluye del chip "Pronto" y usa el mismo badge de pendientes que Pases.
+    const chip = it.key === 'revision'
+      ? (revisionPend > 0 ? <span style={chipPendientes}>{revisionPend}</span> : null)
+      : it.grupo === 'vision'
+        ? <span style={chipPronto}>Pronto</span>
+        : it.key === 'transferencias' && pendientes > 0
+          ? <span style={chipPendientes}>{pendientes}</span>
+          : null;
     const cuerpo = chip
       ? <><span style={{ flex: 1, textAlign: 'left' }}>{it.label}</span>{chip}</>
       : it.label;

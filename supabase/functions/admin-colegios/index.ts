@@ -17,6 +17,13 @@ import {
   validarCrear,
   validarEditar,
 } from './validar.ts';
+// Cola de revisión del mapeo NAP (Task 7): la lógica de armado vive en un
+// módulo hermano puro (nap-revision-logica.ts), testeable desde Node — acá
+// solo el I/O (patrón index.ts=I/O / *-logica.ts=lógica del resto del repo).
+import {
+  armarCatalogoGrado, armarNodosRevision, normalizarNapTemaId,
+  type NapTemaRaw, type NodoNapRaw, type TemaCatalogoOut,
+} from './nap-revision-logica.ts';
 
 const noVacio = (s: unknown): s is string => typeof s === 'string' && s.trim().length > 0;
 
@@ -244,6 +251,97 @@ Deno.serve(async (req) => {
           stats: { sesiones_30d, respuestas_30d },
           feature,
         });
+      }
+
+      // Cola de revisión del mapeo NAP (Task 7). `nap_revisado = false` +
+      // (sin tema o confianza baja): exactamente el criterio del brief, SIN
+      // excluir la materia de prueba que nap_backfill sí excluye (esMateriaDeTest
+      // es para no gastar API real clasificando basura de tests; acá es
+      // trabajo humano y no cuesta nada mostrarlo — decisión del controller).
+      case 'nap_revision_listar': {
+        const { data: nodosRaw, error: nErr } = await sb
+          .from('nodo')
+          .select(
+            'id, nombre, nap_tema_id, nap_confianza, nap_intentos, programa_id, ' +
+            'programa:programa_id(grado, materia:materia_id(nombre))',
+          )
+          .eq('nap_revisado', false)
+          .or('nap_tema_id.is.null,nap_confianza.lt.0.7')
+          .order('nap_intentos', { ascending: false })
+          .order('nombre', { ascending: true });
+        if (nErr) throw nErr;
+        const nodos = (nodosRaw ?? []) as unknown as NodoNapRaw[];
+
+        // Colegio de cada nodo: vía sol_materia (no siempre existe — nodos de
+        // fixtures/tests quedan sin publicar; armarNodosRevision cae a un
+        // texto de fallback, no rompe la pantalla). Última fila por programa
+        // gana (order created_at asc, se pisa con la más nueva).
+        const programaIds = [...new Set(nodos.map((n) => n.programa_id))];
+        const colegioPorPrograma = new Map<string, string>();
+        if (programaIds.length) {
+          const { data: solRaw, error: sErr } = await sb
+            .from('sol_materia')
+            .select('programa_id, escuela:escuela_id(nombre)')
+            .in('programa_id', programaIds)
+            .order('created_at', { ascending: true });
+          if (sErr) throw sErr;
+          for (const s of (solRaw ?? []) as unknown as { programa_id: string; escuela: { nombre: string } | null }[]) {
+            if (s.escuela?.nombre) colegioPorPrograma.set(s.programa_id, s.escuela.nombre);
+          }
+        }
+
+        // Catálogo NAP por grado, SIN filtrar por materia (Regla 4 del brief):
+        // las cuatro materias del grado, una por cada grado presente en la
+        // cola. Cacheado para no repetir la consulta entre nodos del mismo grado.
+        const grados = [...new Set(nodos.map((n) => n.programa?.grado).filter((g): g is number => typeof g === 'number'))];
+        const catalogoPorGrado = new Map<number, TemaCatalogoOut[]>();
+        for (const grado of grados) {
+          const { data: temasRaw, error: tErr } = await sb
+            .from('nap_tema')
+            .select('id, nombre, texto_oficial, orden, nap_eje(materia, nombre, orden)')
+            .eq('grado', grado);
+          if (tErr) throw tErr;
+          catalogoPorGrado.set(grado, armarCatalogoGrado((temasRaw ?? []) as unknown as NapTemaRaw[]));
+        }
+
+        return json({ nodos: armarNodosRevision(nodos, colegioPorPrograma, catalogoPorGrado) });
+      }
+
+      // Confirma o corrige la propuesta de un nodo: `nap_tema_id` (un id del
+      // catálogo) o `null`/ausente = "Fuera del marco". Setea nap_revisado en
+      // true — un nodo revisado nunca se reclasifica solo (spec de diseño).
+      case 'nap_revision_fijar': {
+        const { nodo_id } = body;
+        if (!noVacio(nodo_id)) return json({ error: 'falta_nodo_id' }, 400);
+        const tema = normalizarNapTemaId(body.nap_tema_id);
+        if (!tema.ok) return json({ error: 'nap_tema_id_invalido' }, 400);
+
+        if (tema.value) {
+          const { data: existe } = await sb.from('nap_tema').select('id').eq('id', tema.value).maybeSingle();
+          if (!existe) return json({ error: 'tema_no_existe' }, 400);
+        }
+
+        const { data: antes } = await sb
+          .from('nodo')
+          .select('id, nap_tema_id, nap_confianza')
+          .eq('id', nodo_id)
+          .maybeSingle();
+        if (!antes) return json({ error: 'no_existe' }, 404);
+        const nodoAntes = antes as { id: string; nap_tema_id: string | null; nap_confianza: number | null };
+
+        const { error: uErr } = await sb
+          .from('nodo')
+          .update({ nap_tema_id: tema.value, nap_revisado: true })
+          .eq('id', nodo_id);
+        if (uErr) throw uErr;
+
+        registrarAuditoria(sb, ctx, {
+          accion: 'nap_revision_fijar',
+          entidad: 'nodo',
+          entidad_id: nodo_id,
+          detalle: { de: nodoAntes.nap_tema_id, a: tema.value, confianza_previa: nodoAntes.nap_confianza },
+        });
+        return json({ ok: true });
       }
 
       default:

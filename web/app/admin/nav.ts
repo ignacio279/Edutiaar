@@ -41,6 +41,10 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
   { key: 'auditoria', label: 'Auditoría', ruta: '/admin/auditoria', icono: 'book', grupo: 'custodia' },
   // — VISIÓN —
   { key: 'observatorio', label: 'Observatorio', ruta: '/admin/observatorio', icono: 'globe', grupo: 'vision' },
+  // Revisión NAP: a diferencia de sus hermanas de este grupo, ES una pantalla
+  // funcionando (fase "marco NAP") — el layout la excluye del chip "Pronto" y
+  // le pone el badge de pendientes (mismo patrón que Pases en `custodia`).
+  { key: 'revision', label: 'Revisión NAP', ruta: '/admin/observatorio/revision', icono: 'book', grupo: 'vision' },
   { key: 'capacitacion', label: 'Capacitación', ruta: '/admin/capacitacion', icono: 'book', grupo: 'vision' },
   { key: 'exportaciones', label: 'Exportaciones', ruta: '/admin/exportaciones', icono: 'chart', grupo: 'vision' },
 ] as const;
