@@ -123,3 +123,22 @@ export function normalizarNapTemaId(v: unknown): NapTemaIdNormalizado {
   if (typeof v === 'string' && v.trim().length > 0) return { ok: true, value: v.trim() };
   return { ok: false };
 }
+
+// Hallazgo 1 de la review (Task 7, fix round 1): `nodo.nap_tema_id` es una FK
+// pelada a `nap_tema(id)` (migración 0028), SIN restricción de grado — nada
+// en la base impide pegarle a un nodo de 1° un tema de 7°. Por la pantalla no
+// pasa porque el <select> ya filtra por grado, pero un curl, un payload viejo
+// o un futuro botón de "reclasificar" pueden mandar cualquier id sin que
+// nadie se entere (ni error, ni rastro en la auditoría) — justo el tipo de
+// corrupción silenciosa que esta fase existe para evitar en el agregado. Este
+// chequeo vive en el server (index.ts lo llama antes de escribir), nunca solo
+// en el front. "Fuera del marco" (`napTemaId` null) es SIEMPRE válido: no hay
+// tema, no hay grado que comparar.
+export function gradoCoincide(
+  napTemaId: string | null,
+  gradoPrograma: number | null,
+  gradoTema: number | null,
+): boolean {
+  if (!napTemaId) return true;
+  return gradoPrograma !== null && gradoTema !== null && gradoPrograma === gradoTema;
+}

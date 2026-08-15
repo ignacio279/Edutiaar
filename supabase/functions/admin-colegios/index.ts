@@ -21,7 +21,7 @@ import {
 // módulo hermano puro (nap-revision-logica.ts), testeable desde Node — acá
 // solo el I/O (patrón index.ts=I/O / *-logica.ts=lógica del resto del repo).
 import {
-  armarCatalogoGrado, armarNodosRevision, normalizarNapTemaId,
+  armarCatalogoGrado, armarNodosRevision, gradoCoincide, normalizarNapTemaId,
   type NapTemaRaw, type NodoNapRaw, type TemaCatalogoOut,
 } from './nap-revision-logica.ts';
 
@@ -316,18 +316,35 @@ Deno.serve(async (req) => {
         const tema = normalizarNapTemaId(body.nap_tema_id);
         if (!tema.ok) return json({ error: 'nap_tema_id_invalido' }, 400);
 
-        if (tema.value) {
-          const { data: existe } = await sb.from('nap_tema').select('id').eq('id', tema.value).maybeSingle();
-          if (!existe) return json({ error: 'tema_no_existe' }, 400);
-        }
-
         const { data: antes } = await sb
           .from('nodo')
-          .select('id, nap_tema_id, nap_confianza')
+          .select('id, nap_tema_id, nap_confianza, programa:programa_id(grado)')
           .eq('id', nodo_id)
           .maybeSingle();
         if (!antes) return json({ error: 'no_existe' }, 404);
-        const nodoAntes = antes as { id: string; nap_tema_id: string | null; nap_confianza: number | null };
+        const nodoAntes = antes as unknown as {
+          id: string; nap_tema_id: string | null; nap_confianza: number | null;
+          programa: { grado: number } | null;
+        };
+
+        // `nodo.nap_tema_id` es una FK pelada a nap_tema(id), sin restricción
+        // de grado (migración 0028): el <select> del front ya filtra por
+        // grado, pero este chequeo NO puede vivir solo ahí (Hallazgo 1 de la
+        // review) — un curl, un payload viejo o un futuro botón de
+        // "reclasificar" podrían pegarle a un nodo de 1° un tema de 7° sin
+        // error y sin rastro en la auditoría.
+        if (tema.value) {
+          const { data: temaRow } = await sb
+            .from('nap_tema')
+            .select('id, grado')
+            .eq('id', tema.value)
+            .maybeSingle();
+          if (!temaRow) return json({ error: 'tema_no_existe' }, 400);
+          const gradoTema = (temaRow as { grado: number }).grado;
+          if (!gradoCoincide(tema.value, nodoAntes.programa?.grado ?? null, gradoTema)) {
+            return json({ error: 'grado_no_coincide' }, 400);
+          }
+        }
 
         const { error: uErr } = await sb
           .from('nodo')

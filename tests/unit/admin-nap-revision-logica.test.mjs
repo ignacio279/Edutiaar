@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  armarCatalogoGrado, armarNodosRevision, normalizarNapTemaId, SIN_COLEGIO,
+  armarCatalogoGrado, armarNodosRevision, gradoCoincide, normalizarNapTemaId, SIN_COLEGIO,
 } from '../../supabase/functions/admin-colegios/nap-revision-logica.ts';
 
 // ── armarCatalogoGrado ───────────────────────────────────────────────────
@@ -105,4 +105,23 @@ test('normalizarNapTemaId: string vacío, número u objeto rebotan', () => {
   assert.deepEqual(normalizarNapTemaId('   '), { ok: false });
   assert.deepEqual(normalizarNapTemaId(42), { ok: false });
   assert.deepEqual(normalizarNapTemaId({}), { ok: false });
+});
+
+// ── gradoCoincide (Hallazgo 1, fix round 1) ───────────────────────────────
+
+test('gradoCoincide: "Fuera del marco" (napTemaId null) siempre vale, no hay grado que comparar', () => {
+  assert.equal(gradoCoincide(null, 1, 7), true);
+  assert.equal(gradoCoincide(null, null, null), true);
+});
+
+test('gradoCoincide: con tema, los grados tienen que coincidir', () => {
+  assert.equal(gradoCoincide('t1', 3, 3), true);
+  assert.equal(gradoCoincide('t1', 1, 7), false);
+  assert.equal(gradoCoincide('t1', 7, 1), false);
+});
+
+test('gradoCoincide: con tema pero sin alguno de los dos grados (programa u orfandad de datos), rebota', () => {
+  assert.equal(gradoCoincide('t1', null, 3), false);
+  assert.equal(gradoCoincide('t1', 3, null), false);
+  assert.equal(gradoCoincide('t1', null, null), false);
 });

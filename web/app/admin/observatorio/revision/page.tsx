@@ -25,6 +25,7 @@ const ERRS: Record<string, string> = {
   falta_nodo_id: 'Falta el nodo a confirmar.',
   nap_tema_id_invalido: 'El tema elegido no es válido. Recargá la página.',
   tema_no_existe: 'Ese tema ya no está en el catálogo. Recargá la página.',
+  grado_no_coincide: 'Ese tema es de otro grado. Recargá la página y probá de nuevo.',
   no_existe: 'Ese nodo ya no existe (puede que otra persona ya lo haya revisado).',
   ...ERRS_RED_ADMIN,
 };
