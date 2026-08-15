@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CATALOGO_NAP, MATERIAS_NAP } from '../../supabase/functions/_shared/nap.ts';
@@ -68,4 +70,58 @@ test('el catálogo cubre los grados 1 a 7 en las cuatro materias', () => {
       assert.ok(hay, `falta ${materia} en ${grado}°`);
     }
   }
+});
+
+// Normalización para comparar el catálogo contra el PDF extraído. Empareja las
+// diferencias de MAQUETACIÓN sin tocar el contenido:
+//  - une los guiones de corte de fin de renglón ("designa-\nción")
+//  - colapsa saltos de línea y espacios múltiples
+//  - saca el espacio antes de puntuación que mete el PDF ("transporte , y")
+//  - saca los dígitos de nota al pie PEGADOS a una palabra ("taller11" -> "taller"),
+//    que es lo que el Segundo Ciclo usa como marcador. Ojo: solo los pegados;
+//    los números sueltos del texto (años como "1820") se conservan, porque son
+//    contenido y su pérdida SÍ tiene que hacer fallar el test.
+//  - saca TODOS los guiones que queden, de los dos lados de la comparación. Es
+//    la única forma de que el guión REAL de una palabra compuesta
+//    ("morfo-fisiológicas") y el guión de corte de renglón que el PDF mete en
+//    ese mismo lugar se vuelvan indistinguibles. No perdemos cobertura: la
+//    higiene de guiones ya la cubre el test "ningún texto oficial quedó con
+//    guiones de corte del PDF".
+//  - baja a minúsculas y saca acentos
+function normalizar(s) {
+  return s
+    .replace(/([a-záéíóúñ])-\s+/gi, '$1')
+    .replace(/\s+/g, ' ')
+    .replace(/\s+([,;.:])/g, '$1')
+    .replace(/([a-záéíóúñ])[0-9]{1,2}\b/gi, '$1')
+    .replace(/-/g, '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+const DIR = path.join(import.meta.dirname, '../fixtures/nap');
+const FUENTES = normalizar(
+  fs.readFileSync(path.join(DIR, 'primer-ciclo.txt'), 'utf8') + '\n|||\n' +
+  fs.readFileSync(path.join(DIR, 'segundo-ciclo.txt'), 'utf8'),
+);
+
+test('cada texto oficial existe textualmente en el documento fuente', () => {
+  const huerfanos = [];
+  for (const eje of CATALOGO_NAP) {
+    for (const t of eje.temas) {
+      // 150 caracteres identifican el bloque sin volverse frágil ante
+      // diferencias de cola: cuanto más larga la aguja, más difícil que un
+      // texto alterado pase de casualidad.
+      const aguja = normalizar(t.textoOficial).slice(0, 150);
+      if (!FUENTES.includes(aguja)) huerfanos.push(`${eje.materia} ${t.grado}° · ${t.nombre}`);
+    }
+  }
+  assert.deepEqual(huerfanos, [],
+    `estos temas no aparecen en los documentos oficiales:\n  ${huerfanos.join('\n  ')}`);
+});
+
+test('el catálogo no quedó vacío ni se encogió sin querer', () => {
+  const temas = CATALOGO_NAP.reduce((n, e) => n + e.temas.length, 0);
+  assert.ok(temas >= 289, `el catálogo tiene ${temas} temas; se esperaban al menos 289`);
 });
