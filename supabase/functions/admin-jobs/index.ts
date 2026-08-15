@@ -19,7 +19,7 @@ import { planSnapshotAlertas } from './nocturno-logica.ts';
 // porqué de no escribir un prompt ni una validación paralelos.
 import { TOOL_GUARDAR_DIVISION, type TemaCatalogo } from '../dividir-nodos/dividir.ts';
 import {
-  agruparPorPrograma, construirPromptBackfill, emparejarResultado, esMateriaDeTest,
+  agruparPorPrograma, construirPromptBackfill, emparejarResultado, esMateriaDeTest, sinExcluidos,
 } from './nap-backfill-logica.ts';
 
 // Actor sentinel del cron en la auditoría (no hay admin humano detrás).
@@ -228,6 +228,19 @@ Deno.serve(async (req) => {
         const dryRun = Boolean(body.dry_run);
         const limite = Math.max(1, Math.min(5, Number(body.limite ?? 1) || 1));
         const offset = Math.max(0, Number(body.offset ?? 0) || 0);
+        // Programas que el CALLER ya intentó en llamadas anteriores de esta
+        // misma corrida (haya mapeado o no). Necesario porque `offset` solo
+        // es seguro cuando la lista de pendientes es estable: en dry-run
+        // nunca se escribe, así que la lista no cambia entre llamadas. En la
+        // corrida real, un nodo que Claude clasifica como null se queda
+        // pendiente PARA SIEMPRE (nap_tema_id sigue null, y nap_revisado
+        // tiene que seguir en false — ver el caso `sin_catalogo`/el bloque de
+        // escritura más abajo), así que ni desaparece de la lista ni el
+        // `offset` avanza de forma predecible. El caller real (el script de
+        // esta corrida) manda acá los ids que ya procesó y los saca del
+        // cálculo, así garantiza cobertura completa sin loop infinito.
+        const excluirProgramas: string[] = Array.isArray(body.excluir_programas)
+          ? body.excluir_programas.map(String) : [];
         const key = Deno.env.get('ANTHROPIC_API_KEY');
         if (!key) return json({ error: 'falta_anthropic_api_key' }, 500);
 
@@ -249,7 +262,8 @@ Deno.serve(async (req) => {
         const reales = todos.filter((n) => !esMateriaDeTest(n.programa?.materia?.nombre));
         const excluidosTest = todos.length - reales.length;
 
-        const programas = agruparPorPrograma(reales); // orden estable por programa_id
+        const programasPendientes = agruparPorPrograma(reales); // orden estable por programa_id
+        const programas = sinExcluidos(programasPendientes, excluirProgramas);
         const programasTotales = programas.length;
         const nodosTotales = reales.length;
         const aProcesar = programas.slice(offset, offset + limite);
@@ -407,6 +421,10 @@ Deno.serve(async (req) => {
           limite,
           programas_en_esta_llamada: aProcesar.length,
           programas_restantes: Math.max(0, programasTotales - offset - aProcesar.length),
+          // Para que el caller acumule `excluir_programas` en la próxima
+          // llamada sin tener que hurgar en `procesados` (ver el comentario
+          // de excluirProgramas más arriba).
+          programa_ids_procesados: aProcesar.map(([id]) => id),
           procesados,
           resumen: { mapeados: totalMapeados, sin_tema: totalSinTema },
         });

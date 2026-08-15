@@ -113,3 +113,21 @@ export function agruparPorPrograma<T extends { programa_id: string }>(
   }
   return [...mapa.entries()].sort(([a], [b]) => a.localeCompare(b));
 }
+
+// Saca de la lista los programas cuyo id está en `excluir`. Existe porque
+// `offset` SOLO es seguro cuando la lista de pendientes no cambia de forma
+// (dry-run: nunca escribe, la lista es idéntica en cada llamada). En la
+// corrida REAL, un nodo que Claude clasifica como null se queda pendiente
+// para siempre (nap_tema_id sigue null) — ni desaparece de la lista ni
+// avanza el `offset` de forma predecible, así que un caller que solo use
+// `offset` puede terminar reprocesando el mismo programa sin fin o
+// salteándose otro. El caller real acumula acá los programa_id que ya
+// intentó (haya mapeado o no) y los excluye en la siguiente llamada.
+export function sinExcluidos<T extends [string, unknown]>(
+  programas: T[],
+  excluir: string[],
+): T[] {
+  if (!excluir.length) return programas;
+  const set = new Set(excluir);
+  return programas.filter(([id]) => !set.has(id));
+}

@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  esMateriaDeTest, construirPromptBackfill, emparejarResultado, agruparPorPrograma,
+  esMateriaDeTest, construirPromptBackfill, emparejarResultado, agruparPorPrograma, sinExcluidos,
 } from '../../supabase/functions/admin-jobs/nap-backfill-logica.ts';
 
 const TEMAS = [
@@ -90,4 +90,19 @@ test('agruparPorPrograma agrupa y ordena de forma estable por programa_id (pagin
 
 test('agruparPorPrograma con lista vacía devuelve lista vacía', () => {
   assert.deepEqual(agruparPorPrograma([]), []);
+});
+
+test('sinExcluidos saca los programas ya intentados (necesario porque un null se queda pendiente para siempre)', () => {
+  const programas = [['p1', ['n1']], ['p2', ['n2']], ['p3', ['n3']]];
+  assert.deepEqual(sinExcluidos(programas, ['p2']), [['p1', ['n1']], ['p3', ['n3']]]);
+});
+
+test('sinExcluidos con lista de exclusión vacía devuelve todo tal cual', () => {
+  const programas = [['p1', ['n1']]];
+  assert.deepEqual(sinExcluidos(programas, []), programas);
+});
+
+test('sinExcluidos excluyendo todos deja lista vacía', () => {
+  const programas = [['p1', ['n1']], ['p2', ['n2']]];
+  assert.deepEqual(sinExcluidos(programas, ['p1', 'p2']), []);
 });
