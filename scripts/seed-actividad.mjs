@@ -31,11 +31,29 @@
 //    reales, no un cero) y 3 nodos sin tocar (fila en cero — así se ve la
 //    otra cara, un tema del marco que nadie practicó todavía).
 //
+// 4) Colegios HERMANOS de Cerro Azul (review de la Task 9): la columna
+//    "N de M colegios" del marco NAP no se entiende con M=1, así que se
+//    suman 3 colegios más con Matemática 4° propia — "Colegio Integral
+//    Piacentini" (Chaco) YA vivía en esta base (alta manual de otra prueba,
+//    docente Marita: no lo creamos, solo lo usamos) y "Escuela Rural N° 34
+//    'Monte Quemado'" (Santiago del Estero) + "Escuela N° 15 'Salto
+//    Encantado'" (Misiones) son nuevos, con id fijo como el resto del seed.
+//    Cada colegio escribe SUS PROPIOS nodos —nombre propio de cada docente—
+//    pero clasificados contra el MISMO tema NAP que Cerro Azul: así se arma
+//    la cobertura entre colegios sin que un tema "sea" un nodo particular.
+//    Reparto a propósito DESPAREJO: "Sistema decimal y números naturales" lo
+//    dan los 4 colegios (4 de 4, con precisión bien distinta entre ellos);
+//    "Operaciones entre naturales" lo dan Cerro Azul y Monte Quemado nada
+//    más (2 de 4, y ahí se ve que el MISMO tema da 83% en uno y ~56% en el
+//    otro); "Fracciones y decimales de uso social" sigue siendo solo Cerro
+//    Azul (1 de 4 — la celda que además ya quedaba en `muestra insuficiente`
+//    por tener solo 3 alumnos).
+//
 // Idempotente: sesiones con UUID fijo (delete-then-insert de respuesta/
-// evaluacion_sesion/sesion); programas/nodos/materia con upsert por id fijo
-// (nunca get-or-create por nombre); ejercicios solo si el nodo está vacío;
-// alumnos nuevos con ensureUser (crea o reusa) + matrícula idempotente. El
-// service_role NUNCA va al front ni a git.
+// evaluacion_sesion/sesion); escuelas/aulas/programas/nodos/materia con
+// upsert por id fijo (nunca get-or-create por nombre); ejercicios solo si el
+// nodo está vacío; alumnos nuevos con ensureUser (crea o reusa) + matrícula
+// idempotente. El service_role NUNCA va al front ni a git.
 //   Uso: SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... node scripts/seed-actividad.mjs
 
 import { randomBytes } from 'node:crypto';
@@ -73,13 +91,36 @@ const ID = {
     '90000000-0000-4900-8900-900000000017',
     '90000000-0000-4900-8900-900000000018',
   ],
+  // Colegios hermanos (review de la Task 9): Piacentini YA EXISTE en la base
+  // (no tiene id fijo nuestro porque no lo creamos nosotros — lo copiamos tal
+  // cual está hoy; si algún día desaparece, el script frena con un error
+  // claro en vez de romper en silencio). Monte Quemado y Salto Encantado son
+  // nuevos, con id fijo como el resto del archivo.
+  escuelaPI: '274beb7e-f785-41da-be95-41542c4cbe4c', // "Colegio Integral Piacentini", Chaco
+  aulaPI: 'faafbaf3-2958-4427-91dd-fe12e16675b9', // su única aula ("1° grado" de nombre, pero como en Cerro Azul un aula no es un grado)
+  escuelaMQ: 'a0000000-0000-4a00-8a00-a00000000001', // Escuela Rural N° 34 "Monte Quemado", Santiago del Estero
+  aulaMQ: 'a0000000-0000-4a00-8a00-a00000000011',
+  escuelaSE: 'a0000000-0000-4a00-8a00-a00000000002', // Escuela N° 15 "Salto Encantado", Misiones
+  aulaSE: 'a0000000-0000-4a00-8a00-a00000000012',
+  programaPIMate: 'a0000000-0000-4a00-8a00-a00000000021',
+  programaMQMate: 'a0000000-0000-4a00-8a00-a00000000022',
+  programaSEMate: 'a0000000-0000-4a00-8a00-a00000000023',
+  solPIMate: 'a0000000-0000-4a00-8a00-a00000000031',
+  solMQMate: 'a0000000-0000-4a00-8a00-a00000000032',
+  solSEMate: 'a0000000-0000-4a00-8a00-a00000000033',
+  nodoPI: 'a0000000-0000-4a00-8a00-a00000000041', // Piacentini: solo "Sistema decimal y números naturales"
+  nodoMQ0: 'a0000000-0000-4a00-8a00-a00000000042', // Monte Quemado: "Sistema decimal…" +
+  nodoMQ2: 'a0000000-0000-4a00-8a00-a00000000043', //   "Operaciones entre naturales"
+  nodoSE: 'a0000000-0000-4a00-8a00-a00000000044', // Salto Encantado: solo "Sistema decimal y números naturales"
 };
 
 // UUID fijo de sesión NN (01..99) → idempotencia por delete-then-insert.
 const sesId = (nn) => `e0000000-0000-4000-8000-0000000000${String(nn).padStart(2, '0')}`;
-// 23 de LUNA (Lengua) + 32 (4 nodos × 8 alumnos de 4°) + 3 (1 nodo con solo 3
-// alumnos, la celda "muestra insuficiente") de Matemática = 58.
-const TOTAL_SESIONES = 58;
+// 23 de LUNA (Lengua) + 32 (4 nodos × 8 alumnos de 4° en Cerro Azul) + 3 (1
+// nodo con solo 3 alumnos, la celda "muestra insuficiente") de Matemática en
+// Cerro Azul + 32 de los colegios hermanos (Piacentini 8 + Monte Quemado
+// 8×2 nodos + Salto Encantado 8) = 90.
+const TOTAL_SESIONES = 90;
 
 const NODOS_G1 = [
   { nombre: 'Las vocales', descripcion: 'Reconocer las vocales en palabras cortas.' },
@@ -251,6 +292,77 @@ const ALUMNOS_G4 = [
   { name: 'Franco', animal: 'turtle', pin: '6008', email: 'alu-7b88d0@students.edutia.local' },
 ];
 
+// ── Colegios hermanos (review de la Task 9: la cobertura "N de M colegios"
+// necesita M>1) — cada uno con su propio pool de "Sistema decimal y números
+// naturales" (con sabor de zona propio) y Monte Quemado además con uno de
+// "Operaciones entre naturales", para armar el "2 de 4" contra Cerro Azul.
+const POOL_PI_TEMA0 = [
+  { e: '¿Cuál es el número que sigue a 1899?', o: ['1900', '1898', '1910', '2900'], c: '1900', d: 1, t: 'reconocer' },
+  { e: '¿Cuántas centenas tiene 2680?', o: ['2', '6', '26', '68'], c: '6', d: 2, t: 'reconocer' },
+  { e: 'Completá: 4000 + 500 + 20 + 3 = ___', o: ['4523', '4532', '4253', '4352'], c: '4523', d: 2, t: 'completar' },
+  { e: 'Ordená de menor a mayor: 3210, 3012, 3201 → ¿cuál va primero?', o: ['3012', '3210', '3201', '3021'], c: '3012', d: 2, t: 'ordenar' },
+  { e: 'En la cooperativa algodonera pesaron 2425 kilos. ¿Cómo se lee ese número?', o: ['dos mil cuatrocientos veinticinco', 'dos mil cuatrocientos dos', 'dos veinticuatro veinticinco', 'veinticuatro veinticinco'], c: 'dos mil cuatrocientos veinticinco', d: 2, t: 'producir' },
+  { e: '¿Qué número tiene 5 unidades de mil, 1 centena, 0 decenas y 6 unidades?', o: ['5106', '5160', '5016', '5601'], c: '5106', d: 3, t: 'producir' },
+];
+const POOL_MQ_TEMA0 = [
+  { e: '¿Cuál es el número que sigue a 4599?', o: ['4600', '4598', '4610', '5600'], c: '4600', d: 1, t: 'reconocer' },
+  { e: '¿Cuántas centenas tiene 1750?', o: ['1', '7', '17', '75'], c: '7', d: 2, t: 'reconocer' },
+  { e: 'Completá: 6000 + 300 + 40 + 2 = ___', o: ['6342', '6324', '6234', '6432'], c: '6342', d: 2, t: 'completar' },
+  { e: 'Ordená de menor a mayor: 2105, 2015, 2150 → ¿cuál va primero?', o: ['2015', '2105', '2150', '2510'], c: '2015', d: 2, t: 'ordenar' },
+  { e: 'En el aserradero de quebracho cargaron 1340 postes. ¿Cómo se lee ese número?', o: ['mil trescientos cuarenta', 'mil trescientos cuatro', 'trece cuarenta', 'ciento treinta y cuatro'], c: 'mil trescientos cuarenta', d: 2, t: 'producir' },
+  { e: '¿Qué número tiene 3 unidades de mil, 2 centenas, 0 decenas y 5 unidades?', o: ['3205', '3250', '3025', '3502'], c: '3205', d: 3, t: 'producir' },
+];
+const POOL_MQ_TEMA2 = [
+  { e: '7 × 8 = ?', o: ['56', '54', '64', '48'], c: '56', d: 1, t: 'reconocer' },
+  { e: '¿Cuál es el resultado de 63 ÷ 7?', o: ['9', '8', '7', '6'], c: '9', d: 1, t: 'reconocer' },
+  { e: 'Completá: 6 × ___ = 48', o: ['8', '7', '9', '6'], c: '8', d: 2, t: 'completar' },
+  { e: 'En el paraje hay 32 chivos y se arman corrales de 8. ¿Cuántos corrales hay?', o: ['4', '6', '8', '5'], c: '4', d: 2, t: 'producir' },
+  { e: 'Un productor tiene 7 hileras de algarrobo con 15 plantas cada una. ¿Cuántas plantas tiene?', o: ['105', '95', '115', '101'], c: '105', d: 3, t: 'producir' },
+  { e: '¿Qué operación conviene para repartir 48 empanadas entre 6 chicos por igual?', o: ['división', 'multiplicación', 'suma', 'resta'], c: 'división', d: 2, t: 'reconocer' },
+];
+const POOL_SE_TEMA0 = [
+  { e: '¿Cuál es el número que sigue a 3299?', o: ['3300', '3298', '3310', '4300'], c: '3300', d: 1, t: 'reconocer' },
+  { e: '¿Cuántas centenas tiene 5920?', o: ['5', '9', '59', '92'], c: '9', d: 2, t: 'reconocer' },
+  { e: 'Completá: 7000 + 100 + 60 + 4 = ___', o: ['7164', '7146', '7614', '7461'], c: '7164', d: 2, t: 'completar' },
+  { e: 'Ordená de menor a mayor: 4013, 4031, 4103 → ¿cuál va primero?', o: ['4013', '4031', '4103', '4310'], c: '4013', d: 2, t: 'ordenar' },
+  { e: 'En el secadero cargaron 2750 kilos de yerba. ¿Cómo se lee ese número?', o: ['dos mil setecientos cincuenta', 'dos mil setecientos cinco', 'veintisiete cincuenta', 'doscientos setenta y cinco'], c: 'dos mil setecientos cincuenta', d: 2, t: 'producir' },
+  { e: '¿Qué número tiene 8 unidades de mil, 0 centenas, 3 decenas y 1 unidad?', o: ['8031', '8310', '8301', '8013'], c: '8031', d: 3, t: 'producir' },
+];
+
+// 8 alumnos por colegio hermano (mismo mínimo para k=5 con margen). Nombres
+// sin repetir los ya usados arriba; PIN en bloques propios por aula (7000/
+// 8000/9000) para que se lean de un vistazo como de otro colegio.
+const ALUMNOS_PI = [
+  { name: 'Milagros', animal: 'fox', pin: '7001', email: 'alu-b1c2d3@students.edutia.local' },
+  { name: 'Ezequiel', animal: 'owl', pin: '7002', email: 'alu-b4c5d6@students.edutia.local' },
+  { name: 'Camila', animal: 'turtle', pin: '7003', email: 'alu-b7c8d9@students.edutia.local' },
+  { name: 'Joaquín', animal: 'cat', pin: '7004', email: 'alu-b0c1d2@students.edutia.local' },
+  { name: 'Abril', animal: 'sheep', pin: '7005', email: 'alu-b3c4d5@students.edutia.local' },
+  { name: 'Nahuel', animal: 'fox', pin: '7006', email: 'alu-b6c7d8@students.edutia.local' },
+  { name: 'Rocío', animal: 'owl', pin: '7007', email: 'alu-b9c0d1@students.edutia.local' },
+  { name: 'Elián', animal: 'turtle', pin: '7008', email: 'alu-b2c3d4@students.edutia.local' },
+];
+const ALUMNOS_MQ = [
+  { name: 'Guadalupe', animal: 'cat', pin: '8001', email: 'alu-c1d2e3@students.edutia.local' },
+  { name: 'Ramiro', animal: 'sheep', pin: '8002', email: 'alu-c4d5e6@students.edutia.local' },
+  { name: 'Micaela', animal: 'fox', pin: '8003', email: 'alu-c7d8e9@students.edutia.local' },
+  { name: 'Federico', animal: 'owl', pin: '8004', email: 'alu-c0d1e2@students.edutia.local' },
+  { name: 'Antonella', animal: 'turtle', pin: '8005', email: 'alu-c3d4e5@students.edutia.local' },
+  { name: 'Lautaro', animal: 'cat', pin: '8006', email: 'alu-c6d7e8@students.edutia.local' },
+  { name: 'Jazmín', animal: 'sheep', pin: '8007', email: 'alu-c9d0e1@students.edutia.local' },
+  { name: 'Thiago', animal: 'fox', pin: '8008', email: 'alu-c2d3e4@students.edutia.local' },
+];
+const ALUMNOS_SE = [
+  { name: 'Ayelén', animal: 'owl', pin: '9001', email: 'alu-d1e2f3@students.edutia.local' },
+  { name: 'Maximiliano', animal: 'turtle', pin: '9002', email: 'alu-d4e5f6@students.edutia.local' },
+  { name: 'Brisa', animal: 'cat', pin: '9003', email: 'alu-d7e8f9@students.edutia.local' },
+  { name: 'Gonzalo', animal: 'sheep', pin: '9004', email: 'alu-d0e1f2@students.edutia.local' },
+  { name: 'Milena', animal: 'fox', pin: '9005', email: 'alu-d3e4f5@students.edutia.local' },
+  { name: 'Ulises', animal: 'owl', pin: '9006', email: 'alu-d6e7f8@students.edutia.local' },
+  { name: 'Priscila', animal: 'turtle', pin: '9007', email: 'alu-d9e0f1@students.edutia.local' },
+  { name: 'Emanuel', animal: 'cat', pin: '9008', email: 'alu-d2e3f4@students.edutia.local' },
+];
+
 // `conflicto` (opcional): columnas del unique a usar cuando el conflicto no es
 // por PK (ej. alumno_nodo tiene PK id pero unique (alumno_id, nodo_id)).
 async function upsert(table, rows, conflicto) {
@@ -307,6 +419,38 @@ async function ensureUser(email, password, meta) {
   throw new Error(`create ${email}: ${c.status} ${t}`);
 }
 
+// Crea (o reusa) los alumnos de `lista` en un colegio/aula/docente/grado
+// dados; devuelve el mapa nombre → perfil id.
+//
+// El `upsert('perfil', …)` de acá escribe docente_id/aula_id/escuela_id/
+// grado DIRECTO pese al trigger `perfil_guard` (migración 0022) — a
+// propósito, no es un descuido: el guard es `before UPDATE on perfil`, y acá
+// siempre se hace un INSERT (alumno nuevo). El guard protege contra
+// CAMBIARLE el vínculo a un alumno que YA EXISTE sin pasar por
+// `matricula_abrir`/`matricula_cerrar` (la amenaza real de ADR-011); no
+// aplica al alta. En un rerun el upsert reescribe las MISMAS columnas con
+// los MISMOS valores → no hay "distinct", tampoco dispara. Que quede
+// escrito para que nadie lo "arregle" agregando un `matricula_abrir` previo
+// y lo rompa.
+async function crearAlumnos(lista, { escuelaId, docenteId, aulaId, grado }) {
+  const porNombre = {};
+  for (const a of lista) {
+    const id = await ensureUser(a.email, randPass(), { nombre: a.name, rol: 'alumno' });
+    await upsert('perfil', [{ id, rol: 'alumno', nombre: a.name, avatar: a.animal, grado, escuela_id: escuelaId, docente_id: docenteId, aula_id: aulaId }]);
+    const mExiste = await get(`matricula?alumno_id=eq.${id}&fecha_fin=is.null&select=id`);
+    if (!Array.isArray(mExiste) || mExiste.length === 0) {
+      await rpc('matricula_abrir', { p_alumno: id, p_escuela: escuelaId, p_aula: aulaId, p_docente: docenteId, p_grado: grado, p_actor: docenteId });
+    }
+    // La password de Auth ROTA en cada corrida a propósito (nadie loguea con
+    // email+password en esta demo, así que no hace falta que sea estable).
+    // El PIN sí queda FIJO — viene de `lista` — porque es la credencial real
+    // con la que se entra por aula+PIN.
+    await rpc('set_alumno_cred', { p_perfil: id, p_aula: aulaId, p_pin: a.pin, p_email: a.email, p_password: randPass() });
+    porNombre[a.name] = id;
+  }
+  return porNombre;
+}
+
 // Fecha "hace N días" a la hora local `h`.
 const hace = (dias, h = 10) => {
   const d = new Date();
@@ -338,21 +482,42 @@ async function main() {
   }
   console.log('✓ aula plurigrado (Benja 1° · Sofía y Tomás 3° · Mateo y Lucía 5°)');
 
-  // 1b) 8 alumnos nuevos de 4° (Task 9): mínimo para pasar k=5 con margen en
-  // el observatorio. Mismo aula única del colegio (un salón, plurigrado);
-  // matrícula activa como fuente de verdad del grado (0022).
-  const porNombreG4 = {};
-  for (const a of ALUMNOS_G4) {
-    const id = await ensureUser(a.email, randPass(), { nombre: a.name, rol: 'alumno' });
-    await upsert('perfil', [{ id, rol: 'alumno', nombre: a.name, avatar: a.animal, grado: 4, escuela_id: ID.escuela, docente_id: ana.id, aula_id: ID.aula }]);
-    const mExiste = await get(`matricula?alumno_id=eq.${id}&fecha_fin=is.null&select=id`);
-    if (!Array.isArray(mExiste) || mExiste.length === 0) {
-      await rpc('matricula_abrir', { p_alumno: id, p_escuela: ID.escuela, p_aula: ID.aula, p_docente: ana.id, p_grado: 4, p_actor: ana.id });
-    }
-    await rpc('set_alumno_cred', { p_perfil: id, p_aula: ID.aula, p_pin: a.pin, p_email: a.email, p_password: randPass() });
-    porNombreG4[a.name] = id;
+  // 1b) 8 alumnos nuevos de 4° en Cerro Azul (Task 9): mínimo para pasar
+  // k=5 con margen en el observatorio. Mismo aula única del colegio (un
+  // salón, plurigrado); matrícula activa como fuente de verdad del grado
+  // (0022).
+  const porNombreG4 = await crearAlumnos(ALUMNOS_G4, { escuelaId: ID.escuela, docenteId: ana.id, aulaId: ID.aula, grado: 4 });
+  console.log(`✓ ${ALUMNOS_G4.length} alumnos nuevos de 4° en Cerro Azul (PIN 6001-6008)`);
+
+  // 1c) Colegios hermanos (review de la Task 9): Piacentini ya existe (docente
+  // Marita, se resuelve acá — si algún día no está más, el script frena con
+  // un error claro en vez de seguir con un docente_id inventado); Monte
+  // Quemado y Salto Encantado son nuevos, con provincias distintas de
+  // Neuquén para que "Aprendizaje por zona" también sume jurisdicciones.
+  const [marita] = await get(`perfil?rol=eq.docente&escuela_id=eq.${ID.escuelaPI}&select=id&limit=1`);
+  if (!marita) {
+    throw new Error(`No encontré una docente en "Colegio Integral Piacentini" (escuela ${ID.escuelaPI}): ¿sigue existiendo ese colegio en la base?`);
   }
-  console.log(`✓ ${ALUMNOS_G4.length} alumnos nuevos de 4° (PIN 6001-600${ALUMNOS_G4.length})`);
+  await upsert('escuela', [
+    { id: ID.escuelaMQ, nombre: "Escuela Rural N° 34 'Monte Quemado'", zona: 'Monte Quemado, Santiago del Estero', provincia: 'Santiago del Estero', estado: 'activo' },
+    { id: ID.escuelaSE, nombre: "Escuela N° 15 'Salto Encantado'", zona: 'Salto Encantado, Misiones', provincia: 'Misiones', estado: 'activo' },
+  ]);
+  await upsert('aula', [
+    { id: ID.aulaMQ, escuela_id: ID.escuelaMQ, nombre: '4° grado', grado: 4, codigo: 'QUEMADO-4A' },
+    { id: ID.aulaSE, escuela_id: ID.escuelaSE, nombre: '4° grado', grado: 4, codigo: 'ENCANTADO-4A' },
+  ]);
+  await rpc('set_aula_secreto', { p_aula: ID.aulaMQ, p_secreto: 'quemado2026' });
+  await rpc('set_aula_secreto', { p_aula: ID.aulaSE, p_secreto: 'encantado2026' });
+  const rosaId = await ensureUser('doc-9c41ab@teachers.edutia.local', randPass(), { nombre: 'Rosa', rol: 'docente' });
+  await upsert('perfil', [{ id: rosaId, rol: 'docente', nombre: 'Rosa', escuela_id: ID.escuelaMQ }]);
+  const walterId = await ensureUser('doc-2f7e0d@teachers.edutia.local', randPass(), { nombre: 'Walter', rol: 'docente' });
+  await upsert('perfil', [{ id: walterId, rol: 'docente', nombre: 'Walter', escuela_id: ID.escuelaSE }]);
+  console.log("✓ colegios hermanos (Piacentini existente + Monte Quemado y Salto Encantado nuevos)");
+
+  const porNombrePI = await crearAlumnos(ALUMNOS_PI, { escuelaId: ID.escuelaPI, docenteId: marita.id, aulaId: ID.aulaPI, grado: 4 });
+  const porNombreMQ = await crearAlumnos(ALUMNOS_MQ, { escuelaId: ID.escuelaMQ, docenteId: rosaId, aulaId: ID.aulaMQ, grado: 4 });
+  const porNombreSE = await crearAlumnos(ALUMNOS_SE, { escuelaId: ID.escuelaSE, docenteId: walterId, aulaId: ID.aulaSE, grado: 4 });
+  console.log(`✓ ${ALUMNOS_PI.length + ALUMNOS_MQ.length + ALUMNOS_SE.length} alumnos nuevos de 4° en los colegios hermanos`);
 
   // 2) programas + materias publicadas de Lengua 1° y 5°
   await upsert('programa', [
@@ -423,6 +588,41 @@ async function main() {
     })));
   }
   console.log('✓ Matemática 4° publicada (8 nodos = 8 temas NAP, clasificados en el seed)');
+
+  // 2c) Matemática 4° en los colegios hermanos (review de la Task 9): cada
+  // docente escribe su propio nodo, clasificado contra el MISMO tema NAP que
+  // Cerro Azul — nunca se reusa el nodo_id de Cerro Azul, cada colegio tiene
+  // el suyo. `napTemaIdDe` ya resolvió el catálogo arriba (2b); se reusa acá.
+  await upsert('programa', [
+    { id: ID.programaPIMate, materia_id: ID.materiaMate, grado: 4, contenido: 'Sistema decimal y números naturales.' },
+    { id: ID.programaMQMate, materia_id: ID.materiaMate, grado: 4, contenido: 'Sistema decimal y números naturales; operaciones entre naturales.' },
+    { id: ID.programaSEMate, materia_id: ID.materiaMate, grado: 4, contenido: 'Sistema decimal y números naturales.' },
+  ]);
+  const perfilSolMateHermano = (docente, zona) => ({
+    system_prompt: `Sos SOL, copiloto de Matemática para 4° grado en la escuela de ${docente}, una escuela rural de ${zona}.`,
+    tono: 'cálido, alentador, rioplatense',
+    criterios_eval: 'claridad, un solo procedimiento correcto, sin ambigüedades',
+    ejemplos_zona: zona,
+  });
+  await upsert('sol_materia', [
+    { id: ID.solPIMate, programa_id: ID.programaPIMate, docente_id: marita.id, escuela_id: ID.escuelaPI, estado: 'publicado', perfil: perfilSolMateHermano('Marita', 'el Chaco, algodón y monte') },
+    { id: ID.solMQMate, programa_id: ID.programaMQMate, docente_id: rosaId, escuela_id: ID.escuelaMQ, estado: 'publicado', perfil: perfilSolMateHermano('Rosa', 'Santiago del Estero, quebracho y algarrobo') },
+    { id: ID.solSEMate, programa_id: ID.programaSEMate, docente_id: walterId, escuela_id: ID.escuelaSE, estado: 'publicado', perfil: perfilSolMateHermano('Walter', 'Misiones, yerba mate y selva') },
+  ]);
+  await upsert('nodo', [
+    { id: ID.nodoPI, programa_id: ID.programaPIMate, orden: 0, nombre: 'Números grandes', descripcion: 'Leer, escribir y comparar números de cuatro cifras.', nap_tema_id: napTemaIdDe(NODOS_G4_MATE[0]), nap_confianza: 1, nap_revisado: true },
+    { id: ID.nodoMQ0, programa_id: ID.programaMQMate, orden: 0, nombre: 'El sistema decimal', descripcion: 'Leer, escribir y comparar números de cuatro cifras.', nap_tema_id: napTemaIdDe(NODOS_G4_MATE[0]), nap_confianza: 1, nap_revisado: true },
+    { id: ID.nodoMQ2, programa_id: ID.programaMQMate, orden: 1, nombre: 'Multiplicar y repartir', descripcion: 'Resolver problemas de multiplicación y división.', nap_tema_id: napTemaIdDe(NODOS_G4_MATE[2]), nap_confianza: 1, nap_revisado: true },
+    { id: ID.nodoSE, programa_id: ID.programaSEMate, orden: 0, nombre: 'Números de cuatro cifras', descripcion: 'Leer, escribir y comparar números de cuatro cifras.', nap_tema_id: napTemaIdDe(NODOS_G4_MATE[0]), nap_confianza: 1, nap_revisado: true },
+  ]);
+  for (const [nodoId, pool] of [[ID.nodoPI, POOL_PI_TEMA0], [ID.nodoMQ0, POOL_MQ_TEMA0], [ID.nodoMQ2, POOL_MQ_TEMA2], [ID.nodoSE, POOL_SE_TEMA0]]) {
+    const ya = await get(`ejercicio?nodo_id=eq.${nodoId}&select=id&limit=1`);
+    if (ya.length) continue; // idempotencia: no duplicar el pool
+    await insert('ejercicio', pool.map((x) => ({
+      nodo_id: nodoId, enunciado: x.e, opciones: x.o, correcta: x.c, dificultad: x.d, tipo: x.t,
+    })));
+  }
+  console.log('✓ Matemática 4° en los 3 colegios hermanos (reparto desparejo a propósito)');
 
   // 3) actividad: delete-then-insert de las sesiones fijas
   const ids = Array.from({ length: TOTAL_SESIONES }, (_, i) => sesId(i + 1));
@@ -526,12 +726,52 @@ async function main() {
     alumnoNodoG4.push({ alumno_id: alumnoId, nodo_id: ID.nodosG4Mate[G4_NODO_PARCIAL], ...estadoDeAciertos(ACIERTOS_PARCIAL[i]) });
   });
 
+  // Colegios hermanos (review de la Task 9): mismo tema NAP, desempeño bien
+  // distinto entre colegios — es la lectura que la columna de cobertura
+  // tiene que habilitar. "Sistema decimal y números naturales" lo dan los 4
+  // colegios con precisión bien distinta (Cerro Azul 83%, Piacentini ~60%,
+  // Monte Quemado ~77%, Salto Encantado ~92%); "Operaciones entre naturales"
+  // lo dan solo Cerro Azul (83%) y Monte Quemado (~56%) — el mismo tema le
+  // cuesta bastante más a uno de los dos colegios que lo dan.
+  const ejsPI = await ejsDe(ID.nodoPI);
+  const ejsMQ0 = await ejsDe(ID.nodoMQ0);
+  const ejsMQ2 = await ejsDe(ID.nodoMQ2);
+  const ejsSE = await ejsDe(ID.nodoSE);
+
+  const ACIERTOS_PI_T0 = [4, 3, 4, 3, 4, 4, 3, 4]; // ~60%: a este colegio le cuesta más
+  const ACIERTOS_MQ_T0 = [5, 4, 5, 4, 5, 5, 4, 5]; // ~77%
+  const ACIERTOS_MQ_T2 = [3, 4, 3, 4, 3, 3, 4, 3]; // ~56%: el MISMO tema da 83% en Cerro Azul
+  const ACIERTOS_SE_T0 = [6, 5, 6, 5, 6, 6, 5, 5]; // ~92%: el colegio más fuerte de los 4
+
+  const diasPI = (i) => 3 + ((i * 2) % 16);
+  const diasMQ = (i, extra = 0) => 2 + ((i * 3 + extra) % 20);
+  const diasSE = (i) => 4 + ((i * 2) % 14);
+
+  ALUMNOS_PI.forEach((alumno, i) => {
+    const alumnoId = porNombrePI[alumno.name];
+    armarSesion(alumnoId, ID.nodoPI, diasPI(i), ejsPI, ACIERTOS_PI_T0[i], 6);
+    alumnoNodoG4.push({ alumno_id: alumnoId, nodo_id: ID.nodoPI, ...estadoDeAciertos(ACIERTOS_PI_T0[i]) });
+  });
+  ALUMNOS_MQ.forEach((alumno, i) => {
+    const alumnoId = porNombreMQ[alumno.name];
+    armarSesion(alumnoId, ID.nodoMQ0, diasMQ(i), ejsMQ0, ACIERTOS_MQ_T0[i], 6);
+    alumnoNodoG4.push({ alumno_id: alumnoId, nodo_id: ID.nodoMQ0, ...estadoDeAciertos(ACIERTOS_MQ_T0[i]) });
+    armarSesion(alumnoId, ID.nodoMQ2, diasMQ(i, 7), ejsMQ2, ACIERTOS_MQ_T2[i], 6);
+    alumnoNodoG4.push({ alumno_id: alumnoId, nodo_id: ID.nodoMQ2, ...estadoDeAciertos(ACIERTOS_MQ_T2[i]) });
+  });
+  ALUMNOS_SE.forEach((alumno, i) => {
+    const alumnoId = porNombreSE[alumno.name];
+    armarSesion(alumnoId, ID.nodoSE, diasSE(i), ejsSE, ACIERTOS_SE_T0[i], 6);
+    alumnoNodoG4.push({ alumno_id: alumnoId, nodo_id: ID.nodoSE, ...estadoDeAciertos(ACIERTOS_SE_T0[i]) });
+  });
+
   await insert('sesion', sesiones);
   await insert('respuesta', respuestas);
   console.log(`✓ ${sesiones.length} sesiones + ${respuestas.length} respuestas simuladas`);
 
-  // 4) estados de nodos coherentes con las personas (+ los 35 pares de
-  // Matemática 4° armados arriba, mismo puntaje que la sesión que los generó)
+  // 4) estados de nodos coherentes con las personas (+ los pares de
+  // Matemática 4° armados arriba —Cerro Azul y los 3 colegios hermanos—,
+  // mismo puntaje que la sesión que los generó)
   await upsert('alumno_nodo', [
     { alumno_id: porNombre['Lucía'], nodo_id: ID.nodosG5[0], estado: 'dominado', puntaje: 92 },
     { alumno_id: porNombre['Lucía'], nodo_id: ID.nodosG5[1], estado: 'dominado', puntaje: 88 },
