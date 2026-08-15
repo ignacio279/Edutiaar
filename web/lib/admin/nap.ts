@@ -693,6 +693,9 @@ export const CATALOGO_NAP: EjeNap[] = [
         orden: 4,
       },
       {
+        // La fuente trae "a| tiem-po" (glifo corrupto): se leyó "al tiempo",
+        // única lectura gramaticalmente coherente. Reparación interpretativa,
+        // no normalización (no es guion de corte ni espacio de más).
         nombre: 'Producción de exposiciones individuales y grupales',
         textoOficial:
           'La producción, con la colaboración del docente o de manera autónoma, de exposiciones individuales y grupales referidas a contenidos estudiados y a temas de interés tratados en el aula, a partir de la lectura de diversos textos provenientes de distintas fuentes (enciclopedias, internet, documentales, entre otras), teniendo en cuenta las partes de la exposición (presentación del tema, desarrollo, cierre), realizando la selección, análisis, contrastación de distintas perspectivas y ordenamiento de la información, y atendiendo a la distribución de los subtemas y al tiempo de la exposición del que se dispone. Empleo de un vocabulario acorde al tema tratado que incluya vocabulario específico. Elaboración de materiales de apoyo.',
@@ -1200,7 +1203,7 @@ export const CATALOGO_NAP: EjeNap[] = [
         nombre: 'Ortografía y signos de puntuación',
         textoOficial:
           'El conocimiento de la ortografía correspondiente al vocabulario de uso, de reglas ortográficas (tildación y uso de letras) y de algunos signos de puntuación, lo que supone reconocer y emplear:',
-        fuente: `${NAP2} p.43`,
+        fuente: `${NAP2} p.44`,
         grado: 5,
         orden: 2,
       },
