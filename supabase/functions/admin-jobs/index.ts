@@ -409,14 +409,18 @@ Deno.serve(async (req) => {
               programa_id: programaId, materia: materiaLabel, grado,
               error: String((e as Error)?.message ?? e),
             });
-            // El programa falló (error de Claude, división truncada, cantidad
-            // que no calza) — igual cuenta como "intentado": si no sumara acá,
-            // un nodo que rompe sistemáticamente (no por null, sino por error)
-            // reproduciría el mismo loop infinito que nap_intentos vino a
-            // cortar, solo que por otro síntoma. nap_tema_id/nap_confianza
-            // quedan en null (ya lo estaban — la selección solo trae nodos
-            // con nap_tema_id null) y solo avanza el contador de intentos.
-            for (const n of nodosDePrograma) resultadosTotales.push({ nodo_id: n.id, nap_tema_id: null, nap_confianza: null });
+            // A PROPÓSITO no suma a resultadosTotales (y por lo tanto NO
+            // incrementa nap_intentos): un error de Claude, una división
+            // truncada o una cantidad que no calza son casos donde el
+            // clasificador NUNCA LLEGÓ A MIRAR el nodo — no es lo mismo que
+            // "lo miró y no le encontró tema". Contarlos igual arriesga
+            // excluir un nodo para siempre por tres hipos transitorios de la
+            // API, una pérdida silenciosa de calidad. El caso que nap_intentos
+            // tiene que cortar es el otro: "éxito sin progreso" (todo el
+            // programa clasifica en null) — ESE no devuelve error a quien
+            // llama, así que nadie se entera solo con mirar la respuesta; un
+            // error, en cambio, ya es ruidoso por sí mismo y cualquier caller
+            // razonable frena ante él.
           }
         }
 

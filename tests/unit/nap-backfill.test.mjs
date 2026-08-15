@@ -142,3 +142,19 @@ test('armarUpdates: un nodo sin entrada en intentosPorNodo arranca de 0 (queda e
 test('armarUpdates con lista de resultados vacía y dry_run false devuelve vacío (nada que escribir)', () => {
   assert.deepEqual(armarUpdates([], { n1: 1 }, false), []);
 });
+
+// Fallo de infraestructura (Claude no respondió, división truncada, cantidad
+// que no calza): index.ts NO debe sumar esos nodos a `resultados` — acá se
+// fija el efecto de esa decisión, no la decisión en sí (eso vive en el catch
+// de index.ts, que no es unit-testeable sin mockear fetch/Deno). Si un nodo
+// de un programa que falló simplemente no aparece en `resultados`, tampoco
+// aparece en el update: nap_intentos queda EXACTAMENTE como estaba, no como
+// si "algo se cayó" contara igual que "el clasificador miró y no encontró".
+test('armarUpdates: un nodo ausente de resultados (su programa falló) no genera update ni toca su nap_intentos', () => {
+  // n1 se clasificó bien; n2 pertenecía a un programa cuyo intento reventó y
+  // por eso index.ts nunca lo agrega a `resultados` — solo n1 llega acá.
+  const resultados = [{ nodo_id: 'n1', nap_tema_id: 't1', nap_confianza: 0.9 }];
+  const updates = armarUpdates(resultados, { n1: 0, n2: 2 }, false);
+  assert.deepEqual(updates, [{ id: 'n1', nap_tema_id: 't1', nap_confianza: 0.9, nap_intentos: 1 }]);
+  assert.equal(updates.find((u) => u.id === 'n2'), undefined, 'n2 no debe aparecer: su intento fue un fallo de infra, no una clasificación');
+});

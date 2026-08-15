@@ -121,10 +121,23 @@ export type ActualizacionNodo = {
   nap_intentos: number;
 };
 
-// Arma las filas que hay que escribir en `nodo` a partir de los resultados ya
-// clasificados (mapeen, queden sin tema, o vengan de un intento que falló —
-// ver el catch en index.ts) y el nap_intentos ORIGINAL de cada nodo (el que
+// Arma las filas que hay que escribir en `nodo` a partir de los resultados
+// que YA TERMINARON DE CLASIFICARSE (mapeen o queden sin tema — ambos son un
+// veredicto del clasificador) y el nap_intentos ORIGINAL de cada nodo (el que
 // tenía ANTES de este intento). Con `dryRun` en true SIEMPRE devuelve `[]`.
+//
+// OJO — `resultados` NO debe incluir nodos de un programa cuyo intento
+// falló (error de Claude, división truncada, cantidad que no calza): ese es
+// un caso donde el clasificador NUNCA LLEGÓ A MIRAR el nodo, y nap_intentos
+// tiene que significar "el clasificador lo miró y no le encontró tema", no
+// "algo se cayó". Si un error contara acá, tres hipos transitorios de la API
+// alcanzarían para excluir un nodo PARA SIEMPRE (nap_intentos llega a 3 sin
+// que la clasificación real haya progresado ni una vez) — una pérdida
+// silenciosa de calidad, distinta del caso que este contador vino a cortar
+// (un programa que clasifica TODO en null: "éxito sin progreso", que no
+// devuelve error a quien llama y por eso sí necesita este freno). index.ts
+// es responsable de este filtro: agrega al `resultados` que le pasa acá solo
+// lo que salió de una clasificación completa, nunca lo que salió del catch.
 //
 // Este es EL freno de "dry-run no toca la base": antes vivía solo en la
 // estructura de index.ts (un `if (!dryRun)` alrededor de cada `push`, y otro
