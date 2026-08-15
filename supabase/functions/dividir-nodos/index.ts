@@ -10,6 +10,7 @@ import type { Bloque, LlamarClaude } from '../_shared/loop.ts';
 import { verificarAcceso } from '../_shared/acceso.ts';
 import { registrarUso } from '../_shared/uso.ts';
 import { construirPromptDivision, parseDivision, TOOL_GUARDAR_DIVISION } from './dividir.ts';
+import type { TemaCatalogo } from './dividir.ts';
 
 const MODELO = 'claude-sonnet-4-6'; // división corre raro; calidad/costo OK (Rule 4)
 const MAX_TOKENS = 4096;
@@ -60,8 +61,36 @@ Deno.serve(async (req) => {
       .single();
     if (pErr) throw pErr;
 
+    // 3.5. Catálogo NAP del grado (Task 5): SIN filtrar por materia — la
+    // docente puede haber cargado "Matematicas" y el marco oficial dice
+    // "Matemática" (sin tilde, otro plural); filtrar por nombre perdería el
+    // catálogo entero y todo mapearía a null en silencio. Se pasan las
+    // cuatro materias de ese grado (~40 temas) y que el modelo elija por
+    // contenido. Si esto falla, seguimos sin clasificar: la clasificación
+    // NUNCA puede romper la publicación de una materia.
+    let temasNap: TemaCatalogo[] = [];
+    try {
+      const { data: filasNap, error: napErr } = await sb
+        .from('nap_tema')
+        .select('id, nombre, texto_oficial, nap_eje(materia, nombre)')
+        .eq('grado', grado);
+      if (napErr) throw napErr;
+      temasNap = (filasNap ?? []).map((t: Record<string, unknown>) => {
+        const eje = (t.nap_eje ?? {}) as Record<string, unknown>;
+        return {
+          id: String(t.id),
+          nombre: String(t.nombre ?? ''),
+          texto_oficial: (t.texto_oficial as string | null) ?? null,
+          materia: String(eje.materia ?? ''),
+          eje: String(eje.nombre ?? ''),
+        };
+      });
+    } catch (e) {
+      console.error('nap_tema fetch falló, se publica sin clasificar NAP:', e);
+    }
+
     // 4. Generar la división con Claude (texto o PDF nativo).
-    const { system, user: userMsg } = construirPromptDivision(materia_nombre, grado, contenido ?? '');
+    const { system, user: userMsg } = construirPromptDivision(materia_nombre, grado, contenido ?? '', temasNap);
     const callClaude: LlamarClaude = async ({ system, messages, tools }) => {
       const t0 = Date.now();
       const r = await fetch('https://api.anthropic.com/v1/messages', {
@@ -98,7 +127,7 @@ Deno.serve(async (req) => {
       userMessage,
       maxIters: 3,
     });
-    const division = parseDivision(capturado, materia_nombre, grado);
+    const division = parseDivision(capturado, materia_nombre, grado, temasNap);
 
     // 5. Guardar sol_materia (borrador) + los nodos.
     const { data: solMat, error: smErr } = await sb
@@ -119,6 +148,8 @@ Deno.serve(async (req) => {
       nombre: n.nombre,
       orden: n.orden,
       descripcion: n.descripcion,
+      nap_tema_id: n.nap_tema_id,
+      nap_confianza: n.nap_confianza,
     }));
     const { data: nodos, error: nErr } = await sb
       .from('nodo')
