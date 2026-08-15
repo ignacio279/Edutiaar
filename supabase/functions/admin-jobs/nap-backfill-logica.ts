@@ -114,6 +114,38 @@ export function agruparPorPrograma<T extends { programa_id: string }>(
   return [...mapa.entries()].sort(([a], [b]) => a.localeCompare(b));
 }
 
+export type ActualizacionNodo = {
+  id: string;
+  nap_tema_id: string | null;
+  nap_confianza: number | null;
+  nap_intentos: number;
+};
+
+// Arma las filas que hay que escribir en `nodo` a partir de los resultados ya
+// clasificados (mapeen, queden sin tema, o vengan de un intento que falló —
+// ver el catch en index.ts) y el nap_intentos ORIGINAL de cada nodo (el que
+// tenía ANTES de este intento). Con `dryRun` en true SIEMPRE devuelve `[]`.
+//
+// Este es EL freno de "dry-run no toca la base": antes vivía solo en la
+// estructura de index.ts (un `if (!dryRun)` alrededor de cada `push`, y otro
+// alrededor del loop de `update`) — nada lo probaba, así que si alguien
+// movía el `update` fuera del guard por error, ningún test se enteraba. Acá
+// queda fijado con un test: dry_run=true ⇒ `armarUpdates(...) === []`,
+// sea cual sea la lista de resultados que se le pase.
+export function armarUpdates(
+  resultados: { nodo_id: string; nap_tema_id: string | null; nap_confianza: number | null }[],
+  intentosPorNodo: Record<string, number>,
+  dryRun: boolean,
+): ActualizacionNodo[] {
+  if (dryRun) return [];
+  return resultados.map((r) => ({
+    id: r.nodo_id,
+    nap_tema_id: r.nap_tema_id,
+    nap_confianza: r.nap_confianza,
+    nap_intentos: (intentosPorNodo[r.nodo_id] ?? 0) + 1,
+  }));
+}
+
 // Saca de la lista los programas cuyo id está en `excluir`. Existe porque
 // `offset` SOLO es seguro cuando la lista de pendientes no cambia de forma
 // (dry-run: nunca escribe, la lista es idéntica en cada llamada). En la

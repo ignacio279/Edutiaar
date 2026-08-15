@@ -19,7 +19,7 @@ import { planSnapshotAlertas } from './nocturno-logica.ts';
 // porqué de no escribir un prompt ni una validación paralelos.
 import { TOOL_GUARDAR_DIVISION, type TemaCatalogo } from '../dividir-nodos/dividir.ts';
 import {
-  agruparPorPrograma, construirPromptBackfill, emparejarResultado, esMateriaDeTest, sinExcluidos,
+  agruparPorPrograma, armarUpdates, construirPromptBackfill, emparejarResultado, esMateriaDeTest, sinExcluidos,
 } from './nap-backfill-logica.ts';
 
 // Actor sentinel del cron en la auditoría (no hay admin humano detrás).
@@ -244,23 +244,36 @@ Deno.serve(async (req) => {
         const key = Deno.env.get('ANTHROPIC_API_KEY');
         if (!key) return json({ error: 'falta_anthropic_api_key' }, 500);
 
-        // Único filtro de selección (Regla de idempotencia): correrlo de
-        // nuevo no reclasifica lo ya hecho.
+        // Filtro de selección (Regla de idempotencia): correrlo de nuevo no
+        // reclasifica lo ya hecho. `nap_intentos < 3` (migración 0030) es el
+        // corte que vive en la BASE, no en la memoria de quien llama: un
+        // nodo que Claude clasifica como "sin tema" se queda con
+        // `nap_tema_id` en null para siempre (nap_revisado es cosa de una
+        // persona), así que sin este tope un caller nuevo que no acumule
+        // `excluir_programas` (el botón "reclasificar" de la cola de
+        // revisión, por ejemplo) reproduciría el mismo loop infinito que
+        // arregló `sinExcluidos` para ESTA corrida en particular.
         const { data: nodosRaw, error: nErr } = await sb
           .from('nodo')
-          .select('id, nombre, descripcion, orden, programa_id, programa:programa_id(grado, materia:materia_id(nombre))')
+          .select('id, nombre, descripcion, orden, programa_id, nap_intentos, programa:programa_id(grado, materia:materia_id(nombre))')
           .is('nap_tema_id', null)
           .eq('nap_revisado', false)
+          .lt('nap_intentos', 3)
           .order('orden', { ascending: true });
         if (nErr) throw nErr;
 
         type NodoFila = {
           id: string; nombre: string; descripcion: string | null; orden: number; programa_id: string;
+          nap_intentos: number;
           programa: { grado: number; materia: { nombre: string } };
         };
         const todos = (nodosRaw ?? []) as unknown as NodoFila[];
         const reales = todos.filter((n) => !esMateriaDeTest(n.programa?.materia?.nombre));
         const excluidosTest = todos.length - reales.length;
+        // nap_intentos ORIGINAL de cada nodo (antes de este intento), para
+        // que armarUpdates incremente desde el valor real y no desde 0.
+        const intentosPorNodo: Record<string, number> = {};
+        for (const n of reales) intentosPorNodo[n.id] = n.nap_intentos;
 
         const programasPendientes = agruparPorPrograma(reales); // orden estable por programa_id
         const programas = sinExcluidos(programasPendientes, excluirProgramas);
@@ -294,7 +307,13 @@ Deno.serve(async (req) => {
         }
 
         const procesados: unknown[] = [];
-        const updates: { id: string; nap_tema_id: string | null; nap_confianza: number | null }[] = [];
+        // Superset de TODO lo intentado en esta llamada (mapeó, quedó sin
+        // tema, o el programa entero falló — ver el catch): es el único
+        // insumo de armarUpdates, que decide qué se escribe y con qué
+        // nap_intentos. No confundir con `procesados` (la respuesta HTTP,
+        // para diagnóstico humano) ni con `resumen` (mapeados/sin_tema, que
+        // deliberadamente NO cuenta los nodos de un programa que falló).
+        const resultadosTotales: { nodo_id: string; nap_tema_id: string | null; nap_confianza: number | null }[] = [];
         let totalMapeados = 0;
         let totalSinTema = 0;
 
@@ -313,7 +332,7 @@ Deno.serve(async (req) => {
               motivo: 'sin_catalogo_para_este_grado',
             });
             totalSinTema += resultados.length;
-            if (!dryRun) for (const r of resultados) updates.push({ id: r.nodo_id, nap_tema_id: null, nap_confianza: null });
+            for (const r of resultados) resultadosTotales.push(r);
             continue;
           }
 
@@ -384,20 +403,38 @@ Deno.serve(async (req) => {
               nodos: resultados, mapeados, sin_tema: sinTema,
               ...(avisos.length ? { avisos } : {}),
             });
-            if (!dryRun) for (const r of resultados) updates.push({ id: r.nodo_id, nap_tema_id: r.nap_tema_id, nap_confianza: r.nap_confianza });
+            for (const r of resultados) resultadosTotales.push(r);
           } catch (e) {
             procesados.push({
               programa_id: programaId, materia: materiaLabel, grado,
               error: String((e as Error)?.message ?? e),
             });
+            // El programa falló (error de Claude, división truncada, cantidad
+            // que no calza) — igual cuenta como "intentado": si no sumara acá,
+            // un nodo que rompe sistemáticamente (no por null, sino por error)
+            // reproduciría el mismo loop infinito que nap_intentos vino a
+            // cortar, solo que por otro síntoma. nap_tema_id/nap_confianza
+            // quedan en null (ya lo estaban — la selección solo trae nodos
+            // con nap_tema_id null) y solo avanza el contador de intentos.
+            for (const n of nodosDePrograma) resultadosTotales.push({ nodo_id: n.id, nap_tema_id: null, nap_confianza: null });
           }
         }
 
-        // Escribir: SOLO UPDATE de nap_tema_id/nap_confianza sobre nodo, uno
-        // por uno. Nunca INSERT ni DELETE — ni acá ni en ninguna otra tabla.
+        // Único punto de escritura: con dry_run en true esto es SIEMPRE []
+        // (armarUpdates lo garantiza y lo tiene testeado — ver Hallazgo 1).
+        const updates = armarUpdates(resultadosTotales, intentosPorNodo, dryRun);
+
+        // Escribir: SOLO UPDATE de nap_tema_id/nap_confianza/nap_intentos
+        // sobre nodo, uno por uno. Nunca INSERT ni DELETE — ni acá ni en
+        // ninguna otra tabla. El `if (!dryRun)` de acá es cinturón-y-tirantes
+        // (armarUpdates ya garantiza `updates === []` en dry-run — Hallazgo 1):
+        // con la lista vacía este loop no hace nada de todas formas.
         if (!dryRun) {
           for (const u of updates) {
-            const { error: upErr } = await sb.from('nodo').update({ nap_tema_id: u.nap_tema_id, nap_confianza: u.nap_confianza }).eq('id', u.id);
+            const { error: upErr } = await sb
+              .from('nodo')
+              .update({ nap_tema_id: u.nap_tema_id, nap_confianza: u.nap_confianza, nap_intentos: u.nap_intentos })
+              .eq('id', u.id);
             if (upErr) throw upErr;
           }
           if (ctx && updates.length > 0) {

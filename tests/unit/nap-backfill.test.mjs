@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   esMateriaDeTest, construirPromptBackfill, emparejarResultado, agruparPorPrograma, sinExcluidos,
+  armarUpdates,
 } from '../../supabase/functions/admin-jobs/nap-backfill-logica.ts';
 
 const TEMAS = [
@@ -105,4 +106,39 @@ test('sinExcluidos con lista de exclusión vacía devuelve todo tal cual', () =>
 test('sinExcluidos excluyendo todos deja lista vacía', () => {
   const programas = [['p1', ['n1']], ['p2', ['n2']]];
   assert.deepEqual(sinExcluidos(programas, ['p1', 'p2']), []);
+});
+
+// --- armarUpdates (Hallazgo 1 de la review): el freno de "dry-run no toca
+// la base" fijado con un test, no solo con la estructura de index.ts. ---
+
+test('armarUpdates con dry_run en true SIEMPRE devuelve vacío, sea cual sea la entrada', () => {
+  const resultados = [
+    { nodo_id: 'n1', nap_tema_id: 't1', nap_confianza: 0.9 },
+    { nodo_id: 'n2', nap_tema_id: null, nap_confianza: null },
+  ];
+  assert.deepEqual(armarUpdates(resultados, { n1: 0, n2: 2 }, true), []);
+  // Ni con intentosPorNodo vacío, ni con resultados vacíos: dry_run manda.
+  assert.deepEqual(armarUpdates(resultados, {}, true), []);
+  assert.deepEqual(armarUpdates([], { n1: 0 }, true), []);
+});
+
+test('armarUpdates con dry_run en false arma las filas e incrementa nap_intentos desde el original', () => {
+  const resultados = [
+    { nodo_id: 'n1', nap_tema_id: 't1', nap_confianza: 0.9 },
+    { nodo_id: 'n2', nap_tema_id: null, nap_confianza: null },
+  ];
+  const updates = armarUpdates(resultados, { n1: 0, n2: 2 }, false);
+  assert.deepEqual(updates, [
+    { id: 'n1', nap_tema_id: 't1', nap_confianza: 0.9, nap_intentos: 1 },
+    { id: 'n2', nap_tema_id: null, nap_confianza: null, nap_intentos: 3 },
+  ]);
+});
+
+test('armarUpdates: un nodo sin entrada en intentosPorNodo arranca de 0 (queda en 1)', () => {
+  const updates = armarUpdates([{ nodo_id: 'n1', nap_tema_id: null, nap_confianza: null }], {}, false);
+  assert.deepEqual(updates, [{ id: 'n1', nap_tema_id: null, nap_confianza: null, nap_intentos: 1 }]);
+});
+
+test('armarUpdates con lista de resultados vacía y dry_run false devuelve vacío (nada que escribir)', () => {
+  assert.deepEqual(armarUpdates([], { n1: 1 }, false), []);
 });

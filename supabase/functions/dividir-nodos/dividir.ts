@@ -130,9 +130,10 @@ export function parseDivision(
 
 // Instrucción de clasificación NAP — el criterio en sí (comparar contra el
 // texto_oficial, preferir null antes que forzar un encaje). Exportada para que
-// el backfill de los nodos ya publicados (Task 6, scripts/backfill-nap.mjs) la
-// reuse tal cual: si el backfill clasificara con una redacción distinta a la
-// de publicar, el catálogo terminaría con dos criterios y nadie sabría cuál
+// el backfill de los nodos ya publicados (Task 6, acción `nap_backfill` de
+// supabase/functions/admin-jobs, vía nap-backfill-logica.ts) la reuse tal
+// cual: si el backfill clasificara con una redacción distinta a la de
+// publicar, el catálogo terminaría con dos criterios y nadie sabría cuál
 // mapeo mirar.
 export const NAP_INSTRUCCION = [
   'Además, para cada nodo proponé a qué tema del marco curricular NAP corresponde',
