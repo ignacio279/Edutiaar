@@ -13,7 +13,13 @@ import { construirPromptDivision, parseDivision, TOOL_GUARDAR_DIVISION } from '.
 import type { TemaCatalogo } from './dividir.ts';
 
 const MODELO = 'claude-sonnet-4-6'; // división corre raro; calidad/costo OK (Rule 4)
-const MAX_TOKENS = 4096;
+// Techo de SALIDA, no de costo (se paga lo que se genera, no el techo). Tiene
+// que alcanzar para todos los nodos de una materia grande MÁS los campos NAP
+// (Task 5) que ahora vienen por nodo: nap_tema_id (uuid, ~36 chars) y
+// nap_confianza suman ~20-25 tokens extra por nodo sobre nombre/orden/
+// descripción. Si se vuelve a apretar, la respuesta se corta antes de llamar
+// a la tool y la publicación entera falla (ver chequeo de stop_reason abajo).
+const MAX_TOKENS = 8192;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
@@ -91,6 +97,10 @@ Deno.serve(async (req) => {
 
     // 4. Generar la división con Claude (texto o PDF nativo).
     const { system, user: userMsg } = construirPromptDivision(materia_nombre, grado, contenido ?? '', temasNap);
+    // Guarda el stop_reason de la última respuesta: si el loop termina sin
+    // haber llamado a la tool, esto distingue "se cortó por tokens" de
+    // "el modelo no quiso" (diagnóstico del truncado, ver abajo).
+    let ultimoStopReason: string | null = null;
     const callClaude: LlamarClaude = async ({ system, messages, tools }) => {
       const t0 = Date.now();
       const r = await fetch('https://api.anthropic.com/v1/messages', {
@@ -106,6 +116,7 @@ Deno.serve(async (req) => {
         throw new Error(`claude_${r.status}: ${await r.text()}`);
       }
       const data = await r.json();
+      ultimoStopReason = data.stop_reason ?? null;
       registrarUso(sb, {
         escuela_id: perfil.escuela_id, perfil_id: user.id, funcion: 'dividir-nodos', modelo: MODELO,
         usage: data.usage, latencia_ms: Date.now() - t0, ok: true,
@@ -127,6 +138,17 @@ Deno.serve(async (req) => {
       userMessage,
       maxIters: 3,
     });
+    // Sin tool call: si fue porque se agotó MAX_TOKENS, decilo con todas las
+    // letras (si no, parseDivision tira "division_sin_nodos", que apunta al
+    // lugar equivocado — parece que el modelo no devolvió nodos, no que se
+    // quedó sin presupuesto de salida).
+    if (capturado === null && ultimoStopReason === 'max_tokens') {
+      throw new Error(
+        'division_truncada: el programa es demasiado largo para dividirlo en una sola pasada ' +
+        '(la respuesta se cortó por el límite de tokens de salida antes de llamar a la tool). ' +
+        'Probá con contenido más corto o dividido en partes.',
+      );
+    }
     const division = parseDivision(capturado, materia_nombre, grado, temasNap);
 
     // 5. Guardar sol_materia (borrador) + los nodos.
