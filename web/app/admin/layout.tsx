@@ -113,12 +113,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   // Un ítem del sidebar: el activo no es botón (no se navega a donde ya estás)
   // y el chip de la derecha depende del grupo.
   const item = (it: (typeof ADMIN_NAV)[number]) => {
-    // Revisión NAP vive en el grupo `vision` pero, a diferencia de sus
-    // hermanas (Capacitación/Exportaciones, "Próximamente"), YA funciona: se
-    // excluye del chip "Pronto" y usa el mismo badge de pendientes que Pases.
+    // Del grupo `vision`, solo Capacitación y Exportaciones siguen siendo
+    // "Próximamente". Observatorio y Revisión NAP YA funcionan (fase "marco
+    // NAP"): nada de chip "Pronto" sobre pantallas que andan. Revisión usa
+    // además el mismo badge de pendientes que Pases.
     const chip = it.key === 'revision'
       ? (revisionPend > 0 ? <span style={chipPendientes}>{revisionPend}</span> : null)
-      : it.grupo === 'vision'
+      : it.grupo === 'vision' && it.key !== 'observatorio'
         ? <span style={chipPronto}>Pronto</span>
         : it.key === 'transferencias' && pendientes > 0
           ? <span style={chipPendientes}>{pendientes}</span>

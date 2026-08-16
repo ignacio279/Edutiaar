@@ -3,8 +3,10 @@
 // stub, nada más). Solo se edita en las fases secuenciales de fundaciones
 // (Fase 0 la creó; "Observatorio y avisos" sumó Observatorio; "Alumno
 // golondrina" sumó Transferencias, Instituciones, Licencias y ARCO; el restyle
-// 2026-08 al mock Admin.dc.html sumó el grupo VISIÓN — `vision: true` agrupa
-// Observatorio/Capacitación/Exportaciones bajo ese label con chip "Pronto",
+// 2026-08 al mock Admin.dc.html sumó el grupo VISIÓN — `grupo: 'vision'` agrupa
+// Observatorio/Capacitación/Exportaciones bajo ese label. El chip "Pronto" lo
+// llevan solo Capacitación y Exportaciones: Observatorio y Revisión NAP ya
+// funcionan desde la fase "marco NAP" (ver el `item()` de layout.tsx),
 // supersede la regla vieja de "Capacitación/Exportaciones no van en el nav").
 // El campo `icono` se conserva por los tests aunque el sidebar ya no lo pinte.
 // El sidebar del mock agrupa en tres bloques: el operativo (sin label),
