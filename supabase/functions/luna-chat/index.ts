@@ -214,14 +214,14 @@ Deno.serve(async (req) => {
       body: JSON.stringify({ model: MODELO, max_tokens: MAX_TOKENS, temperature: TEMPERATURA, system, messages }),
     });
     if (!r.ok) {
-      registrarUso(sb, {
+      await registrarUso(sb, {
         escuela_id: acc.escuelaId, perfil_id: user.id, funcion: 'luna-chat', modelo: MODELO,
         latencia_ms: Date.now() - t0, ok: false, error_codigo: `claude_${r.status}`,
       });
       throw new Error(`claude_${r.status}: ${await r.text()}`);
     }
     const data = await r.json();
-    registrarUso(sb, {
+    await registrarUso(sb, {
       escuela_id: acc.escuelaId, perfil_id: user.id, funcion: 'luna-chat', modelo: MODELO,
       usage: data.usage, latencia_ms: Date.now() - t0, ok: true,
     });

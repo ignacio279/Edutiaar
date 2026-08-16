@@ -109,7 +109,7 @@ Deno.serve(async (req) => {
         body: JSON.stringify({ model: MODELO, max_tokens: MAX_TOKENS, system, messages, tools }),
       });
       if (!r.ok) {
-        registrarUso(sb, {
+        await registrarUso(sb, {
           escuela_id: perfil.escuela_id, perfil_id: user.id, funcion: 'dividir-nodos', modelo: MODELO,
           latencia_ms: Date.now() - t0, ok: false, error_codigo: `claude_${r.status}`,
         });
@@ -117,7 +117,7 @@ Deno.serve(async (req) => {
       }
       const data = await r.json();
       ultimoStopReason = data.stop_reason ?? null;
-      registrarUso(sb, {
+      await registrarUso(sb, {
         escuela_id: perfil.escuela_id, perfil_id: user.id, funcion: 'dividir-nodos', modelo: MODELO,
         usage: data.usage, latencia_ms: Date.now() - t0, ok: true,
       });

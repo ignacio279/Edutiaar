@@ -57,14 +57,14 @@ Deno.serve(async (req) => {
       }),
     });
     if (!r.ok) {
-      registrarUso(sb, {
+      await registrarUso(sb, {
         escuela_id: acc.escuelaId, perfil_id: user.id, funcion: 'sol-chat', modelo: MODELO,
         latencia_ms: Date.now() - t0, ok: false, error_codigo: `claude_${r.status}`,
       });
       throw new Error(`claude_${r.status}: ${await r.text()}`);
     }
     const data = await r.json();
-    registrarUso(sb, {
+    await registrarUso(sb, {
       escuela_id: acc.escuelaId, perfil_id: user.id, funcion: 'sol-chat', modelo: MODELO,
       usage: data.usage, latencia_ms: Date.now() - t0, ok: true,
     });
