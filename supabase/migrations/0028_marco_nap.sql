@@ -4,6 +4,14 @@
 -- Server-only a propósito (RLS habilitada SIN policies): lo leen dividir-nodos
 -- y las fns admin-* con service_role. La docente todavía no ve su tema NAP
 -- (fuera de alcance) y el alumno nunca.
+--
+-- OJO: nodo.nap_* (agregadas más abajo) NO eran server-only hasta la
+-- migración 0031_nodo_nap_guard.sql — quedaban cubiertas por las policies
+-- normales de `nodo` (nodo_update_autor), agnósticas de columnas, así que
+-- cualquier docente podía escribirlas en sus propios nodos. Desde 0031 lo
+-- garantiza el trigger nodo_nap_guard (rechaza el cambio si auth.role() no es
+-- 'service_role'), que además invalida la clasificación cuando cambia el
+-- texto del nodo. Ver esa migración y el spec (sección Modelo de datos).
 
 create table nap_eje (
   id uuid primary key default gen_random_uuid(),

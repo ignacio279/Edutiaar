@@ -141,8 +141,21 @@ RLS: el catálogo es **server-only** (lo leen `dividir-nodos` y las fns `admin-*
 con service_role). No se expone a `anon` ni a `authenticated` — la docente no lo
 ve todavía (fuera de alcance), y el alumno nunca.
 
-`nodo.nap_*` queda cubierto por las policies que `nodo` ya tiene. La escritura
-del mapeo pasa solo por service_role.
+`nodo.nap_*` queda cubierto por las policies que `nodo` ya tiene, y esas
+policies son agnósticas de columnas: `nodo_update_autor` por sí sola dejaba a
+cualquier docente autenticada escribir `nap_tema_id`/`nap_confianza`/
+`nap_revisado`/`nap_intentos` de sus propios nodos por `PATCH /rest/v1/nodo`
+directo. **"La escritura del mapeo pasa solo por service_role" fue falso hasta
+la migración `0031_nodo_nap_guard.sql`** (Task 10 de la revisión final, hallazgo
+4): un trigger (`nodo_nap_guard`, antes de cada `UPDATE` en `nodo`) rechaza
+cualquier cambio a esas columnas cuyo `auth.role()` no sea `'service_role'`.
+El mismo trigger resuelve el hallazgo 5 (editar `nombre`/`descripcion` sin
+invalidar la clasificación vieja): si cambió el texto, invalida
+(`nap_revisado=false`, `nap_intentos=0`, `nap_confianza=null`, conservando
+`nap_tema_id` como punto de partida) **antes** de llegar al guard, para que esa
+propia invalidación —que también escribe columnas `nap_*`— no se autobloquee.
+Detalle y tests en `supabase/migrations/0031_nodo_nap_guard.sql` y
+`tests/integration/nap-guard.test.mjs`.
 
 ## La clasificación
 
