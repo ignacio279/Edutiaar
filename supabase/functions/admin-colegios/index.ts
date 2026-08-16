@@ -21,7 +21,7 @@ import {
 // módulo hermano puro (nap-revision-logica.ts), testeable desde Node — acá
 // solo el I/O (patrón index.ts=I/O / *-logica.ts=lógica del resto del repo).
 import {
-  armarCatalogoGrado, armarNodosRevision, gradoCoincide, normalizarNapTemaId,
+  armarCatalogoGrado, armarNodosRevision, gradoCoincide, normalizarNapTemaId, soloNodosReales,
   type NapTemaRaw, type NodoNapRaw, type TemaCatalogoOut,
 } from './nap-revision-logica.ts';
 
@@ -254,11 +254,15 @@ Deno.serve(async (req) => {
       }
 
       // Cola de revisión del mapeo NAP (Task 7). `nap_revisado = false` +
-      // (sin tema o confianza baja): exactamente el criterio del brief, SIN
-      // excluir la materia de prueba que nap_backfill sí excluye (esMateriaDeTest
-      // es para no gastar API real clasificando basura de tests; acá es
-      // trabajo humano y no cuesta nada mostrarlo — decisión del controller).
+      // (sin tema, confianza baja O confianza null con tema puesto — un
+      // mapeo sin respaldo, alcanzable desde la publicación porque el schema
+      // de la tool no exige nap_confianza; review final, Hallazgo 4). Se
+      // excluyen las filas de materias de test (soloNodosReales, mismo
+      // filtro que ya usa nap_backfill para no gastar API — acá es para no
+      // ensuciar la vista de un humano; review final, Hallazgo 2). NUNCA se
+      // borran esas filas, solo se sacan de lo que ve el admin.
       case 'nap_revision_listar': {
+        const soloConteo = body.solo_conteo === true;
         const { data: nodosRaw, error: nErr } = await sb
           .from('nodo')
           .select(
@@ -266,11 +270,18 @@ Deno.serve(async (req) => {
             'programa:programa_id(grado, materia:materia_id(nombre))',
           )
           .eq('nap_revisado', false)
-          .or('nap_tema_id.is.null,nap_confianza.lt.0.7')
+          .or('nap_tema_id.is.null,nap_confianza.lt.0.7,nap_confianza.is.null')
           .order('nap_intentos', { ascending: false })
           .order('nombre', { ascending: true });
         if (nErr) throw nErr;
-        const nodos = (nodosRaw ?? []) as unknown as NodoNapRaw[];
+        const nodos = soloNodosReales((nodosRaw ?? []) as unknown as NodoNapRaw[]);
+
+        // Modo liviano para el badge del sidebar (review final, Hallazgo 3):
+        // el badge pide este número en CADA navegación solo para leer
+        // `.length` — sale ANTES de la parte cara (el join con sol_materia y
+        // el catálogo NAP por grado, que trae el texto_oficial completo de
+        // ~40 temas por grado).
+        if (soloConteo) return json({ pendientes: nodos.length });
 
         // Colegio de cada nodo: vía sol_materia (no siempre existe — nodos de
         // fixtures/tests quedan sin publicar; armarNodosRevision cae a un
@@ -352,7 +363,14 @@ Deno.serve(async (req) => {
           .eq('id', nodo_id);
         if (uErr) throw uErr;
 
-        registrarAuditoria(sb, ctx, {
+        // Awaiteada a propósito (review final, Hallazgo 1): el patrón
+        // fire-and-forget del resto del archivo YA se vio perder un insert
+        // real en la Task 6 (el runtime puede cortar la invocación al
+        // responder antes de que viaje) — por eso _shared/auditoria.ts
+        // devuelve Promise<void>. Acá la mutación reescribe el mapeo que
+        // agrega el observatorio; ADR-009 exige que quede auditada de
+        // verdad, no "probablemente".
+        await registrarAuditoria(sb, ctx, {
           accion: 'nap_revision_fijar',
           entidad: 'nodo',
           entidad_id: nodo_id,

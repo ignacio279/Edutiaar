@@ -78,11 +78,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   // Badge de "Revisión NAP": nodos esperando confirmación humana. Mismo
   // patrón que el de Pases — silencioso si falla, se recalcula al navegar.
+  // `solo_conteo` (review final, Hallazgo 3): esto corre en CADA navegación
+  // solo para leer un número; sin el flag, nap_revision_listar arma el
+  // listado completo (join con sol_materia + el catálogo NAP con el
+  // texto_oficial de ~40 temas por grado) nada más que para tirarlo.
   useEffect(() => {
     if (esLogin || !me) return;
     (async () => {
-      const r = await llamarAdmin<{ nodos: unknown[] }>('admin-colegios', 'nap_revision_listar', {});
-      if (r.ok) setRevisionPend((r.data.nodos ?? []).length);
+      const r = await llamarAdmin<{ pendientes: number }>('admin-colegios', 'nap_revision_listar', { solo_conteo: true });
+      if (r.ok) setRevisionPend(r.data.pendientes ?? 0);
     })();
   }, [esLogin, me, pathname]);
 

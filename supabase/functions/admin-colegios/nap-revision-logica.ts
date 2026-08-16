@@ -9,6 +9,7 @@
 // cruzados (ver progress.md: nodos de "conteo" archivados en un programa de
 // Lengua que mapean bien a Matemática) y que el nombre de materia que carga
 // la docente puede no calzar con el nombre oficial del marco.
+import { esMateriaDeTest } from '../admin-jobs/nap-backfill-logica.ts';
 
 export type NodoNapRaw = {
   id: string;
@@ -87,6 +88,18 @@ export type NodoRevisionOut = {
 // "Nodo golondrina"/materia TestRep). No es tarea de esta cola limpiarlos:
 // se muestran igual, sin romper la pantalla.
 export const SIN_COLEGIO = 'Sin colegio asignado';
+
+// Hallazgo 2 de la review final: `nap_backfill` ya excluye las materias de
+// test por prefijo (`esMateriaDeTest`, mismo módulo) para no gastar API real
+// clasificando basura de `npm run test:db` que nunca limpió su corrida — pero
+// esta cola no aplicaba el mismo filtro, así que esos nodos (con descripción
+// real, sin tema) se acumulaban en la vista de un humano para siempre y el
+// badge del sidebar nunca podía bajar de esa cantidad. Filtra la VISTA, no la
+// base: nunca se borran esas filas (regla del proyecto), solo se sacan de lo
+// que ve el admin.
+export function soloNodosReales(nodos: NodoNapRaw[]): NodoNapRaw[] {
+  return nodos.filter((n) => !esMateriaDeTest(n.programa?.materia?.nombre));
+}
 
 // Une cada nodo pendiente con su colegio (mapa programa_id → nombre de
 // escuela, ya resuelto en index.ts vía sol_materia) y el catálogo de temas

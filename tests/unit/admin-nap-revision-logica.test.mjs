@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  armarCatalogoGrado, armarNodosRevision, gradoCoincide, normalizarNapTemaId, SIN_COLEGIO,
+  armarCatalogoGrado, armarNodosRevision, gradoCoincide, normalizarNapTemaId, soloNodosReales, SIN_COLEGIO,
 } from '../../supabase/functions/admin-colegios/nap-revision-logica.ts';
 
 // ── armarCatalogoGrado ───────────────────────────────────────────────────
@@ -124,4 +124,28 @@ test('gradoCoincide: con tema pero sin alguno de los dos grados (programa u orfa
   assert.equal(gradoCoincide('t1', null, 3), false);
   assert.equal(gradoCoincide('t1', 3, null), false);
   assert.equal(gradoCoincide('t1', null, null), false);
+});
+
+// ── soloNodosReales (Hallazgo 2, review final) ────────────────────────────
+
+const nodoDe = (id, nombreMateria) => ({
+  id, nombre: id, nap_tema_id: null, nap_confianza: null, nap_intentos: 0,
+  programa_id: `p-${id}`, programa: { grado: 1, materia: { nombre: nombreMateria } },
+});
+
+test('soloNodosReales: saca los nodos de materias de test (mismo prefijo que usa nap_backfill)', () => {
+  const reales = [nodoDe('a', 'Lengua'), nodoDe('b', 'TestRep xf20n1m5y8fkcjec8en9n'), nodoDe('c', 'Matemática')];
+  const out = soloNodosReales(reales);
+  assert.deepEqual(out.map((n) => n.id), ['a', 'c']);
+});
+
+test('soloNodosReales: sin materias de test, no saca nada', () => {
+  const reales = [nodoDe('a', 'Lengua'), nodoDe('b', 'Ciencias Naturales')];
+  assert.deepEqual(soloNodosReales(reales), reales);
+});
+
+test('soloNodosReales: nodo sin programa (defensivo) no revienta y queda adentro', () => {
+  const nodoSinPrograma = { ...nodoDe('x', 'Lengua'), programa: null };
+  const out = soloNodosReales([nodoSinPrograma]);
+  assert.equal(out.length, 1);
 });
