@@ -139,7 +139,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <AdminContext.Provider value={me}>
       <div style={{ minHeight: '100vh', display: 'flex', animation: 'edFade .3s ease' }}>
-        <aside style={{ width: 236, flexShrink: 0, background: ADMIN.carta, borderRight: `2px solid ${ADMIN.bordeCalido}`, padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: 3, position: 'sticky', top: 0, height: '100vh', overflowY: 'auto' }}>
+        {/* Al imprimir, el panel desaparece y queda solo el contenido: el legajo
+            ARCO sale como hoja A4 limpia. La pantalla de ARCO ya ocultaba sus
+            propios botones, pero el sidebar se colaba en la impresión. */}
+        <style>{`@media print {
+          .ad-sidebar { display: none !important; }
+          .ad-main { padding: 0 !important; }
+        }`}</style>
+        <aside className="ad-sidebar" style={{ width: 236, flexShrink: 0, background: ADMIN.carta, borderRight: `2px solid ${ADMIN.bordeCalido}`, padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: 3, position: 'sticky', top: 0, height: '100vh', overflowY: 'auto' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 8px 20px' }}>
             <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 11, background: ADMIN.base, display: 'grid', placeItems: 'center', color: '#fff', fontFamily: BALOO, fontWeight: 800, fontSize: 22 }}>E</div>
             <div style={{ lineHeight: 1.1 }}>
@@ -160,7 +167,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             Cerrar sesión
           </button>
         </aside>
-        <main style={{ flex: 1, minWidth: 0, padding: 'clamp(22px, 3.2vw, 38px)', overflowX: 'hidden', animation: 'edFade .25s ease' }}>
+        <main className="ad-main" style={{ flex: 1, minWidth: 0, padding: 'clamp(22px, 3.2vw, 38px)', overflowX: 'hidden', animation: 'edFade .25s ease' }}>
           {children}
         </main>
       </div>
