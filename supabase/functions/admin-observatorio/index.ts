@@ -130,7 +130,11 @@ Deno.serve(async (req) => {
     };
 
     // ── Lecturas del marco NAP (desempenoPorEje) ────────────────────────────
-    const traerNodosNap = () => traerTabla<NodoNap>('nodo', 'id, nap_tema_id');
+    // Trae también los campos de banda: mapeoCuenta (en desempenoPorEje)
+    // decide con ellos si el mapeo entra al agregado — pendiente o descartado
+    // no suma (bandas de confianza, 2026-08-18).
+    const traerNodosNap = () =>
+      traerTabla<NodoNap>('nodo', 'id, nap_tema_id, nap_confianza, nap_revisado');
 
     const traerAlumnoNodo = () =>
       traerTabla<AlumnoNodoNap>('alumno_nodo', 'alumno_id, nodo_id, puntaje, estado');

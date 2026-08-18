@@ -3,7 +3,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  armarCatalogoGrado, armarNodosRevision, gradoCoincide, normalizarNapTemaId, soloNodosReales, SIN_COLEGIO,
+  armarCatalogoGrado, armarNodosRevision, gradoCoincide, normalizarNapTemaId, partirPorBanda,
+  soloNodosReales, SIN_COLEGIO,
 } from '../../supabase/functions/admin-colegios/nap-revision-logica.ts';
 
 // ── armarCatalogoGrado ───────────────────────────────────────────────────
@@ -60,7 +61,8 @@ test('armarNodosRevision: arma la fila con colegio, materia, grado y el catálog
     new Map([[1, CATALOGO_G1]]),
   );
   assert.deepEqual(out, [{
-    id: 'n1', nombre: 'Vocales', colegio: 'Escuela Rural N° 12', materia: 'Lengua', grado: 1,
+    id: 'n1', nombre: 'Vocales', descripcion: null, ejemplos: [],
+    colegio: 'Escuela Rural N° 12', materia: 'Lengua', grado: 1,
     nap_tema_id: null, nap_confianza: null, nap_intentos: 0, temas_posibles: CATALOGO_G1,
   }]);
 });
@@ -148,4 +150,60 @@ test('soloNodosReales: nodo sin programa (defensivo) no revienta y queda adentro
   const nodoSinPrograma = { ...nodoDe('x', 'Lengua'), programa: null };
   const out = soloNodosReales([nodoSinPrograma]);
   assert.equal(out.length, 1);
+});
+
+// ── partirPorBanda (auto-triage por banda, 2026-08-18) ────────────────────
+
+const conBanda = (id, tema, conf) => ({ ...nodoDe(id, 'Lengua'), nap_tema_id: tema, nap_confianza: conf });
+
+test('partirPorBanda: banda media y mapeo sin respaldo van a pendientes', () => {
+  const out = partirPorBanda([
+    conBanda('medio', 't1', 0.65),
+    conBanda('sin-respaldo', 't1', null),
+  ]);
+  assert.deepEqual(out.pendientes.map((n) => n.id), ['medio', 'sin-respaldo']);
+  assert.deepEqual(out.descartados, []);
+});
+
+test('partirPorBanda: sin propuesta o confianza baja van a descartados', () => {
+  const out = partirPorBanda([
+    conBanda('sin-tema', null, null),
+    conBanda('bajo', 't1', 0.55),
+  ]);
+  assert.deepEqual(out.pendientes, []);
+  assert.deepEqual(out.descartados.map((n) => n.id), ['sin-tema', 'bajo']);
+});
+
+test('partirPorBanda: un confiable que se coló en la consulta no aparece en ninguna vista', () => {
+  const out = partirPorBanda([conBanda('alto', 't1', 0.9)]);
+  assert.deepEqual(out.pendientes, []);
+  assert.deepEqual(out.descartados, []);
+});
+
+test('partirPorBanda: preserva el orden de llegada dentro de cada vista', () => {
+  const out = partirPorBanda([
+    conBanda('b', 't1', 0.7), conBanda('x', null, null), conBanda('a', 't1', 0.6),
+  ]);
+  assert.deepEqual(out.pendientes.map((n) => n.id), ['b', 'a']);
+  assert.deepEqual(out.descartados.map((n) => n.id), ['x']);
+});
+
+// ── contexto del nodo en la tarjeta (descripcion + ejercicios de muestra) ──
+
+test('armarNodosRevision: propaga la descripcion y los ejercicios de muestra del nodo', () => {
+  const nodoConDesc = { ...NODO_BASE, descripcion: 'Reconocer las vocales en palabras cortas' };
+  const out = armarNodosRevision(
+    [nodoConDesc],
+    new Map([['p1', 'Escuela']]),
+    new Map([[1, CATALOGO_G1]]),
+    new Map([['n1', ['¿Cuál empieza con A?', '¿Cuántas vocales tiene "mate"?']]]),
+  );
+  assert.equal(out[0].descripcion, 'Reconocer las vocales en palabras cortas');
+  assert.deepEqual(out[0].ejemplos, ['¿Cuál empieza con A?', '¿Cuántas vocales tiene "mate"?']);
+});
+
+test('armarNodosRevision: sin descripcion ni ejemplos cae a null y lista vacía (no undefined)', () => {
+  const out = armarNodosRevision([NODO_BASE], new Map(), new Map());
+  assert.equal(out[0].descripcion, null);
+  assert.deepEqual(out[0].ejemplos, []);
 });

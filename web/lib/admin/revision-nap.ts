@@ -14,6 +14,8 @@ export type TemaOpcion = {
 export type NodoRevision = {
   id: string;
   nombre: string;
+  descripcion: string | null; // lo que escribió/generó la autoría — contexto para decidir
+  ejemplos: string[]; // hasta 3 enunciados reales del pool del nodo
   colegio: string;
   materia: string;
   grado: number | null;

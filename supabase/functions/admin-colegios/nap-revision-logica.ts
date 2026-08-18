@@ -10,10 +10,12 @@
 // Lengua que mapean bien a Matemática) y que el nombre de materia que carga
 // la docente puede no calzar con el nombre oficial del marco.
 import { esMateriaDeTest } from '../admin-jobs/nap-backfill-logica.ts';
+import { bandaNap } from '../_shared/nap-bandas.ts';
 
 export type NodoNapRaw = {
   id: string;
   nombre: string;
+  descripcion?: string | null;
   nap_tema_id: string | null;
   nap_confianza: number | null;
   nap_intentos: number;
@@ -74,6 +76,8 @@ export function armarCatalogoGrado(filas: NapTemaRaw[]): TemaCatalogoOut[] {
 export type NodoRevisionOut = {
   id: string;
   nombre: string;
+  descripcion: string | null;
+  ejemplos: string[];
   colegio: string;
   materia: string;
   grado: number | null;
@@ -101,6 +105,23 @@ export function soloNodosReales(nodos: NodoNapRaw[]): NodoNapRaw[] {
   return nodos.filter((n) => !esMateriaDeTest(n.programa?.materia?.nombre));
 }
 
+// Auto-triage por banda (2026-08-18): la cola por defecto es SOLO la banda
+// media ("revisar" — incluido el mapeo sin respaldo); lo descartado (<60% o
+// sin propuesta) va a la vista del toggle, recuperable. Un confiable que se
+// cuele en la consulta (el prefilter de la query es más laxo que la banda) no
+// aparece en ninguna: no necesita humano.
+export type NodosPorBanda = { pendientes: NodoNapRaw[]; descartados: NodoNapRaw[] };
+
+export function partirPorBanda(nodos: NodoNapRaw[]): NodosPorBanda {
+  const out: NodosPorBanda = { pendientes: [], descartados: [] };
+  for (const n of nodos) {
+    const banda = bandaNap(n);
+    if (banda === 'revisar') out.pendientes.push(n);
+    else if (banda === 'descartado') out.descartados.push(n);
+  }
+  return out;
+}
+
 // Une cada nodo pendiente con su colegio (mapa programa_id → nombre de
 // escuela, ya resuelto en index.ts vía sol_materia) y el catálogo de temas
 // del grado de su programa.
@@ -108,12 +129,15 @@ export function armarNodosRevision(
   nodos: NodoNapRaw[],
   colegioPorPrograma: Map<string, string>,
   catalogoPorGrado: Map<number, TemaCatalogoOut[]>,
+  ejemplosPorNodo: Map<string, string[]> = new Map(),
 ): NodoRevisionOut[] {
   return nodos.map((n) => {
     const grado = n.programa?.grado ?? null;
     return {
       id: n.id,
       nombre: n.nombre,
+      descripcion: n.descripcion ?? null,
+      ejemplos: ejemplosPorNodo.get(n.id) ?? [],
       colegio: colegioPorPrograma.get(n.programa_id) ?? SIN_COLEGIO,
       materia: n.programa?.materia?.nombre ?? '(sin materia)',
       grado,

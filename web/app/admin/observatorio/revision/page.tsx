@@ -5,16 +5,28 @@
 // corrige. Mismo principio que LUNA: la máquina propone, la persona decide —
 // un nodo confirmado (`nap_revisado = true`) nunca se reclasifica solo.
 //
+// Bandas de confianza (2026-08-18): acá solo llega la banda media (60-75%) y
+// el mapeo sin respaldo; lo confiable (>=75%) entra al Observatorio solo, y
+// lo descartado (<60% o sin propuesta) queda fuera del marco efectivo pero
+// RECUPERABLE bajo el toggle "Descartados" — confirmarle un tema lo rescata.
+//
 // Nunca datos de alumnos: esta pantalla trabaja sobre nodos y temas del
 // currículum, no sobre chicos.
 import { useEffect, useMemo, useState } from 'react';
 import { ADMIN } from '@/lib/admin/tema';
 import { llamarAdmin, ERRS_ADMIN, ERRS_RED_ADMIN } from '@/lib/admin/api';
 import { toast } from '@/lib/toast';
+import FiltroChips from '@/components/admin/FiltroChips';
+import { UMBRAL_CONFIABLE, UMBRAL_DESCARTE } from '@/lib/admin/nap-bandas';
 import {
   agruparPorColegioMateria, agruparTemasPorMateria, alTope, temaPorId, textoConfianza,
   type NodoRevision,
 } from '@/lib/admin/revision-nap';
+
+const PCT_CONFIABLE = Math.round(UMBRAL_CONFIABLE * 100);
+const PCT_DESCARTE = Math.round(UMBRAL_DESCARTE * 100);
+
+type Vista = 'pendientes' | 'descartados';
 
 const BALOO = 'var(--font-baloo), cursive';
 const QUICK = 'var(--font-quicksand), sans-serif';
@@ -77,6 +89,28 @@ function FilaNodo({
         )}
       </div>
 
+      {/* Contexto para decidir (bandas 2026-08-18): qué se trabaja en el
+          nodo y qué ejercicios reales le llegan al chico. */}
+      {(nodo.descripcion || nodo.ejemplos.length > 0) && (
+        <div style={{ marginTop: 10, background: ADMIN.suave, border: `1px solid ${ADMIN.bordeCalido}`, borderRadius: 12, padding: '10px 14px' }}>
+          {nodo.descripcion && (
+            <div style={{ fontSize: 13, color: ADMIN.ink, fontWeight: 600, lineHeight: 1.45 }}>{nodo.descripcion}</div>
+          )}
+          {nodo.ejemplos.length > 0 && (
+            <div style={{ marginTop: nodo.descripcion ? 8 : 0 }}>
+              <div style={{ fontSize: 11.5, fontWeight: 800, color: ADMIN.tinta2, textTransform: 'uppercase', letterSpacing: '.4px' }}>
+                Ejercicios del nodo
+              </div>
+              <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+                {nodo.ejemplos.map((e, i) => (
+                  <li key={i} style={{ fontSize: 12.5, color: ADMIN.tinta2, fontWeight: 600, lineHeight: 1.5 }}>{e}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 12 }}>
         <select
           value={seleccion}
@@ -125,18 +159,23 @@ function FilaNodo({
 }
 
 export default function AdminRevisionNap() {
+  const [vista, setVista] = useState<Vista>('pendientes');
   const [nodos, setNodos] = useState<NodoRevision[] | null>(null);
+  const [conteos, setConteos] = useState<{ pendientes: number; descartados: number } | null>(null);
   const [error, setError] = useState('');
   const [selecciones, setSelecciones] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  async function cargar() {
+  async function cargar(v: Vista) {
     setNodos(null);
     setError('');
-    const r = await llamarAdmin<{ nodos: NodoRevision[] }>('admin-colegios', 'nap_revision_listar', {});
+    const r = await llamarAdmin<{ nodos: NodoRevision[]; pendientes: number; descartados: number }>(
+      'admin-colegios', 'nap_revision_listar', { vista: v },
+    );
     if (!r.ok) { setError(copyError(r.data.error)); setNodos([]); return; }
     const filas = r.data.nodos ?? [];
     setNodos(filas);
+    setConteos({ pendientes: r.data.pendientes ?? 0, descartados: r.data.descartados ?? 0 });
     // Default del selector: la propuesta de SOL si existe, o "Fuera del
     // marco" si nunca encontró tema. No pisa lo que ya venía tocando el admin.
     setSelecciones((prev) => {
@@ -146,7 +185,7 @@ export default function AdminRevisionNap() {
     });
   }
 
-  useEffect(() => { cargar(); }, []);
+  useEffect(() => { cargar(vista); }, [vista]);
 
   async function confirmar(nodoId: string) {
     if (busyId) return;
@@ -155,8 +194,9 @@ export default function AdminRevisionNap() {
     const r = await llamarAdmin('admin-colegios', 'nap_revision_fijar', { nodo_id: nodoId, nap_tema_id: napTemaId });
     setBusyId(null);
     if (!r.ok) { toast(copyError(r.data.error)); return; }
-    toast('Tema confirmado.');
+    toast(vista === 'descartados' && napTemaId ? 'Nodo rescatado.' : 'Tema confirmado.');
     setNodos((prev) => (prev ?? []).filter((n) => n.id !== nodoId));
+    setConteos((prev) => prev && ({ ...prev, [vista]: Math.max(0, prev[vista] - 1) }));
   }
 
   const grupos = agruparPorColegioMateria(nodos ?? []);
@@ -167,10 +207,31 @@ export default function AdminRevisionNap() {
       <h1 style={{ fontFamily: BALOO, fontWeight: 700, fontSize: 'clamp(26px, 3.6vw, 34px)', color: ADMIN.ink, margin: '0 0 4px' }}>
         Revisión del mapeo NAP
       </h1>
-      <p style={{ fontSize: 14.5, color: ADMIN.tinta2, fontWeight: 600, margin: '0 0 18px', maxWidth: 680, textWrap: 'pretty' }}>
-        SOL propone a qué tema del marco curricular corresponde cada nodo. Acá confirmás la propuesta o la
-        corregís — nunca se reclasifica solo un nodo ya revisado.
+      <p style={{ fontSize: 14.5, color: ADMIN.tinta2, fontWeight: 600, margin: '0 0 14px', maxWidth: 680, textWrap: 'pretty' }}>
+        SOL propone a qué tema del marco curricular corresponde cada nodo. Lo que propone con {PCT_CONFIABLE}% o más
+        de confianza entra solo; lo de menos de {PCT_DESCARTE}% (o sin propuesta) queda fuera del marco. Acá decidís
+        la banda del medio — nunca se reclasifica solo un nodo ya revisado.
       </p>
+
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+        <FiltroChips
+          opciones={[
+            { key: 'pendientes', label: `Para revisar${conteos ? ` (${conteos.pendientes})` : ''}` },
+            { key: 'descartados', label: `Descartados${conteos ? ` (${conteos.descartados})` : ''}` },
+          ]}
+          valor={vista}
+          onCambio={(k) => setVista(k as Vista)}
+        />
+      </div>
+
+      {vista === 'descartados' && (
+        <div style={{ background: ADMIN.burbuja, border: `1px solid ${ADMIN.borde}`, borderRadius: 14, padding: '12px 16px', marginBottom: 16, maxWidth: 680 }}>
+          <span style={{ fontSize: 13.5, color: ADMIN.oscuro, fontWeight: 600, lineHeight: 1.5 }}>
+            SOL los descartó: confianza menor a {PCT_DESCARTE}% o ninguna propuesta. No cuentan en el Observatorio
+            y no hace falta hacer nada — pero si alguno mapea bien a un tema, elegilo y confirmá para rescatarlo.
+          </span>
+        </div>
+      )}
 
       {totalTope > 0 && (
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: ADMIN.dangerFondo, border: `1.5px solid ${ADMIN.danger}22`, borderRadius: 999, padding: '7px 16px', marginBottom: 16 }}>
@@ -195,9 +256,13 @@ export default function AdminRevisionNap() {
 
       {nodos !== null && !error && grupos.length === 0 && (
         <div style={{ ...carta, textAlign: 'center', padding: '48px 24px', maxWidth: 640 }}>
-          <div style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 19, color: ADMIN.ink }}>No hay nada pendiente de revisar</div>
+          <div style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 19, color: ADMIN.ink }}>
+            {vista === 'pendientes' ? 'No hay nada pendiente de revisar' : 'No hay nodos descartados'}
+          </div>
           <div style={{ fontSize: 14.5, color: ADMIN.tinta2, fontWeight: 600, marginTop: 4 }}>
-            Todos los nodos sin tema o con confianza baja ya fueron confirmados o corregidos.
+            {vista === 'pendientes'
+              ? `Los nodos en la banda media de confianza (${PCT_DESCARTE}-${PCT_CONFIABLE}%) ya fueron confirmados o corregidos.`
+              : 'SOL no descartó ningún nodo: todos tienen propuesta con confianza suficiente.'}
           </div>
         </div>
       )}

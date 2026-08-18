@@ -21,9 +21,10 @@ import {
 // módulo hermano puro (nap-revision-logica.ts), testeable desde Node — acá
 // solo el I/O (patrón index.ts=I/O / *-logica.ts=lógica del resto del repo).
 import {
-  armarCatalogoGrado, armarNodosRevision, gradoCoincide, normalizarNapTemaId, soloNodosReales,
-  type NapTemaRaw, type NodoNapRaw, type TemaCatalogoOut,
+  armarCatalogoGrado, armarNodosRevision, gradoCoincide, normalizarNapTemaId, partirPorBanda,
+  soloNodosReales, type NapTemaRaw, type NodoNapRaw, type TemaCatalogoOut,
 } from './nap-revision-logica.ts';
+import { UMBRAL_CONFIABLE } from '../_shared/nap-bandas.ts';
 
 const noVacio = (s: unknown): s is string => typeof s === 'string' && s.trim().length > 0;
 
@@ -253,35 +254,42 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Cola de revisión del mapeo NAP (Task 7). `nap_revisado = false` +
-      // (sin tema, confianza baja O confianza null con tema puesto — un
-      // mapeo sin respaldo, alcanzable desde la publicación porque el schema
-      // de la tool no exige nap_confianza; review final, Hallazgo 4). Se
+      // Cola de revisión del mapeo NAP (Task 7 + bandas 2026-08-18).
+      // `nap_revisado = false` + todo lo no-confiable (sin tema, confianza
+      // bajo el umbral, O confianza null con tema puesto — un mapeo sin
+      // respaldo, alcanzable desde la publicación porque el schema de la tool
+      // no exige nap_confianza; review final, Hallazgo 4). La partición fina
+      // la hace partirPorBanda en código puro: la vista por defecto es la
+      // banda media ("pendientes"), y lo descartado (<60% o sin propuesta) va
+      // al toggle `vista: 'descartados'` — recuperable, nunca final. Se
       // excluyen las filas de materias de test (soloNodosReales, mismo
       // filtro que ya usa nap_backfill para no gastar API — acá es para no
       // ensuciar la vista de un humano; review final, Hallazgo 2). NUNCA se
       // borran esas filas, solo se sacan de lo que ve el admin.
       case 'nap_revision_listar': {
         const soloConteo = body.solo_conteo === true;
+        const vista = body.vista === 'descartados' ? 'descartados' : 'pendientes';
         const { data: nodosRaw, error: nErr } = await sb
           .from('nodo')
           .select(
-            'id, nombre, nap_tema_id, nap_confianza, nap_intentos, programa_id, ' +
+            'id, nombre, descripcion, nap_tema_id, nap_confianza, nap_intentos, programa_id, ' +
             'programa:programa_id(grado, materia:materia_id(nombre))',
           )
           .eq('nap_revisado', false)
-          .or('nap_tema_id.is.null,nap_confianza.lt.0.7,nap_confianza.is.null')
+          .or(`nap_tema_id.is.null,nap_confianza.lt.${UMBRAL_CONFIABLE},nap_confianza.is.null`)
           .order('nap_intentos', { ascending: false })
           .order('nombre', { ascending: true });
         if (nErr) throw nErr;
-        const nodos = soloNodosReales((nodosRaw ?? []) as unknown as NodoNapRaw[]);
+        const bandas = partirPorBanda(soloNodosReales((nodosRaw ?? []) as unknown as NodoNapRaw[]));
+        const conteos = { pendientes: bandas.pendientes.length, descartados: bandas.descartados.length };
 
         // Modo liviano para el badge del sidebar (review final, Hallazgo 3):
         // el badge pide este número en CADA navegación solo para leer
-        // `.length` — sale ANTES de la parte cara (el join con sol_materia y
-        // el catálogo NAP por grado, que trae el texto_oficial completo de
-        // ~40 temas por grado).
-        if (soloConteo) return json({ pendientes: nodos.length });
+        // `pendientes` — sale ANTES de la parte cara (el join con sol_materia,
+        // el catálogo NAP por grado y los ejercicios de muestra).
+        if (soloConteo) return json(conteos);
+
+        const nodos = vista === 'descartados' ? bandas.descartados : bandas.pendientes;
 
         // Colegio de cada nodo: vía sol_materia (no siempre existe — nodos de
         // fixtures/tests quedan sin publicar; armarNodosRevision cae a un
@@ -315,7 +323,24 @@ Deno.serve(async (req) => {
           catalogoPorGrado.set(grado, armarCatalogoGrado((temasRaw ?? []) as unknown as NapTemaRaw[]));
         }
 
-        return json({ nodos: armarNodosRevision(nodos, colegioPorPrograma, catalogoPorGrado) });
+        // Ejercicios de muestra por nodo (contexto para decidir la banda
+        // media): hasta 3 enunciados del pool. Una consulta por nodo porque
+        // PostgREST no limita por grupo — la cola es corta (decenas como
+        // mucho) y van en paralelo.
+        const ejemplosPorNodo = new Map<string, string[]>();
+        await Promise.all(nodos.map(async (n) => {
+          const { data: ej } = await sb
+            .from('ejercicio')
+            .select('enunciado')
+            .eq('nodo_id', n.id)
+            .limit(3);
+          ejemplosPorNodo.set(n.id, ((ej ?? []) as { enunciado: string }[]).map((e) => e.enunciado));
+        }));
+
+        return json({
+          nodos: armarNodosRevision(nodos, colegioPorPrograma, catalogoPorGrado, ejemplosPorNodo),
+          ...conteos,
+        });
       }
 
       // Confirma o corrige la propuesta de un nodo: `nap_tema_id` (un id del

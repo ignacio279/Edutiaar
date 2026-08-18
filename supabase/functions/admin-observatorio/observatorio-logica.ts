@@ -1,6 +1,7 @@
 // Lógica PURA del observatorio educativo (WP-A — fase "Observatorio y avisos").
 // Módulo hermano de index.ts SIN imports de Deno/supabase: testeable desde Node
 // (patrón admin-costos/agregar.ts; tests/unit/admin-observatorio.test.mjs).
+import { mapeoCuenta } from '../_shared/nap-bandas.ts';
 //
 // ANONIMATO (D-OA3): acá se cocina el k-anonimato. Toda métrica de DESEMPEÑO
 // (precisión, dominio) de una celda con menos de K_ANONIMATO alumnos distintos
@@ -53,8 +54,15 @@ export type FilaMateria = {
   muestraInsuficiente: boolean;
 };
 
-// Tipos para desempenoPorEje (marco NAP).
-export type NodoNap = { id: string; nap_tema_id?: string | null };
+// Tipos para desempenoPorEje (marco NAP). Los campos de banda (confianza y
+// revisado) deciden si el mapeo CUENTA (mapeoCuenta, _shared/nap-bandas.ts):
+// pendiente o descartado no suma al dato provincial.
+export type NodoNap = {
+  id: string;
+  nap_tema_id?: string | null;
+  nap_confianza?: number | null;
+  nap_revisado?: boolean | null;
+};
 export type TemaCat = { id: string; eje_id: string; nombre: string; grado: number; orden: number };
 export type EjeCat = { id: string; materia: string; nombre: string; orden: number };
 export type AlumnoNodoNap = { alumno_id: string; nodo_id: string; puntaje?: number | null; estado?: string | null };
@@ -315,10 +323,12 @@ export function desempenoPorEje(
   const temasFiltro = temas.filter((t) => t.grado === filtro.grado && ejeIds.has(t.eje_id));
   if (temasFiltro.length === 0) return [];
 
-  // nodo → tema. Un nodo sin nap_tema_id no entra al mapa y por lo tanto no
-  // existe para el resto de la función.
+  // nodo → tema. Solo entran los mapeos que CUENTAN (bandas de confianza,
+  // 2026-08-18): confiable (>=75%) o confirmado por un humano. Un nodo sin
+  // tema, pendiente de revisión o descartado no entra al mapa y por lo tanto
+  // no existe para el resto de la función.
   const temaDeNodo = new Map<string, string>();
-  for (const n of nodos) if (n.nap_tema_id) temaDeNodo.set(n.id, n.nap_tema_id);
+  for (const n of nodos) if (n.nap_tema_id && mapeoCuenta(n)) temaDeNodo.set(n.id, n.nap_tema_id);
 
   // Solo los temas del filtro (materia + grado) cuentan en la cobertura.
   const temasDelFiltro = new Set(temasFiltro.map((t) => t.id));

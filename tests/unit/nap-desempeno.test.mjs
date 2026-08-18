@@ -8,11 +8,13 @@ const TEMAS = [
   { id: 't1', eje_id: 'e1', nombre: 'Fracciones', grado: 4, orden: 0 },
   { id: 't2', eje_id: 'e1', nombre: 'Suma y resta', grado: 4, orden: 1 },
 ];
-// n1 → t1, n2 → t2, n3 fuera del marco.
+// n1 → t1, n2 → t2, n3 fuera del marco. Revisados: desde las bandas de
+// confianza (2026-08-18) un mapeo pelado sin confianza ni revisión es
+// "pendiente" y no cuenta — estos fixtures representan mapeos confirmados.
 const NODOS = [
-  { id: 'n1', nap_tema_id: 't1' },
-  { id: 'n2', nap_tema_id: 't2' },
-  { id: 'n3', nap_tema_id: null },
+  { id: 'n1', nap_tema_id: 't1', nap_revisado: true },
+  { id: 'n2', nap_tema_id: 't2', nap_revisado: true },
+  { id: 'n3', nap_tema_id: null, nap_revisado: true },
 ];
 
 // k alumnos de una escuela, todos con sesión en el nodo dado.
@@ -53,6 +55,49 @@ test('los nodos fuera del marco no entran en ningún agregado', () => {
   const t1 = eje.temas.find((t) => t.temaId === 't1');
   assert.equal(t1.colegiosTotal, 1, 'esc2 no cuenta en el denominador de cobertura');
   assert.equal(t1.colegiosConTema, 1, 'solo esc1 practica el tema');
+});
+
+// ── Bandas de confianza (auto-triage, 2026-08-18): pendiente = no cuenta ──
+
+const seisEnUnNodo = (nodo) => ({
+  sesiones: sesiones(6, 'a', nodo, 'esc1'),
+  escuelaDeAlumno: mapaEscuela([6, 'a', 'esc1']),
+});
+
+test('bandas: un mapeo confiable (>=75%) entra al agregado sin revisión humana', () => {
+  const datos = base({
+    nodos: [{ id: 'n1', nap_tema_id: 't1', nap_confianza: 0.8, nap_revisado: false }],
+    ...seisEnUnNodo('n1'),
+  });
+  const [eje] = desempenoPorEje(datos, { materia: 'Matemática', grado: 4 });
+  assert.equal(eje.alumnos, 6);
+});
+
+test('bandas: un mapeo pendiente (banda media, sin revisar) NO cuenta hasta que alguien confirme', () => {
+  const datos = base({
+    nodos: [{ id: 'n1', nap_tema_id: 't1', nap_confianza: 0.65, nap_revisado: false }],
+    ...seisEnUnNodo('n1'),
+  });
+  const [eje] = desempenoPorEje(datos, { materia: 'Matemática', grado: 4 });
+  assert.equal(eje.alumnos, 0);
+});
+
+test('bandas: un mapeo descartado (<60%) no cuenta — fuera del marco efectivo', () => {
+  const datos = base({
+    nodos: [{ id: 'n1', nap_tema_id: 't1', nap_confianza: 0.4, nap_revisado: false }],
+    ...seisEnUnNodo('n1'),
+  });
+  const [eje] = desempenoPorEje(datos, { materia: 'Matemática', grado: 4 });
+  assert.equal(eje.alumnos, 0);
+});
+
+test('bandas: la decisión humana manda aunque la confianza fuera baja', () => {
+  const datos = base({
+    nodos: [{ id: 'n1', nap_tema_id: 't1', nap_confianza: 0.4, nap_revisado: true }],
+    ...seisEnUnNodo('n1'),
+  });
+  const [eje] = desempenoPorEje(datos, { materia: 'Matemática', grado: 4 });
+  assert.equal(eje.alumnos, 6);
 });
 
 test('un tema con menos de k alumnos no publica métricas', () => {
