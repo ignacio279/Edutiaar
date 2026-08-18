@@ -25,10 +25,14 @@ import {
   soloNodosReales, type NapTemaRaw, type NodoNapRaw, type TemaCatalogoOut,
 } from './nap-revision-logica.ts';
 import { UMBRAL_CONFIABLE } from '../_shared/nap-bandas.ts';
+import { armarPatchIdentidad } from '../_shared/identidad.ts';
 
 const noVacio = (s: unknown): s is string => typeof s === 'string' && s.trim().length > 0;
 
-const COLS = 'id, nombre, zona, provincia, tipo, estado, trial_inicio, trial_fin, created_at';
+// Identidad oficial (0033) incluida: el CUE es la llave con la que el
+// ministerio cruza esta fila contra el Padrón Oficial y el Relevamiento Anual.
+const COLS = 'id, nombre, zona, provincia, tipo, estado, trial_inicio, trial_fin, created_at, '
+  + 'cue, cue_anexo, departamento, localidad, matricula_declarada, matricula_anio';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
@@ -101,7 +105,7 @@ Deno.serve(async (req) => {
 
       case 'crear': {
         const { nombre, zona, tipo, provincia } = body;
-        const v = validarCrear({ nombre, zona, tipo, provincia });
+        const v = validarCrear(body);
         if (!v.ok) return json({ error: v.error }, 400);
 
         const { trial_inicio, trial_fin } = fechasTrial(new Date());
@@ -115,10 +119,20 @@ Deno.serve(async (req) => {
             estado: 'trial',
             trial_inicio,
             trial_fin,
+            // Identidad oficial normalizada (0033): el mismo armador que usa
+            // `editar`, así el CUE se guarda sin guiones por los dos caminos.
+            ...armarPatchIdentidad(body),
           })
           .select(COLS)
           .single();
-        if (error) throw error;
+        if (error) {
+          // Índice único parcial escuela_cue_unico_idx: dos colegios no pueden
+          // reclamar el mismo establecimiento oficial.
+          if ((error as { code?: string }).code === '23505') {
+            return json({ error: 'cue_duplicado' }, 409);
+          }
+          throw error;
+        }
 
         // Fila de features con las flags default (plan docente). Si falla,
         // rollback del colegio (patrón gestion-alumnos): no dejar un colegio
@@ -141,11 +155,11 @@ Deno.serve(async (req) => {
       }
 
       case 'editar': {
-        const { escuela_id, nombre, zona, tipo, provincia } = body;
+        const { escuela_id } = body;
         if (!noVacio(escuela_id)) return json({ error: 'falta_escuela_id' }, 400);
-        const v = validarEditar({ nombre, zona, tipo, provincia });
+        const v = validarEditar(body);
         if (!v.ok) return json({ error: v.error }, 400);
-        const patch = armarPatchEditar({ nombre, zona, tipo, provincia });
+        const patch = armarPatchEditar(body);
         if (!Object.keys(patch).length) return json({ ok: true });
 
         const { data, error } = await sb
@@ -154,7 +168,12 @@ Deno.serve(async (req) => {
           .eq('id', escuela_id)
           .select(COLS)
           .maybeSingle();
-        if (error) throw error;
+        if (error) {
+          if ((error as { code?: string }).code === '23505') {
+            return json({ error: 'cue_duplicado' }, 409);
+          }
+          throw error;
+        }
         if (!data) return json({ error: 'no_existe' }, 404);
 
         registrarAuditoria(sb, ctx, {

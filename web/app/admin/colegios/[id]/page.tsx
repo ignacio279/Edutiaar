@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ADMIN, ESTADO_COLEGIO, TIPO_COLEGIO } from '@/lib/admin/tema';
 import { PROVINCIAS } from '@/lib/admin/provincias';
+import { ANEXO_SEDE, copyCue } from '@/lib/admin/identidad';
 import { ERRS_ADMIN, llamarAdmin } from '@/lib/admin/api';
 import Pill from '@/components/admin/Pill';
 import Stat from '@/components/admin/Stat';
@@ -24,6 +25,10 @@ type Detalle = {
     id: string; nombre: string; zona: string | null; provincia: string | null;
     tipo: string | null;
     estado: string; trial_inicio: string | null; trial_fin: string | null; created_at: string;
+    // Identidad oficial (0033): la llave para cruzar con el Padrón Oficial.
+    cue: string | null; cue_anexo: string | null;
+    departamento: string | null; localidad: string | null;
+    matricula_declarada: number | null; matricula_anio: number | null;
   };
   counts: { maestras: number; aulas: number; alumnos: number };
   stats: { sesiones_30d: number; respuestas_30d: number };
@@ -47,6 +52,12 @@ const ERRS: Record<string, string> = {
   estado_invalido: 'Ese estado no existe.',
   transicion_invalida: 'Esa transición de estado no está permitida.',
   falta_escuela_id: 'Falta el colegio.',
+  cue_invalido: 'El CUE son 9 números (mirá el papel del ministerio).',
+  cue_anexo_invalido: 'El anexo son 2 números; la sede es 00.',
+  anexo_sin_cue: 'El anexo necesita su CUE.',
+  cue_duplicado: 'Ya hay un colegio cargado con ese CUE.',
+  matricula_invalida: 'La matrícula va de 1 a 10000 chicos.',
+  matricula_anio_invalido: 'Ese año de matrícula no es válido.',
 };
 const errCopy = (code?: string) => (code && ERRS[code]) || 'Algo salió mal. Probá de nuevo.';
 
@@ -81,6 +92,13 @@ export default function FichaColegio() {
   const [fProvincia, setFProvincia] = useState('');
   const [fZona, setFZona] = useState('');
   const [fTipo, setFTipo] = useState('');
+  // Identidad oficial (0033), en su propia tarjeta y su propio guardado.
+  const [fCue, setFCue] = useState('');
+  const [fAnexo, setFAnexo] = useState('');
+  const [fDepartamento, setFDepartamento] = useState('');
+  const [fLocalidad, setFLocalidad] = useState('');
+  const [fMatricula, setFMatricula] = useState('');
+  const [fMatriculaAnio, setFMatriculaAnio] = useState('');
 
   async function cargar() {
     const r = await llamarAdmin<Detalle>('admin-colegios', 'detalle', { escuela_id: id });
@@ -94,6 +112,12 @@ export default function FichaColegio() {
     setFProvincia(r.data.colegio.provincia ?? '');
     setFZona(r.data.colegio.zona ?? '');
     setFTipo(r.data.colegio.tipo ?? '');
+    setFCue(r.data.colegio.cue ?? '');
+    setFAnexo(r.data.colegio.cue_anexo ?? '');
+    setFDepartamento(r.data.colegio.departamento ?? '');
+    setFLocalidad(r.data.colegio.localidad ?? '');
+    setFMatricula(r.data.colegio.matricula_declarada?.toString() ?? '');
+    setFMatriculaAnio(r.data.colegio.matricula_anio?.toString() ?? '');
   }
 
   useEffect(() => {
@@ -127,6 +151,27 @@ export default function FichaColegio() {
     setBusy(false);
     if (!r.ok) { toast(errCopy(r.data.error)); return; }
     toast('Datos guardados.');
+    cargar();
+  }
+
+  // La identidad oficial se guarda aparte: es el dato que el ministerio cruza
+  // contra el Padrón, y un error de CUE no debe hacer perder la edición del
+  // nombre (ni al revés). Vacío = limpiar la columna, no "no tocar".
+  async function guardarIdentidad() {
+    if (busy || !det) return;
+    setBusy(true);
+    const r = await llamarAdmin('admin-colegios', 'editar', {
+      escuela_id: id,
+      cue: fCue.trim() || null,
+      cue_anexo: fCue.trim() ? (fAnexo.trim() || ANEXO_SEDE) : null,
+      departamento: fDepartamento.trim() || null,
+      localidad: fLocalidad.trim() || null,
+      matricula_declarada: fMatricula.trim() || null,
+      matricula_anio: fMatricula.trim() ? (fMatriculaAnio.trim() || new Date().getFullYear()) : null,
+    });
+    setBusy(false);
+    if (!r.ok) { toast(errCopy(r.data.error)); return; }
+    toast('Identidad oficial guardada.');
     cargar();
   }
 
@@ -223,6 +268,52 @@ export default function FichaColegio() {
             style={{ background: ADMIN.base, color: '#fff', border: 'none', borderRadius: 999, padding: '11px 26px', fontFamily: QUICK, fontWeight: 700, fontSize: 14, cursor: busy ? 'not-allowed' : 'pointer' }}
           >
             {busy ? 'Guardando…' : 'Guardar'}
+          </button>
+        </div>
+
+        {/* ── Identidad oficial (0033) ───────────────────────────────────
+            Sin CUE, ningún número de este colegio se puede cruzar con el
+            Padrón Oficial, el Relevamiento Anual ni Aprender. */}
+        <div style={{ background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 22, padding: 22 }}>
+          <h2 style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 17, color: ADMIN.oscuro, margin: '0 0 4px' }}>Identidad oficial</h2>
+          <p style={{ fontFamily: NUNITO, fontSize: 13.5, color: ADMIN.tinta2, fontWeight: 600, margin: '0 0 16px', lineHeight: 1.45 }}>
+            {copyCue(c.cue, c.cue_anexo)}. Es la llave para cruzar este colegio con el Padrón Oficial,
+            el Relevamiento Anual y Aprender.
+          </p>
+          <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
+            <div style={{ flex: 2 }}>
+              <label style={label}>CUE</label>
+              <input value={fCue} onChange={(e) => setFCue(e.target.value)} placeholder="Sin CUE" inputMode="numeric" style={{ ...input, width: '100%' }} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={label}>Anexo</label>
+              <input value={fAnexo} onChange={(e) => setFAnexo(e.target.value)} placeholder={ANEXO_SEDE} inputMode="numeric" style={{ ...input, width: '100%' }} />
+            </div>
+          </div>
+          <label style={label}>Departamento</label>
+          <input value={fDepartamento} onChange={(e) => setFDepartamento(e.target.value)} placeholder="Sin departamento" style={{ ...input, width: '100%', marginBottom: 14 }} />
+          <label style={label}>Localidad</label>
+          <input value={fLocalidad} onChange={(e) => setFLocalidad(e.target.value)} placeholder="Sin localidad" style={{ ...input, width: '100%', marginBottom: 14 }} />
+          <div style={{ display: 'flex', gap: 10, marginBottom: 18 }}>
+            <div style={{ flex: 2 }}>
+              <label style={label}>Matrícula del colegio</label>
+              <input value={fMatricula} onChange={(e) => setFMatricula(e.target.value)} placeholder="Sin declarar" inputMode="numeric" style={{ ...input, width: '100%' }} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={label}>Año</label>
+              <input value={fMatriculaAnio} onChange={(e) => setFMatriculaAnio(e.target.value)} placeholder={String(new Date().getFullYear())} inputMode="numeric" style={{ ...input, width: '100%' }} />
+            </div>
+          </div>
+          <p style={{ fontFamily: NUNITO, fontSize: 12.5, color: ADMIN.tinta2, fontWeight: 600, margin: '0 0 14px', lineHeight: 1.4 }}>
+            La matrícula es la del establecimiento entero según la escuela, no la de EDUTIA: es el denominador de la cobertura.
+          </p>
+          <button
+            onClick={guardarIdentidad}
+            disabled={busy}
+            className="ed-primary"
+            style={{ background: ADMIN.base, color: '#fff', border: 'none', borderRadius: 999, padding: '11px 26px', fontFamily: QUICK, fontWeight: 700, fontSize: 14, cursor: busy ? 'not-allowed' : 'pointer' }}
+          >
+            {busy ? 'Guardando…' : 'Guardar identidad'}
           </button>
         </div>
 

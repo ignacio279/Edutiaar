@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ADMIN, ESTADO_COLEGIO, TIPO_COLEGIO } from '@/lib/admin/tema';
 import { PROVINCIAS } from '@/lib/admin/provincias';
+import { ANEXO_SEDE } from '@/lib/admin/identidad';
 import { ERRS_ADMIN, llamarAdmin } from '@/lib/admin/api';
 import Pill from '@/components/admin/Pill';
 import { toast } from '@/lib/toast';
@@ -27,6 +28,12 @@ const ERRS: Record<string, string> = {
   tipo_invalido: 'Elegí el tipo de colegio.',
   zona_invalida: 'La zona no es válida.',
   provincia_invalida: 'Esa provincia no es válida.',
+  cue_invalido: 'El CUE son 9 números (mirá el papel del ministerio).',
+  cue_anexo_invalido: 'El anexo son 2 números; la sede es 00.',
+  anexo_sin_cue: 'El anexo necesita su CUE.',
+  cue_duplicado: 'Ya hay un colegio cargado con ese CUE.',
+  matricula_invalida: 'La matrícula va de 1 a 10000 chicos.',
+  matricula_anio_invalido: 'Ese año de matrícula no es válido.',
 };
 const errCopy = (code?: string) => (code && ERRS[code]) || 'Algo salió mal. Probá de nuevo.';
 
@@ -63,6 +70,8 @@ export default function ColegiosPage() {
   const [provincia, setProvincia] = useState('');
   const [zona, setZona] = useState('');
   const [tipo, setTipo] = useState('');
+  const [cue, setCue] = useState('');
+  const [cueAnexo, setCueAnexo] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function cargar(estado: string) {
@@ -86,12 +95,14 @@ export default function ColegiosPage() {
     setBusy(true);
     const r = await llamarAdmin<{ colegio: { id: string } }>('admin-colegios', 'crear', {
       nombre: nombre.trim(), zona: zona.trim() || null, provincia: provincia || null, tipo,
+      // El CUE viaja como lo tipearon (con guiones o sin): el server normaliza.
+      ...(cue.trim() ? { cue: cue.trim(), cue_anexo: cueAnexo.trim() || ANEXO_SEDE } : {}),
     });
     setBusy(false);
     if (!r.ok) { toast(errCopy(r.data.error)); return; }
     toast('¡Colegio creado! Arranca con 30 días de prueba.');
     setModal(false);
-    setNombre(''); setProvincia(''); setZona(''); setTipo('');
+    setNombre(''); setProvincia(''); setZona(''); setTipo(''); setCue(''); setCueAnexo('');
     router.push(`/admin/colegios/${r.data.colegio.id}`);
   }
 
@@ -194,6 +205,18 @@ export default function ColegiosPage() {
             </select>
             <label style={label}>Zona</label>
             <input value={zona} onChange={(e) => setZona(e.target.value)} placeholder="Arroyo Seco, Misiones" style={{ ...input, width: '100%', marginBottom: 12 }} />
+            {/* CUE: opcional en el alta, pero es la llave con la que el
+                ministerio cruza este colegio contra el Padrón Oficial. */}
+            <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
+              <div style={{ flex: 2 }}>
+                <label style={label}>CUE <span style={{ fontWeight: 600, color: ADMIN.tinta2 }}>(opcional)</span></label>
+                <input value={cue} onChange={(e) => setCue(e.target.value)} placeholder="740123400" inputMode="numeric" style={{ ...input, width: '100%' }} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={label}>Anexo</label>
+                <input value={cueAnexo} onChange={(e) => setCueAnexo(e.target.value)} placeholder={ANEXO_SEDE} inputMode="numeric" style={{ ...input, width: '100%' }} />
+              </div>
+            </div>
             <label style={label}>Tipo</label>
             <select value={tipo} onChange={(e) => setTipo(e.target.value)} style={{ ...input, width: '100%', marginBottom: 20, fontWeight: 700, cursor: 'pointer' }}>
               <option value="">Elegí un tipo…</option>

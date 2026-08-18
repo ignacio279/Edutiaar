@@ -91,6 +91,33 @@ test('armarPatchEditar: la provincia entra al patch y el null explícito la limp
   );
 });
 
+test('identidad oficial: el CUE viaja por crear y por editar, siempre opcional', () => {
+  // Un colegio sin CUE sigue siendo legal: la identidad se carga cuando la
+  // escuela la dicta (migración 0033).
+  assert.deepEqual(validarCrear({ nombre: 'Esc. 12', tipo: 'rural' }), { ok: true });
+  assert.deepEqual(
+    validarCrear({ nombre: 'Esc. 12', tipo: 'rural', cue: '74-01234-00', cue_anexo: '00' }),
+    { ok: true },
+  );
+  assert.deepEqual(
+    validarCrear({ nombre: 'Esc. 12', tipo: 'rural', cue: '1234' }),
+    { ok: false, error: 'cue_invalido' },
+  );
+  assert.deepEqual(validarEditar({ cue: '740123400' }), { ok: true });
+  assert.deepEqual(validarEditar({ matricula_declarada: 0 }), { ok: false, error: 'matricula_invalida' });
+  assert.deepEqual(validarEditar({ departamento: 'Confluencia' }), { ok: true });
+});
+
+test('armarPatchEditar: la identidad oficial entra normalizada al mismo patch', () => {
+  assert.deepEqual(
+    armarPatchEditar({ nombre: 'Esc. 5', cue: '74-01234-00', matricula_declarada: '48' }),
+    { nombre: 'Esc. 5', cue: '740123400', matricula_declarada: 48 },
+  );
+  assert.deepEqual(armarPatchEditar({ localidad: '  Aluminé  ' }), { localidad: 'Aluminé' });
+  // Limpiar el CUE se lleva el anexo: sin CUE, un anexo es basura.
+  assert.deepEqual(armarPatchEditar({ cue: null }), { cue: null, cue_anexo: null });
+});
+
 test('puedeTransicionar: matriz de estados', () => {
   // Válidas.
   assert.equal(puedeTransicionar('trial', 'activo'), true);
