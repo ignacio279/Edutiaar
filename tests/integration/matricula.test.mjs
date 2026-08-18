@@ -260,3 +260,67 @@ test('perfil_guard: el vínculo y el estado NO se tocan por fuera de la matrícu
     if (escuela) await fetch(`${URL}/rest/v1/escuela?id=eq.${escuela.id}`, { method: 'DELETE', headers: sr() });
   }
 });
+
+// Regresión del bug del 2026-08-18 (migración 0034): mover un chico de aula
+// desde "Mi clase" le rompía el login en silencio. editar_alumno escribe el aula
+// en la matrícula (service_role, igual que este test) y matricula_sync sincroniza
+// el caché de perfil; alumno_cred.aula_id quedaba en el aula VIEJA y alumno_login
+// exige que la credencial coincida con el aula del código → 'aula_invalida'.
+test('matricula_sync: la credencial del alumno sigue al aula de la matrícula (0034)', { skip }, async () => {
+  let escuela, aulaA, aulaB, docente, alumno;
+  const SECRETO = 'secreto-efimero';
+  const PIN = '4321';
+  const login = (codigo) => rpcSR('alumno_login', {
+    p_codigo: codigo, p_secreto: SECRETO, p_perfil: alumno.id, p_pin: PIN,
+  });
+  const statusDe = (r) => (Array.isArray(r.body) ? r.body[0] : r.body)?.status;
+  const credAula = async () =>
+    (await getSR('alumno_cred', `perfil_id=eq.${alumno.id}`, 'aula_id'))[0]?.aula_id ?? null;
+
+  try {
+    escuela = await insSR('escuela', { nombre: 'Escuela Efimera Cred Aula Test' });
+    const cod = rnd().slice(0, 6).toUpperCase();
+    aulaA = await insSR('aula', { escuela_id: escuela.id, nombre: '3° cred A', grado: 3, codigo: `CRA-${cod}` });
+    aulaB = await insSR('aula', { escuela_id: escuela.id, nombre: '4° cred B', grado: 4, codigo: `CRB-${cod}` });
+    for (const a of [aulaA, aulaB]) {
+      const s = await rpcSR('set_aula_secreto', { p_aula: a.id, p_secreto: SECRETO });
+      assert.ok(s.ok, `secreto de ${a.codigo} sembrado: ${JSON.stringify(s.body)}`);
+    }
+    docente = await nuevoUsuario('docente', { escuela_id: escuela.id });
+    alumno = await nuevoUsuario('alumno', {});
+
+    // Alta como en producción: matrícula primero, credencial después. El trigger
+    // corre con la fila de alumno_cred todavía inexistente (0 filas, no error).
+    const a1 = await abrir(alumno.id, escuela.id, aulaA.id, docente.id, docente.id);
+    assert.ok(a1.ok, `abrir falló: ${JSON.stringify(a1.body)}`);
+    await rpcSR('set_alumno_cred', {
+      p_perfil: alumno.id, p_aula: aulaA.id, p_pin: PIN,
+      p_email: `alu-${rnd().slice(0, 8)}@students.edutia.local`, p_password: rnd(),
+    });
+    assert.equal(await credAula(), aulaA.id, 'la credencial nace en el aula del alta');
+    assert.equal(statusDe(await login(aulaA.codigo)), 'ok', 'entra por su aula');
+
+    // Mover de aula: EXACTAMENTE lo que hace editar_alumno (patch de la matrícula
+    // activa como service_role). Nada toca alumno_cred a mano.
+    const mv = await patchSR('matricula', `alumno_id=eq.${alumno.id}&fecha_fin=is.null`, { aula_id: aulaB.id, grado: 4 });
+    assert.ok(mv.ok, `mover de aula falló: ${JSON.stringify(mv.rows)}`);
+    assert.equal((await perfilDe(alumno.id)).aula_id, aulaB.id, 'el caché de perfil siguió');
+    assert.equal(await credAula(), aulaB.id, 'y la credencial también (esto era el bug)');
+
+    // Lo que se ve desde afuera: entra por el aula NUEVA y no por la vieja.
+    assert.equal(statusDe(await login(aulaB.codigo)), 'ok', 'entra por el aula nueva');
+    assert.equal(statusDe(await login(aulaA.codigo)), 'aula_invalida', 'la vieja ya no lo deja');
+
+    // El listado y el login coinciden: era justo la incoherencia del bug.
+    const listado = await rpcSR('aula_students', { p_codigo: aulaB.codigo, p_secreto: SECRETO });
+    assert.ok(listado.body?.some((r) => r.perfil_id === alumno.id), 'aparece en el listado del aula nueva');
+  } finally {
+    for (const u of [alumno, docente]) {
+      if (u?.id) await fetch(`${URL}/auth/v1/admin/users/${u.id}`, { method: 'DELETE', headers: sr() });
+    }
+    for (const a of [aulaA, aulaB]) {
+      if (a) await fetch(`${URL}/rest/v1/aula?id=eq.${a.id}`, { method: 'DELETE', headers: sr() });
+    }
+    if (escuela) await fetch(`${URL}/rest/v1/escuela?id=eq.${escuela.id}`, { method: 'DELETE', headers: sr() });
+  }
+});
