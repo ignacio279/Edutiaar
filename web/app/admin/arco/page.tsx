@@ -1,8 +1,12 @@
 'use client';
 // Derechos de la familia — ARCO (Ley 25.326), alumno golondrina migración 0024.
 // Restyle 2026-08 al mock Admin.dc.html: una tarjeta por derecho (Acceso,
-// Rectificación, Oposición), la Cancelación aparte y en dos pasos numerados, y
-// el legajo como hoja A4 lista para imprimir y entregar.
+// Oposición), la Cancelación aparte y en dos pasos numerados, y el legajo como
+// hoja A4 lista para imprimir y entregar.
+//
+// La RECTIFICACIÓN salió de la pantalla (2026-08-18): nadie la usa. La acción
+// `rectificar` sigue viva en `admin-arco` y los casos ya registrados se siguen
+// viendo en el historial de abajo.
 //
 // La CANCELACIÓN es el único borrado físico de todo el sistema: por eso son
 // DOS pasos con el dry-run a la vista y confirmación tipeada. Nada de un botón
@@ -12,23 +16,17 @@ import { llamarAdmin, ERRS_ADMIN, ERRS_RED_ADMIN } from '@/lib/admin/api';
 import {
   ADMIN, CAMPO, ETIQUETA, ESTADO_ALUMNO_PILL, ESTADO_ARCO_PILL, TIPO_ARCO_PILL,
 } from '@/lib/admin/tema';
-import { animal } from '@/lib/art';
 import { toast } from '@/lib/toast';
 import Pill from '@/components/admin/Pill';
 import { useAdmin } from '../admin-context';
 import {
   ERRS_ARCO, TIPO_ARCO_COPY, confirmacionValida, lineasDelPlan,
-  nombreArchivoLegajo, resumenAnonimo, seccionesDelLegajo, type ItemBorrado,
+  resumenAnonimo, seccionesDelLegajo, tituloDocumentoLegajo, type ItemBorrado,
 } from '@/lib/arco';
 
 const BALOO = 'var(--font-baloo), cursive';
 const QUICK = 'var(--font-quicksand), sans-serif';
 const NUNITO = 'var(--font-nunito), sans-serif';
-
-// Los cinco avatares reales de la app (web/lib/art.ts). La rectificación de
-// identidad solo puede tocar nombre y avatar: nada más es "un dato mal
-// cargado", el resto son hechos que pasaron.
-const AVATARES = ['fox', 'owl', 'turtle', 'cat', 'sheep'] as const;
 
 type Caso = {
   id: string; alumno_id: string; tipo: string; estado: string;
@@ -39,8 +37,7 @@ type Caso = {
 type Legajo = Record<string, unknown>;
 
 const ERRS: Record<string, string> = { ...ERRS_ADMIN, ...ERRS_ARCO, ...ERRS_RED_ADMIN };
-const copyError = (c?: string) => ERRS[c ?? ''] ?? (c?.startsWith('campo_no_rectificable')
-  ? 'Solo se pueden rectificar el nombre y el avatar.' : 'Algo salió mal. Probá de nuevo.');
+const copyError = (c?: string) => ERRS[c ?? ''] ?? 'Algo salió mal. Probá de nuevo.';
 
 const carta: React.CSSProperties = {
   background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 22, padding: 22,
@@ -58,10 +55,6 @@ const btnPetroleo: React.CSSProperties = {
   background: ADMIN.base, color: '#fff', border: 'none', borderRadius: 999, padding: '10px 20px',
   fontFamily: QUICK, fontWeight: 700, fontSize: 13.5, cursor: 'pointer',
 };
-const btnGhost: React.CSSProperties = {
-  background: ADMIN.carta, border: `1.5px solid ${ADMIN.borde}`, color: ADMIN.oscuro, borderRadius: 999,
-  padding: '10px 18px', fontFamily: QUICK, fontWeight: 700, fontSize: 13.5, cursor: 'pointer',
-};
 
 const hoy = () => new Date().toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' });
 
@@ -75,10 +68,6 @@ export default function AdminArco() {
   const [hoja, setHoja] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const [nuevoNombre, setNuevoNombre] = useState('');
-  const [avatar, setAvatar] = useState('');
-  const [diff, setDiff] = useState('');
-
   const [motivo, setMotivo] = useState('');
   const [pendiente, setPendiente] = useState<{ caso_id: string; plan: ItemBorrado[] } | null>(null);
   const [tipeado, setTipeado] = useState('');
@@ -89,6 +78,15 @@ export default function AdminArco() {
     setCasos(r.data.casos ?? []);
   }
   useEffect(() => { cargarCasos(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+
+  // Chrome nombra el PDF que guarda con `document.title`: mientras la hoja está
+  // abierta el título ES el nombre del archivo. Se restaura al salir.
+  useEffect(() => {
+    if (!hoja || !legajo) return;
+    const previo = document.title;
+    document.title = tituloDocumentoLegajo(alumnoId, new Date().toISOString());
+    return () => { document.title = previo; };
+  }, [hoja, legajo, alumnoId]);
 
   const perfil = (legajo?.perfil ?? null) as Record<string, unknown> | null;
   const nombre = typeof perfil?.nombre === 'string' ? perfil.nombre : '';
@@ -106,7 +104,7 @@ export default function AdminArco() {
   const ultimoConsentimiento = arr('consentimientos').at(-1);
 
   function limpiar() {
-    setLegajo(null); setHoja(false); setNuevoNombre(''); setAvatar(''); setDiff('');
+    setLegajo(null); setHoja(false);
     setPendiente(null); setTipeado(''); setMotivo('');
   }
 
@@ -121,41 +119,8 @@ export default function AdminArco() {
     const r = await llamarAdmin<{ legajo: Legajo }>('admin-arco', 'exportar_legajo', { alumno_id: alumnoId.trim() });
     setBusy(false);
     if (!r.ok) { toast(copyError(r.data.error)); return; }
-    const l = r.data.legajo;
-    setLegajo(l);
-    const p = (l?.perfil ?? {}) as Record<string, unknown>;
-    setNuevoNombre(typeof p.nombre === 'string' ? p.nombre : '');
-    setAvatar(typeof p.avatar === 'string' ? p.avatar : '');
+    setLegajo(r.data.legajo);
     toast('Legajo cargado.');
-    await cargarCasos();
-  }
-
-  function bajarJson() {
-    if (!legajo) return;
-    const blob = new Blob([JSON.stringify(legajo, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = window.URL.createObjectURL(blob);
-    a.download = nombreArchivoLegajo(alumnoId, new Date().toISOString());
-    a.click();
-    window.URL.revokeObjectURL(a.href);
-  }
-
-  async function rectificar() {
-    if (!pedirAlumno() || busy) return;
-    const cambios: Record<string, string> = {};
-    if (nuevoNombre.trim() && nuevoNombre.trim() !== nombre) cambios.nombre = nuevoNombre.trim();
-    if (avatar && avatar !== perfil?.avatar) cambios.avatar = avatar;
-    if (Object.keys(cambios).length === 0) { toast('No cambiaste nada todavía.'); return; }
-    setBusy(true);
-    const r = await llamarAdmin('admin-arco', 'rectificar', { alumno_id: alumnoId.trim(), cambios });
-    setBusy(false);
-    if (!r.ok) { toast(copyError(r.data.error)); return; }
-    setDiff(cambios.nombre ? `Nombre: «${nombre}» → «${cambios.nombre}»` : `Avatar: «${perfil?.avatar}» → «${cambios.avatar}»`);
-    // El legajo se parchea en memoria a propósito: `exportar_legajo` REGISTRA un
-    // caso ARCO de acceso cada vez que se llama, así que refrescar por ahí
-    // inventaría pedidos de acceso que la familia nunca hizo.
-    setLegajo({ ...legajo, perfil: { ...perfil, ...cambios } });
-    toast('Corrección guardada. Queda el diff en el caso.');
     await cargarCasos();
   }
 
@@ -165,7 +130,9 @@ export default function AdminArco() {
     const r = await llamarAdmin('admin-arco', 'oponer', { alumno_id: alumnoId.trim(), excluido: valor });
     setBusy(false);
     if (!r.ok) { toast(copyError(r.data.error)); return; }
-    // Mismo motivo que en rectificar: no se re-exporta el legajo, se parchea.
+    // El legajo se parchea en memoria a propósito: `exportar_legajo` REGISTRA
+    // un caso ARCO de acceso cada vez que se llama, así que refrescar por ahí
+    // inventaría pedidos de acceso que la familia nunca hizo.
     setLegajo({ ...legajo, perfil: { ...perfil, excluido_procesamiento: valor } });
     toast(valor ? 'Listo: queda fuera de los agregados.' : 'Listo: vuelve a contarse en los agregados.');
     await cargarCasos();
@@ -212,10 +179,15 @@ export default function AdminArco() {
   if (hoja && legajo) {
     return (
       <div>
-        <style>{`@media print {
+        {/* @page fija el A4 y los márgenes: sin esto cada navegador mete los
+            suyos y la hoja entregada sale distinta en cada equipo. */}
+        <style>{`@page { size: A4; margin: 16mm 14mm; }
+        @media print {
           [data-noprint] { display: none !important; }
           body { background: #fff !important; }
-          [data-hoja] { box-shadow: none !important; border: none !important; margin: 0 !important; width: 100% !important; }
+          [data-hoja] { box-shadow: none !important; border: none !important; margin: 0 !important; width: 100% !important; padding: 0 !important; }
+          [data-seccion] { break-inside: avoid; }
+          [data-bloque] { break-inside: avoid; }
         }`}</style>
         <div data-noprint style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', marginBottom: 20 }}>
           <button
@@ -226,13 +198,13 @@ export default function AdminArco() {
           </button>
           <div style={{ flex: 1 }} />
           <span style={{ fontSize: 13, color: ADMIN.tinta2, fontWeight: 700 }}>
-            Así se imprime y se le entrega a la familia · A4
+            Para guardarlo en PDF: Imprimir → destino «Guardar como PDF» · A4
           </span>
           <button
             onClick={() => window.print()}
             style={{ ...btnPetroleo, padding: '11px 24px', fontSize: 14, boxShadow: `0 6px 16px ${ADMIN.sombraCTA}` }}
           >
-            Imprimir
+            Imprimir o guardar como PDF
           </button>
         </div>
 
@@ -242,7 +214,9 @@ export default function AdminArco() {
         >
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, borderBottom: `2px solid ${ADMIN.ink}`, paddingBottom: 16, marginBottom: 8 }}>
             <div>
-              <div style={{ fontFamily: BALOO, fontWeight: 700, fontSize: 26, lineHeight: 1.1 }}>Legajo del alumno · EDUTIA</div>
+              <div style={{ fontFamily: BALOO, fontWeight: 700, fontSize: 26, lineHeight: 1.1 }}>
+                Legajo de {nombre || 'el alumno'} · EDUTIA
+              </div>
               <div style={{ fontSize: 16, fontWeight: 600, color: '#5A5145', marginTop: 6 }}>Emitido el {hoy()}</div>
             </div>
             <div style={{ width: 46, height: 46, borderRadius: 12, background: ADMIN.base, color: '#fff', display: 'grid', placeItems: 'center', fontFamily: BALOO, fontWeight: 800, fontSize: 26, flexShrink: 0 }}>E</div>
@@ -252,23 +226,48 @@ export default function AdminArco() {
             datos personales). EDUTIA no registra documentos ni identificadores estatales de los chicos.
           </p>
           {secciones.map((s) => (
-            <div key={s.titulo} style={{ marginBottom: 26, breakInside: 'avoid' }}>
-              <div style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 18, color: ADMIN.oscuro, borderBottom: '1px solid #D9CDB6', paddingBottom: 6, marginBottom: 12 }}>
+            <div key={s.titulo} data-seccion style={{ marginBottom: 28 }}>
+              <div style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 18, color: ADMIN.oscuro, borderBottom: '1px solid #D9CDB6', paddingBottom: 6, marginBottom: s.nota ? 6 : 12 }}>
                 {s.titulo}
               </div>
-              {s.vacio ? (
+              {s.nota && (
+                <div style={{ fontSize: 14, color: '#7A6F5F', fontWeight: 600, lineHeight: 1.45, marginBottom: 12 }}>
+                  {s.nota}
+                </div>
+              )}
+              {s.vacio && (
                 <div style={{ fontSize: 16, color: '#5A5145', fontWeight: 600, padding: '7px 0' }}>Sin datos.</div>
-              ) : s.filas.map((f, i) => (
-                <div key={`${s.titulo}-${i}`} style={{ display: 'flex', gap: 18, padding: '7px 0', fontSize: 16, lineHeight: 1.45 }}>
+              )}
+              {!s.vacio && s.filas.map((f, i) => (
+                <div key={`${s.titulo}-f${i}`} style={{ display: 'flex', gap: 18, padding: '7px 0', fontSize: 16, lineHeight: 1.45 }}>
                   <span style={{ minWidth: 190, color: '#5A5145', fontWeight: 700 }}>{f.etiqueta}</span>
                   <span style={{ flex: 1, fontWeight: 600 }}>{f.valor}</span>
+                </div>
+              ))}
+              {/* Bloques de texto largo: las devoluciones de SOL y los boletines
+                  de LUNA se transcriben enteros, no se resumen. */}
+              {!s.vacio && s.bloques.map((b, i) => (
+                <div key={`${s.titulo}-b${i}`} data-bloque style={{ padding: '12px 0', borderTop: i > 0 ? '1px solid #EFE7D8' : 'none' }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
+                    <span style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 16, color: ADMIN.oscuro }}>{b.titulo}</span>
+                    {b.sub && <span style={{ fontSize: 14, color: '#7A6F5F', fontWeight: 600 }}>{b.sub}</span>}
+                  </div>
+                  {b.partes.map((parte, j) => (
+                    <div key={`${s.titulo}-b${i}-p${j}`} style={{ marginBottom: 8 }}>
+                      {parte.titulo && (
+                        <div style={{ fontSize: 15, fontWeight: 800, color: '#5A5145', marginBottom: 2 }}>{parte.titulo}</div>
+                      )}
+                      <div style={{ fontSize: 16, fontWeight: 600, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{parte.texto}</div>
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>
           ))}
           <div style={{ borderTop: '1px solid #D9CDB6', paddingTop: 14, fontSize: 15, color: '#5A5145', fontWeight: 600, lineHeight: 1.5 }}>
-            Si algo de este legajo no es correcto, la familia puede pedir que se corrija su identidad, que
-            el chico salga de los reportes agregados o que se borre todo. Se pide en la escuela.
+            La familia puede pedir en la escuela que el chico salga de los reportes agregados, que se
+            corrija algo de este legajo o que se borre todo lo que EDUTIA guarda de él. Cada pedido queda
+            registrado.
           </div>
         </div>
       </div>
@@ -327,53 +326,18 @@ export default function AdminArco() {
         )}
       </div>
 
-      {/* ── Acceso / Rectificación / Oposición ───────────────────────────── */}
+      {/* ── Acceso / Oposición ───────────────────────────────────────────── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))', gap: 18, alignItems: 'start', marginBottom: 18, opacity: listo ? 1 : .55, pointerEvents: listo ? 'auto' : 'none' }}>
         <div style={carta}>
           <div style={rotulo}>ACCESO</div>
           <h2 style={tituloCarta}>Entregar el legajo completo</h2>
           <p style={bajada}>
-            Todo lo que EDUTIA guarda de {nombre || 'este chico'}, en el formato que la familia prefiera.
+            Todo lo que EDUTIA guarda de {nombre || 'este chico'}, escrito en palabras: un documento para
+            imprimir o guardar como PDF y entregarle a la familia.
           </p>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button onClick={bajarJson} style={btnPetroleo}>Bajar JSON</button>
-            <button onClick={() => setHoja(true)} className="ad-ghost" style={btnGhost}>Versión imprimible</button>
+            <button onClick={() => setHoja(true)} style={btnPetroleo}>Ver el legajo para entregar</button>
           </div>
-        </div>
-
-        <div style={carta}>
-          <div style={rotulo}>RECTIFICACIÓN</div>
-          <h2 style={tituloCarta}>Corregir la identidad</h2>
-          <p style={{ ...bajada, marginBottom: 14 }}>
-            Solo nombre y avatar. El resto del legajo son hechos que pasaron: no se rectifican.
-          </p>
-          <label style={ETIQUETA}>Nombre</label>
-          <input
-            value={nuevoNombre} onChange={(e) => setNuevoNombre(e.target.value)}
-            style={{ ...CAMPO, padding: '11px 13px', marginBottom: 12 }}
-          />
-          <label style={ETIQUETA}>Avatar</label>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
-            {AVATARES.map((a) => (
-              <button
-                key={a} onClick={() => setAvatar(a)} title={a}
-                style={{
-                  width: 46, height: 46, borderRadius: 14, cursor: 'pointer', padding: 3,
-                  background: avatar === a ? ADMIN.burbuja : ADMIN.suave,
-                  border: `2px solid ${avatar === a ? ADMIN.base : ADMIN.bordeCalido}`,
-                }}
-              >
-                <span style={{ display: 'block', width: '100%', height: '100%', background: `${animal(a)} center/contain no-repeat` }} />
-              </button>
-            ))}
-          </div>
-          <button onClick={rectificar} disabled={busy} style={btnPetroleo}>Guardar corrección</button>
-          {diff && (
-            <div style={{ background: ADMIN.burbuja, border: `1.5px solid ${ADMIN.borde}`, borderRadius: 14, padding: '13px 15px', marginTop: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 800, color: ADMIN.oscuro, letterSpacing: '.6px', marginBottom: 5 }}>QUEDÓ REGISTRADO</div>
-              <div style={{ fontSize: 13.5, color: ADMIN.oscuro, fontWeight: 700, lineHeight: 1.45 }}>{diff}</div>
-            </div>
-          )}
         </div>
 
         <div style={carta}>

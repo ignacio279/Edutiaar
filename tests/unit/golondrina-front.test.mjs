@@ -8,13 +8,15 @@ import assert from 'node:assert/strict';
 import {
   armarLinkAbsoluto, copyEstado, copyMotivo, copyVencimiento, diasHastaVencer,
   msgErrTransferencia, tokenDelFragmento, validarAutorizacion,
+  MOTIVO_COPY, ESTADO_ALUMNO_COPY,
 } from '../../web/lib/transferencias.ts';
 import {
   mensajeDeuda, validarConsentimiento, copyEstadoConsentimiento,
 } from '../../web/lib/consentimientos.ts';
 import {
-  confirmacionValida, lineasDelPlan, nombreArchivoLegajo, resumenDelPlan,
-  seccionesDelLegajo, msgErrArco, resumenAnonimo,
+  confirmacionValida, lineasDelPlan, tituloDocumentoLegajo, resumenDelPlan,
+  seccionesDelLegajo, partesDelBoletin, msgErrArco, resumenAnonimo,
+  MOTIVO_CIERRE, ESTADO_ALUMNO,
 } from '../../web/lib/arco.ts';
 import {
   copyCupos, copyVencimientoLicencia, cuposDe, diasHastaFin, extenderTreintaDias, porVencer,
@@ -171,22 +173,42 @@ test('confirmacionValida: freno tipeado tolerante a mayúsculas y espacios', () 
 // supabase/functions/admin-arco/index.ts (`escuela` aplanado, `progreso`, y un
 // perfil sin `id`). El fixture anterior inventaba `escuela_nombre`/`alumno_nodo`
 // y por eso el test pasaba en verde mientras la hoja del legajo mostraba "—".
-test('seccionesDelLegajo: siempre las 5 secciones, marcando las vacías', () => {
-  const secciones = seccionesDelLegajo({
-    perfil: { nombre: 'Wanda', avatar: 'sheep', grado: 3, estado: 'activo', excluido_procesamiento: false },
-    matriculas: [{ escuela: 'El Chañar', grado: 2, fecha_inicio: '2026-03-01', fecha_fin: '2026-06-30', motivo_cierre: 'migracion' }],
-    sesiones: [{}, {}], respuestas: [{}], progreso: [],
-    consentimientos: [], boletines: [],
-  });
-  assert.equal(secciones.length, 5);
+const LEGAJO = {
+  perfil: { nombre: 'Wanda', avatar: 'sheep', grado: 3, estado: 'activo', excluido_procesamiento: false },
+  matriculas: [{ escuela: 'El Chañar', grado: 2, fecha_inicio: '2026-03-01', fecha_fin: '2026-06-30', motivo_cierre: 'migracion' }],
+  consentimientos: [],
+  sesiones: [
+    { fecha: '2026-03-04', aciertos: 8, total: 10, duracion_seg: 600, nodo: 'Sumar' },
+    { fecha: '2026-03-18', aciertos: 6, total: 10, duracion_seg: 1200, nodo: 'Sumar' },
+    { fecha: '2026-04-02', aciertos: 5, total: 10, duracion_seg: 300, nodo: 'Restar' },
+  ],
+  respuestas: [{}, {}, {}],
+  progreso: [{ nodo: 'Sumar', estado: 'en_construccion', puntaje: 61.7, actualizado_at: '2026-04-02' }],
+  evaluaciones: [{ resumen: 'Le costó llevarse.', errores: [], a_reforzar: ['Sumas con llevada'], created_at: '2026-04-02' }],
+  boletines: [{
+    periodo: '2026-04', estado: 'aprobado', version: 2,
+    contenido: {
+      secciones: [{ titulo: 'Matemática', texto: 'Avanzó con las sumas.' }],
+      actitud: 'Se prende con ganas.',
+      sugerencia_proximo_periodo: 'Seguir con la llevada.',
+    },
+  }],
+};
+
+test('seccionesDelLegajo: las 7 secciones del documento de la familia', () => {
+  const secciones = seccionesDelLegajo(LEGAJO);
   assert.deepEqual(secciones.map((s) => s.titulo), [
-    'Identidad', 'Recorrido escolar', 'Consentimientos', 'Actividad de aprendizaje', 'Boletines',
+    'Identidad', 'Recorrido escolar', 'Consentimientos', 'Cómo viene aprendiendo',
+    'Práctica mes a mes', 'Devoluciones de SOL', 'Boletines',
   ]);
-  assert.equal(secciones[1].vacio, false);
   assert.equal(secciones[2].vacio, true, 'sin consentimientos → vacía');
   assert.match(secciones[1].filas[0].valor, /El Chañar/);
   assert.match(secciones[1].filas[0].valor, /2° grado/);
-  assert.equal(secciones[3].filas[0].valor, '2');
+  // Fechas y motivos en castellano, no en crudo de la DB.
+  assert.match(secciones[1].filas[0].valor, /01\/03\/2026/);
+  assert.match(secciones[1].filas[0].valor, /Se mudó/);
+  assert.equal(secciones[0].filas[3].valor, 'En el aula');
+
   // El legajo se entrega a la familia: nada de UUIDs internos, y se dice
   // explícitamente que no guardamos documentos.
   const identidad = secciones[0].filas.map((f) => f.etiqueta);
@@ -196,9 +218,67 @@ test('seccionesDelLegajo: siempre las 5 secciones, marcando las vacías', () => 
   assert.equal(seccionesDelLegajo(null).every((s, i) => (i === 0 ? true : s.vacio)), true);
 });
 
-test('nombreArchivoLegajo no filtra el nombre del chico', () => {
-  const n = nombreArchivoLegajo('11111111-2222-3333-4444-555555555555', '2026-08-11T10:00:00Z');
-  assert.equal(n, 'legajo-11111111-2026-08-11.json');
+test('seccionesDelLegajo: el progreso se dice en palabras, no en estados internos', () => {
+  const aprende = seccionesDelLegajo(LEGAJO)[3];
+  assert.equal(aprende.filas[0].etiqueta, 'Sumar');
+  assert.match(aprende.filas[0].valor, /En camino/);
+  assert.ok(!aprende.filas[0].valor.includes('en_construccion'), 'nada de snake_case en el papel');
+  assert.match(aprende.filas[0].valor, /62 de 100/, 'el puntaje se redondea');
+});
+
+test('seccionesDelLegajo: la práctica se agrupa por mes y las respuestas se cuentan, no se listan', () => {
+  const practica = seccionesDelLegajo(LEGAJO)[4];
+  // Dos meses + total + la línea de respuestas.
+  assert.deepEqual(practica.filas.map((f) => f.etiqueta), [
+    'marzo de 2026', 'abril de 2026', 'Total', 'Respuestas guardadas',
+  ]);
+  assert.match(practica.filas[0].valor, /2 prácticas/);
+  assert.match(practica.filas[0].valor, /20 ejercicios/);
+  assert.match(practica.filas[0].valor, /70% de aciertos/);
+  assert.match(practica.filas[0].valor, /30 min/);
+  assert.match(practica.filas[2].valor, /3 prácticas · 30 ejercicios · 63% de aciertos/);
+  assert.match(practica.filas[3].valor, /^3 respuestas/, 'se informa cuántas hay');
+});
+
+test('seccionesDelLegajo: SOL y los boletines se transcriben enteros', () => {
+  const [sol, boletines] = seccionesDelLegajo(LEGAJO).slice(5);
+  assert.equal(sol.bloques[0].titulo, 'Práctica del 02/04/2026');
+  assert.equal(sol.bloques[0].partes[0].texto, 'Le costó llevarse.');
+  assert.match(sol.bloques[0].partes[1].texto, /Sumas con llevada/);
+
+  assert.equal(boletines.bloques[0].titulo, 'Boletín de 2026-04');
+  assert.match(boletines.bloques[0].sub, /versión 2/);
+  assert.deepEqual(boletines.bloques[0].partes.map((p) => p.texto), [
+    'Avanzó con las sumas.', 'Se prende con ganas.', 'Seguir con la llevada.',
+  ]);
+});
+
+test('partesDelBoletin lee el shape viejo (pre prompts v2) y nunca deja el bloque mudo', () => {
+  const viejo = partesDelBoletin({
+    materias: [{ materia: 'Lengua', texto: 'Lee de corrido.' }],
+    actitud: 'Atenta.',
+    sugerencia: 'Leer en voz alta.',
+  });
+  assert.deepEqual(viejo.map((p) => p.texto), ['Lee de corrido.', 'Atenta.', 'Leer en voz alta.']);
+  assert.equal(viejo[0].titulo, 'Lengua');
+  assert.match(partesDelBoletin(null)[0].texto, /todavía no tiene texto/);
+});
+
+// `arco.ts` espeja estos copys en vez de importarlos (Node corre el módulo
+// crudo y un import entre libs sin extensión no resuelve). Si alguien toca uno,
+// esto se pone rojo.
+test('los copys de motivo y estado del legajo son los mismos que en transferencias', () => {
+  assert.deepEqual(MOTIVO_CIERRE, MOTIVO_COPY);
+  assert.deepEqual(
+    ESTADO_ALUMNO,
+    Object.fromEntries(Object.entries(ESTADO_ALUMNO_COPY).map(([k, v]) => [k, v.copy])),
+  );
+});
+
+test('tituloDocumentoLegajo no filtra el nombre del chico', () => {
+  // Es el nombre con el que Chrome guarda el PDF: no lleva nombre de menor.
+  const n = tituloDocumentoLegajo('11111111-2222-3333-4444-555555555555', '2026-08-11T10:00:00Z');
+  assert.equal(n, 'legajo-11111111-2026-08-11');
 });
 
 test('msgErrArco traduce los códigos con sufijo variable', () => {
