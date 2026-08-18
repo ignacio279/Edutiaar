@@ -31,7 +31,9 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
   { key: 'maestras', label: 'Maestras', ruta: '/admin/maestras', icono: 'people' },
   { key: 'metricas', label: 'Métricas', ruta: '/admin/metricas', icono: 'chart' },
   { key: 'costos', label: 'Costos y salud', ruta: '/admin/costos', icono: 'coin' },
-  { key: 'alertas', label: 'Alertas', ruta: '/admin/alertas', icono: 'bell' },
+  // Alertas NO está en el nav: Inicio ya las muestra y entra por "Ver todas ›".
+  // La ruta /admin/alertas sigue viva (tiene "Recalcular ahora" y "Listo ✓",
+  // que el widget de Inicio no trae) y navActivo la mapea a Inicio.
   { key: 'anuncios', label: 'Anuncios', ruta: '/admin/anuncios', icono: 'megaphone' },
   { key: 'config', label: 'Administradores', ruta: '/admin/config', icono: 'gear', soloSuper: true },
   // — CUSTODIA DE DATOS —
@@ -52,7 +54,9 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
 ] as const;
 
 // Resuelve el ítem activo por prefijo de ruta (la ficha de colegio marca
-// "Colegios", ver-como marca "Maestras").
+// "Colegios", ver-como marca "Maestras"). Las rutas sin ítem propio caen en
+// "Inicio", que matchea `/admin/` con el prefijo más corto: así /admin/alertas,
+// que salió del nav, deja marcado Inicio — de donde se entra.
 export function navActivo(pathname: string): string {
   if (pathname.startsWith('/admin/ver-como')) return 'maestras';
   const hit = [...ADMIN_NAV]
