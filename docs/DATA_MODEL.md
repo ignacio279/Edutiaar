@@ -222,3 +222,20 @@ La fuente de verdad del vínculo alumno↔colegio; el legajo (keyed por `alumno_
 
 ### licencia / licencia_asignacion *(0026, server-only)*
 `licencia`: `id` · `escuela_id` **XOR** `institucion_id` (check `num_nonnulls = 1`) · `plan` (`basico|docente|completo|custom`) · `cupos` (solo pools) · `fecha_inicio`/`fecha_fin` · `estado` (`prueba|activa|vencida|suspendida`) · `condiciones`. `licencia_asignacion`: `escuela_id` (PK — un colegio consume a lo sumo un cupo) · `licencia_id`; trigger `licencia_cupos_guard` (error `sin_cupos`). `acceso_calcular` v2 (misma firma): licencia efectiva = directa > pool; suspendida → bloqueado; vencida → **solo lectura**; sin licencia → rama trial 0018. Backfill: una licencia por colegio existente.
+
+## Métricas de valor *(mig. 0032 — spec 2026-08-17)*
+
+Tres tablas para medir **qué le pasó al chico que usó la plataforma**, no cuánto la usó. Las dos primeras son server-only (RLS activa, **sin policies**, como `uso_api`).
+
+### hito_aprendizaje ⭐ *(server-only)*
+`id` · `alumno_id` (FK cascade) · `nodo_id` (FK cascade) · `escuela_id` + `grado` (**desnormalizados** desde `perfil` para agregar sin joins; el hito conserva DÓNDE pasó aunque el chico se transfiera) · `tipo` (`dominado|destrabado|trabado|override`) · `ejercicios_hasta` · `puntaje` · `origen` (`vivo|backfill`) · `created_at`.
+
+Lo escribe **solo** el trigger `hito_registrar` (`after insert or update on alumno_nodo`, `security definer`, `search_path` fijo). Motivo: `alumno_nodo` lo escribe el CLIENTE por RLS (el chico al practicar, la seño al hacer override) y **`actualizado_at` no sirve** para fechar un hito — el cierre de cada sesión lo pisa, también sobre nodos ya dominados. Una transición puede emitir **dos** hitos (`a_reforzar` → `dominado` = destrabado + dominado). `ejercicios_hasta` se cuenta en el momento del hito (`respuesta` ⋈ `sesion`): es la única oportunidad de saberlo sin reconstruir la historia.
+
+`origen='backfill'` = sembrado desde el estado actual al aplicar 0032, con **fecha aproximada**; el front lo cuenta aparte ("antes de la medición") y nunca lo mete en una serie temporal.
+
+### snapshot_aprendizaje *(server-only)*
+`fecha` · `escuela_id` · `bucket` (decil 0-9 de puntaje) · `nodos`. PK `(fecha, escuela_id, bucket)` → la corrida es idempotente. La escribe `admin-jobs` (acción propia + colgada del cron nocturno). Es lo único genuinamente poblacional: el histograma "hoy contra hace un mes" no se puede reconstruir hacia atrás.
+
+### luna_alerta
+`docente_id` · `clave` (`<tipo>:<alumno_id>`, la de `claveAlerta`) · `tipo` · `prioridad` · `primera_vez_at`. PK `(docente_id, clave)`. Es el **denominador** de "atendidas / emitidas": `luna_alerta_atendida` (0017) tenía numerador sin denominador. La escribe el dashboard de la seño con lo que efectivamente le mostró (upsert idempotente). RLS: inserta y lee lo suyo, **sin policy de UPDATE** → `primera_vez_at` no se puede empujar y el "tiempo hasta atender" no se falsea.
