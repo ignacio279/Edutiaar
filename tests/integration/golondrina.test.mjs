@@ -352,12 +352,18 @@ test('institucion-panel: fail-closed, sin cruce entre instituciones y sin datos 
     await esperarStatus(rPlataforma, 403, 'admin de institución contra admin-colegios');
     assert.equal((await rPlataforma.json()).error, 'no_admin');
 
-    // (4) Métricas propias: el desempeño de una muestra chica se suprime (k=5).
+    // (4) Métricas propias: volumen y costo, y NUNCA precisión por colegio
+    //     (2026-08-18: se retiró; no es comparable entre colegios y acá la
+    //     miraba quien tiene poder de ranking sobre esas escuelas — el
+    //     aprendizaje se mira en la acción `desempeno`, contra los NAP).
     const rMet = await callFn('institucion-panel', 'metricas', {}, coordA.access_token);
     await esperarStatus(rMet, 200, 'metricas propias');
     const fila = (await rMet.json()).filas.find((f) => f.escuela_id === escA.id);
-    assert.equal(fila.precision, null, 'con 1 alumno no sale precisión');
-    assert.equal(fila.muestraInsuficiente, true);
+    assert.ok(Number.isFinite(fila.sesiones), 'la fila trae volumen');
+    assert.ok(Number.isFinite(fila.costo_mes_usd), 'la fila trae costo');
+    for (const k of Object.keys(fila)) {
+      assert.ok(!/precision|precisi\u00f3n/i.test(k), `la fila NO trae precisión (vino "${k}")`);
+    }
 
     // (5) Institución suspendida: sus admins quedan afuera enteros.
     await patchSR('institucion', `id=eq.${instA.id}`, { estado: 'suspendida' });
