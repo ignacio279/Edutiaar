@@ -178,6 +178,29 @@ export function idCorto(id: string | null | undefined): string {
   return s.length <= 10 ? s : `${s.slice(0, 4)}…${s.slice(-4)}`;
 }
 
+const MESES = [
+  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+];
+const RE_FECHA = /^(\d{4})-(\d{2})-(\d{2})/;
+
+// "2026-08-14" y "2026-08-14T09:05:00Z" → "14 de agosto de 2026".
+// Con regex y no con Date: un ISO en UTC parseado y re-formateado en Argentina
+// se corre un día para atrás, y acá la fecha exacta importa (vencimientos).
+export function fechaEnPalabras(v: string): string | null {
+  const m = RE_FECHA.exec(v);
+  if (!m) return null;
+  const mes = MESES[Number(m[2]) - 1];
+  if (!mes) return null;
+  return `${Number(m[3])} de ${mes} de ${m[1]}`;
+}
+
+// Una fecha que no se pudo interpretar se muestra tal cual: nunca '—'.
+const fechaODato = (v: unknown): string | null => {
+  const s = str(v);
+  return s === null ? null : (fechaEnPalabras(s) ?? s);
+};
+
 const str = (v: unknown): string | null =>
   typeof v === 'string' && v.trim().length > 0 ? v.trim() : null;
 
@@ -310,13 +333,13 @@ const REDACTORES: Record<string, (ctx: Ctx) => string> = {
   // ── Acceso ──
   set_trial: (c) => {
     const quien = c.e.entidad === 'perfil' ? perf(c, c.e.entidad_id) : esc(c, c.e.entidad_id);
-    const fin = str(c.d.fin);
+    const fin = fechaODato(c.d.fin);
     return `Fijó el trial de ${quien}${fin ? ` hasta el ${fin}` : ''}`;
   },
   extender_trial: (c) => {
     const quien = c.e.entidad === 'perfil' ? perf(c, c.e.entidad_id) : esc(c, c.e.entidad_id);
     const dias = typeof c.d.dias === 'number' ? `${c.d.dias} días` : '';
-    const fin = str(c.d.nuevo_fin);
+    const fin = fechaODato(c.d.nuevo_fin);
     return `Extendió el trial de ${quien}${dias ? ` ${dias}` : ''}${fin ? ` — hasta el ${fin}` : ''}`;
   },
   finalizar_trial: (c) => `Finalizó el trial de ${esc(c, c.e.entidad_id)}`,

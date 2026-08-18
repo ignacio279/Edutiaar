@@ -8,12 +8,16 @@
 // autorizó cada pase); el relato lo arma la lógica pura de
 // web/lib/admin/auditoria-relato.ts.
 //
+// Al abrir un evento tampoco aparece nada de código: el detalle es un párrafo
+// que explica qué pasó y qué consecuencia tuvo, más una lista de "campo: valor"
+// con etiquetas y valores en castellano (web/lib/admin/auditoria-detalle.ts).
+//
 // Por defecto se ven solo las acciones CLAVE. Lo rutinario se sigue
 // registrando siempre y vuelve con el toggle (D3): el filtro es de la vista,
 // nunca del registro.
 //
 // Spec: docs/superpowers/specs/2026-08-18-auditoria-legible-design.md
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { ADMIN, NIVEL_ADMIN } from '@/lib/admin/tema';
 import Pill from '@/components/admin/Pill';
 import FiltroChips from '@/components/admin/FiltroChips';
@@ -26,9 +30,11 @@ import {
   filtrarFeed,
   type Consentimientos,
   type EventoAuditoria,
+  redactar,
   type ItemAuditoria,
   type Nombres,
 } from '@/lib/admin/auditoria-relato';
+import { describir } from '@/lib/admin/auditoria-detalle';
 
 const BALOO = 'var(--font-baloo), cursive';
 const QUICK = 'var(--font-quicksand), sans-serif';
@@ -115,6 +121,42 @@ function fusionarNombres(prev: Nombres, nuevo: Nombres | undefined): Nombres {
   };
 }
 
+// ── Un hecho contado en palabras ───────────────────────────────────────────
+// Lo que antes era el jsonb crudo. Quien opera este panel puede no tener nada
+// de oficio con computadoras: acá no se muestra ni un slug ni una llave, solo
+// castellano. El dato entero sigue guardado igual en la base.
+
+function BloqueHecho({ ev, nombres, conTitulo }: { ev: EventoAuditoria; nombres: Nombres; conTitulo: boolean }) {
+  const { relato, sobre, datos } = describir(ev, nombres);
+
+  return (
+    <div style={{ marginTop: conTitulo ? 16 : 0 }}>
+      {conTitulo && (
+        <div style={{ fontSize: 13, fontWeight: 800, color: ADMIN.ink, marginBottom: 4 }}>
+          {fechaCorta(ev.created_at)} · {redactar(ev, nombres)}
+        </div>
+      )}
+
+      {relato && (
+        <p style={{ margin: '0 0 10px', fontFamily: NUNITO, fontWeight: 600, fontSize: 14, lineHeight: 1.55, color: ADMIN.ink, maxWidth: 620 }}>
+          {relato}
+        </p>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, max-content) 1fr', gap: '5px 14px', maxWidth: 620 }}>
+        <span style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 12.5, color: ADMIN.tinta2 }}>Sobre</span>
+        <span style={{ fontFamily: NUNITO, fontWeight: 700, fontSize: 13, color: ADMIN.ink }}>{sobre}</span>
+        {datos.map((dato) => (
+          <Fragment key={dato.etiqueta}>
+            <span style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 12.5, color: ADMIN.tinta2 }}>{dato.etiqueta}</span>
+            <span style={{ fontFamily: NUNITO, fontWeight: 700, fontSize: 13, color: ADMIN.ink }}>{dato.valor}</span>
+          </Fragment>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Una fila del feed ──────────────────────────────────────────────────────
 
 function FilaEvento({ item, nombres }: { item: ItemAuditoria; nombres: Nombres }) {
@@ -149,38 +191,34 @@ function FilaEvento({ item, nombres }: { item: ItemAuditoria; nombres: Nombres }
       <div style={{ padding: '12px 0 4px', paddingLeft: 104 }}>
         {/* La cadena: quién hizo qué y quién autorizó, en orden */}
         {esCadena && (
-          <ol style={{ listStyle: 'none', margin: '0 0 12px', padding: 0, borderLeft: `2px solid ${ADMIN.divisor}` }}>
-            {item.pasos.map((p) => (
-              <li key={p.id} style={{ padding: '5px 0 5px 14px', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 12, color: ADMIN.tinta2, fontWeight: 700, minWidth: 96 }}>
-                  {fechaCorta(p.fecha) || '—'}
-                </span>
-                <span style={{ fontSize: 13, color: ADMIN.ink, fontWeight: 600 }}>{p.texto}</span>
-              </li>
-            ))}
-          </ol>
+          <>
+            <div style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 12.5, color: ADMIN.tinta2, marginBottom: 4 }}>
+              Cómo fue, paso a paso
+            </div>
+            <ol style={{ listStyle: 'none', margin: '0 0 14px', padding: 0, borderLeft: `2px solid ${ADMIN.divisor}` }}>
+              {item.pasos.map((p) => (
+                <li key={p.id} style={{ padding: '5px 0 5px 14px', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 12, color: ADMIN.tinta2, fontWeight: 700, minWidth: 96 }}>
+                    {fechaCorta(p.fecha) || '—'}
+                  </span>
+                  <span style={{ fontSize: 13, color: ADMIN.ink, fontWeight: 600 }}>{p.texto}</span>
+                </li>
+              ))}
+            </ol>
+          </>
         )}
 
-        {/* Quién lo hizo y contra qué registro */}
-        <div style={{ fontSize: 13, color: ADMIN.tinta2, fontWeight: 600 }}>
-          {actorDe(principal, nombres)}
+        {/* Qué pasó y qué quedó registrado, en palabras */}
+        {item.eventos.map((ev) => (
+          <BloqueHecho key={ev.id} ev={ev} nombres={nombres} conTitulo={item.eventos.length > 1} />
+        ))}
+
+        {/* Quién lo hizo y cuándo */}
+        <div style={{ fontSize: 13, color: ADMIN.tinta2, fontWeight: 600, marginTop: 12, borderTop: `1px solid ${ADMIN.divisor}`, paddingTop: 8 }}>
+          Lo hizo <strong style={{ color: ADMIN.ink }}>{actorDe(principal, nombres)}</strong>
           {' · '}
           {fechaLinda(item.fecha)}
         </div>
-        <div style={{ fontSize: 12.5, color: ADMIN.tinta2, fontWeight: 600, marginTop: 2 }}>
-          {principal.entidad_id
-            ? `${principal.entidad ?? 'registro'} · ${principal.entidad_id}`
-            : 'Sin identificador de registro'}
-        </div>
-
-        {/* El jsonb original, siempre disponible: el relato no reemplaza al dato */}
-        {item.eventos.map((ev) => (
-          ev.detalle && Object.keys(ev.detalle).length > 0 ? (
-            <pre key={ev.id} style={{ margin: '8px 0 0', padding: '10px 12px', background: ADMIN.suave, border: `1.5px solid ${ADMIN.bordeCalido}`, borderRadius: 12, fontSize: 12.5, color: ADMIN.ink, overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-              {`${ev.accion}\n${JSON.stringify(ev.detalle, null, 2)}`}
-            </pre>
-          ) : null
-        ))}
       </div>
     </details>
   );

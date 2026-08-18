@@ -6,6 +6,10 @@
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
+    // Permite importar con extensión .ts entre módulos de lib/: los tests de
+    // Node corren esos archivos tal cual (node --test) y necesitan la ruta
+    // literal. Seguro porque acá no se emite nada (noEmit).
+    "allowImportingTsExtensions": true,
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",

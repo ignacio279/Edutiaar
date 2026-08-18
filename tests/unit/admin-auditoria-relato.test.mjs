@@ -216,7 +216,7 @@ test('titular: extender trial dice cuántos días y hasta cuándo', () => {
     detalle: { dias: 30, nuevo_fin: '2026-09-15' },
   }));
   assert.match(t, /30/);
-  assert.match(t, /2026-09-15/);
+  assert.match(t, /15 de septiembre de 2026/);
   assert.match(t, /Cerro Azul/);
 });
 
