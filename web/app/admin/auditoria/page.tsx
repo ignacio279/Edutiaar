@@ -1,28 +1,38 @@
 'use client';
-// Auditoría (Dashboard admin v3, WP9): timeline de quién hizo qué y cuándo.
-// Todo llega por admin-auditoria (la tabla es server-only: PostgREST no la
-// sirve a nadie). Filtros por entidad/acción/actor/rango de fechas + paginado
-// por cursor con "Cargar más" — nunca la tabla entera.
-import { useEffect, useState } from 'react';
+// Auditoría (Dashboard admin v3, WP9 · rediseño "Auditoría legible" 2026-08-18):
+// feed de lo que pasó, escrito en castellano. Todo llega por admin-auditoria
+// (la tabla es server-only: PostgREST no la sirve a nadie).
+//
+// La fn trae datos crudos + los diccionarios que el front no puede resolver por
+// RLS (nombres de colegios/maestras/instituciones, y el consentimiento que
+// autorizó cada pase); el relato lo arma la lógica pura de
+// web/lib/admin/auditoria-relato.ts.
+//
+// Por defecto se ven solo las acciones CLAVE. Lo rutinario se sigue
+// registrando siempre y vuelve con el toggle (D3): el filtro es de la vista,
+// nunca del registro.
+//
+// Spec: docs/superpowers/specs/2026-08-18-auditoria-legible-design.md
+import { useEffect, useMemo, useState } from 'react';
 import { ADMIN, NIVEL_ADMIN } from '@/lib/admin/tema';
 import Pill from '@/components/admin/Pill';
+import FiltroChips from '@/components/admin/FiltroChips';
 import { llamarAdmin, ERRS_ADMIN } from '@/lib/admin/api';
+import { fechaRelativa } from '@/lib/admin/metricas';
+import {
+  CATEGORIAS,
+  actorDe,
+  armarFeed,
+  filtrarFeed,
+  type Consentimientos,
+  type EventoAuditoria,
+  type ItemAuditoria,
+  type Nombres,
+} from '@/lib/admin/auditoria-relato';
 
 const BALOO = 'var(--font-baloo), cursive';
 const QUICK = 'var(--font-quicksand), sans-serif';
 const NUNITO = 'var(--font-nunito), sans-serif';
-
-type Evento = {
-  id: string;
-  actor_id: string;
-  actor_email: string | null;
-  nivel: string | null;
-  accion: string;
-  entidad: string | null;
-  entidad_id: string | null;
-  detalle: Record<string, unknown> | null;
-  created_at: string;
-};
 
 type Filtros = { entidad: string; accion: string; actor: string; desde: string; hasta: string };
 const FILTROS_VACIOS: Filtros = { entidad: '', accion: '', actor: '', desde: '', hasta: '' };
@@ -32,11 +42,18 @@ const ENTIDADES: [string, string][] = [
   ['', 'Todas las entidades'],
   ['escuela', 'Colegio'],
   ['perfil', 'Maestra / perfil'],
+  ['transferencia', 'Pase'],
+  ['arco_caso', 'Caso ARCO'],
+  ['licencia', 'Licencia'],
+  ['institucion', 'Institución'],
   ['plataforma_admin', 'Admin de plataforma'],
-  ['escuela_feature', 'Features'],
   ['anuncio', 'Anuncio'],
   ['escuela_nota', 'Nota CRM'],
+  ['nodo', 'Nodo (mapeo NAP)'],
 ];
+
+// "Todas" + las categorías del relato, para los chips.
+const CHIPS = [{ key: '', label: 'Todo' }, ...CATEGORIAS] as const;
 
 const inputStyle: React.CSSProperties = {
   padding: '10px 13px', border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 12,
@@ -57,6 +74,17 @@ function fechaLinda(iso: string): string {
   }
 }
 
+const fechaCorta = (iso: string): string => {
+  if (!iso) return '';
+  try {
+    return new Date(iso).toLocaleString('es-AR', {
+      day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+    });
+  } catch {
+    return iso;
+  }
+};
+
 // Arma el payload de filtros para la fn: solo claves con valor; las fechas del
 // <input type="date"> se convierten en límites del día completo.
 function payloadFiltros(f: Filtros): Record<string, string> {
@@ -69,59 +97,201 @@ function payloadFiltros(f: Filtros): Record<string, string> {
   return p;
 }
 
+type Respuesta = {
+  eventos: EventoAuditoria[];
+  nombres?: Nombres;
+  consentimientos?: Consentimientos;
+  siguiente_cursor: string | null;
+};
+
+// Los diccionarios se acumulan página a página: un evento viejo puede
+// referirse a un colegio que recién aparece en la página siguiente.
+function fusionarNombres(prev: Nombres, nuevo: Nombres | undefined): Nombres {
+  if (!nuevo) return prev;
+  return {
+    escuelas: { ...prev.escuelas, ...nuevo.escuelas },
+    perfiles: { ...prev.perfiles, ...nuevo.perfiles },
+    instituciones: { ...prev.instituciones, ...nuevo.instituciones },
+  };
+}
+
+// ── Una fila del feed ──────────────────────────────────────────────────────
+
+function FilaEvento({ item, nombres }: { item: ItemAuditoria; nombres: Nombres }) {
+  const principal = item.eventos[item.eventos.length - 1];
+  const categoria = CATEGORIAS.find((c) => c.key === item.categoria);
+  const esCadena = item.pasos.length > 0;
+
+  return (
+    <details style={{ borderBottom: `1px solid ${ADMIN.divisor}`, padding: '13px 0' }}>
+      <summary style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', cursor: 'pointer', listStyle: 'none' }}>
+        <span style={{ fontSize: 12.5, color: ADMIN.tinta2, fontWeight: 700, minWidth: 92 }}>
+          {fechaRelativa(item.fecha, new Date())}
+        </span>
+        {principal.nivel && NIVEL_ADMIN[principal.nivel] && (
+          <Pill tupla={NIVEL_ADMIN[principal.nivel]} />
+        )}
+        <span style={{ flex: 1, minWidth: 240, fontSize: 14, color: ADMIN.ink, fontWeight: 700 }}>
+          {item.titular}
+        </span>
+        {esCadena && (
+          <span style={{ background: ADMIN.burbuja, border: `1px solid ${ADMIN.borde}`, color: ADMIN.oscuro, borderRadius: 999, padding: '3px 10px', fontSize: 11, fontWeight: 800, whiteSpace: 'nowrap' }}>
+            {item.pasos.length} pasos
+          </span>
+        )}
+        {categoria && (
+          <span style={{ background: ADMIN.hover, border: `1px solid ${ADMIN.chipBorde}`, color: ADMIN.tinta2, borderRadius: 999, padding: '3px 10px', fontSize: 11, fontWeight: 800 }}>
+            {categoria.label}
+          </span>
+        )}
+      </summary>
+
+      <div style={{ padding: '12px 0 4px', paddingLeft: 104 }}>
+        {/* La cadena: quién hizo qué y quién autorizó, en orden */}
+        {esCadena && (
+          <ol style={{ listStyle: 'none', margin: '0 0 12px', padding: 0, borderLeft: `2px solid ${ADMIN.divisor}` }}>
+            {item.pasos.map((p) => (
+              <li key={p.id} style={{ padding: '5px 0 5px 14px', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12, color: ADMIN.tinta2, fontWeight: 700, minWidth: 96 }}>
+                  {fechaCorta(p.fecha) || '—'}
+                </span>
+                <span style={{ fontSize: 13, color: ADMIN.ink, fontWeight: 600 }}>{p.texto}</span>
+              </li>
+            ))}
+          </ol>
+        )}
+
+        {/* Quién lo hizo y contra qué registro */}
+        <div style={{ fontSize: 13, color: ADMIN.tinta2, fontWeight: 600 }}>
+          {actorDe(principal, nombres)}
+          {' · '}
+          {fechaLinda(item.fecha)}
+        </div>
+        <div style={{ fontSize: 12.5, color: ADMIN.tinta2, fontWeight: 600, marginTop: 2 }}>
+          {principal.entidad_id
+            ? `${principal.entidad ?? 'registro'} · ${principal.entidad_id}`
+            : 'Sin identificador de registro'}
+        </div>
+
+        {/* El jsonb original, siempre disponible: el relato no reemplaza al dato */}
+        {item.eventos.map((ev) => (
+          ev.detalle && Object.keys(ev.detalle).length > 0 ? (
+            <pre key={ev.id} style={{ margin: '8px 0 0', padding: '10px 12px', background: ADMIN.suave, border: `1.5px solid ${ADMIN.bordeCalido}`, borderRadius: 12, fontSize: 12.5, color: ADMIN.ink, overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+              {`${ev.accion}\n${JSON.stringify(ev.detalle, null, 2)}`}
+            </pre>
+          ) : null
+        ))}
+      </div>
+    </details>
+  );
+}
+
+// ── Pantalla ───────────────────────────────────────────────────────────────
+
 export default function AuditoriaPage() {
   const [filtros, setFiltros] = useState<Filtros>(FILTROS_VACIOS);
   const [aplicados, setAplicados] = useState<Filtros>(FILTROS_VACIOS);
-  const [eventos, setEventos] = useState<Evento[]>([]);
+  const [eventos, setEventos] = useState<EventoAuditoria[]>([]);
+  const [nombres, setNombres] = useState<Nombres>({ escuelas: {}, perfiles: {}, instituciones: {} });
+  const [consentimientos, setConsentimientos] = useState<Consentimientos>({});
+  const [verRutina, setVerRutina] = useState(false);
+  const [categoria, setCategoria] = useState('');
   const [cursor, setCursor] = useState<string | null>(null);
   const [cargando, setCargando] = useState(false);
   const [cargado, setCargado] = useState(false);
   const [error, setError] = useState('');
 
-  async function cargar(f: Filtros, cursorActual: string | null) {
+  // `solo_clave` va a la QUERY: si el filtro fuera solo del lado del cliente,
+  // una página entera de acciones rutinarias llegaría para mostrarse vacía.
+  async function cargar(f: Filtros, cursorActual: string | null, rutina: boolean) {
     setCargando(true);
     setError('');
-    const r = await llamarAdmin<{ eventos: Evento[]; siguiente_cursor: string | null }>(
-      'admin-auditoria',
-      'listar',
-      { filtros: payloadFiltros(f), ...(cursorActual ? { cursor: cursorActual } : {}), limite: 50 },
-    );
+    const r = await llamarAdmin<Respuesta>('admin-auditoria', 'listar', {
+      filtros: payloadFiltros(f),
+      ...(cursorActual ? { cursor: cursorActual } : {}),
+      limite: 50,
+      solo_clave: !rutina,
+    });
     setCargando(false);
     if (!r.ok) {
       setError(ERRS_ADMIN[r.data.error ?? ''] ?? 'No se pudo cargar la auditoría. Probá de nuevo.');
       return;
     }
-    setEventos((prev) => (cursorActual ? [...prev, ...(r.data.eventos ?? [])] : (r.data.eventos ?? [])));
+    const nuevos = r.data.eventos ?? [];
+    setEventos((prev) => (cursorActual ? [...prev, ...nuevos] : nuevos));
+    setNombres((prev) => fusionarNombres(cursorActual ? prev : {}, r.data.nombres));
+    setConsentimientos((prev) => ({
+      ...(cursorActual ? prev : {}),
+      ...(r.data.consentimientos ?? {}),
+    }));
     setCursor(r.data.siguiente_cursor ?? null);
     setCargado(true);
   }
 
   useEffect(() => {
-    cargar(FILTROS_VACIOS, null);
+    cargar(FILTROS_VACIOS, null, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function aplicar() {
-    setAplicados(filtros);
+  function recargar(f: Filtros, rutina: boolean) {
+    setAplicados(f);
     setEventos([]);
     setCursor(null);
-    cargar(filtros, null);
+    cargar(f, null, rutina);
   }
 
   function limpiar() {
     setFiltros(FILTROS_VACIOS);
-    setAplicados(FILTROS_VACIOS);
-    setEventos([]);
-    setCursor(null);
-    cargar(FILTROS_VACIOS, null);
+    setCategoria('');
+    recargar(FILTROS_VACIOS, verRutina);
   }
+
+  // El toggle cambia la query, así que rearranca la lista desde la primera página.
+  function alternarRutina() {
+    const proximo = !verRutina;
+    setVerRutina(proximo);
+    recargar(aplicados, proximo);
+  }
+
+  // El relato se arma sobre TODO lo cargado, así que una cadena partida entre
+  // dos páginas se une sola al traer la siguiente.
+  const items = useMemo(
+    () => armarFeed(eventos, nombres, consentimientos),
+    [eventos, nombres, consentimientos],
+  );
+  const visibles = useMemo(
+    () => filtrarFeed(items, { verRutina: true, categoria }),
+    [items, categoria],
+  );
 
   return (
     <div>
       <h1 style={{ fontFamily: BALOO, fontWeight: 700, fontSize: 'clamp(26px, 3.6vw, 34px)', color: ADMIN.ink, margin: '0 0 6px' }}>Auditoría</h1>
       <p style={{ fontFamily: NUNITO, fontWeight: 600, fontSize: 14.5, color: ADMIN.tinta2, margin: '0 0 18px' }}>
-        Registro de solo lectura de toda mutación: quién hizo qué y cuándo.
+        Todo lo que pasó en la plataforma: quién lo hizo, cuándo y quién lo autorizó.
+        Tocá un evento para ver el detalle.
       </p>
+
+      {/* Chips de categoría + toggle de rutina */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
+        <FiltroChips opciones={CHIPS} valor={categoria} onCambio={setCategoria} />
+        <span style={{ flex: 1 }} />
+        <button
+          onClick={alternarRutina}
+          disabled={cargando}
+          className={verRutina ? undefined : 'ad-ghost-warm'}
+          style={{
+            background: verRutina ? ADMIN.base : ADMIN.carta,
+            color: verRutina ? '#fff' : ADMIN.tinta2,
+            border: verRutina ? 'none' : `1.5px solid ${ADMIN.bordeCalido}`,
+            borderRadius: 999, padding: '8px 16px',
+            fontFamily: QUICK, fontWeight: 700, fontSize: 13,
+            cursor: cargando ? 'wait' : 'pointer',
+          }}
+        >
+          {verRutina ? 'Ocultando nada — ves todo' : 'Ver también lo rutinario'}
+        </button>
+      </div>
 
       {/* Filtros */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'flex-end', marginBottom: 16 }}>
@@ -148,7 +318,7 @@ export default function AuditoriaPage() {
           <input type="date" value={filtros.hasta} onChange={(e) => setFiltros({ ...filtros, hasta: e.target.value })} style={inputStyle} />
         </label>
         <button
-          onClick={aplicar}
+          onClick={() => recargar(filtros, verRutina)}
           disabled={cargando}
           className="ed-primary"
           style={{ background: ADMIN.base, color: '#fff', border: 'none', borderRadius: 999, padding: '11px 22px', fontFamily: QUICK, fontWeight: 700, fontSize: 14, cursor: cargando ? 'wait' : 'pointer', boxShadow: `0 6px 16px ${ADMIN.sombraCTA}` }}
@@ -171,43 +341,23 @@ export default function AuditoriaPage() {
         </div>
       )}
 
-      {/* Timeline: una sola tarjeta con un <details> por evento (mock) */}
-      <div style={{ background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 22, padding: '10px 22px', maxWidth: 860 }}>
-        {eventos.map((ev) => (
-          <details key={ev.id} style={{ borderBottom: `1px solid ${ADMIN.divisor}`, padding: '13px 0' }}>
-            <summary style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', cursor: 'pointer', listStyle: 'none' }}>
-              <span style={{ fontSize: 12.5, color: ADMIN.tinta2, fontWeight: 700, minWidth: 118 }}>{fechaLinda(ev.created_at)}</span>
-              <span style={{ fontSize: 13, color: ADMIN.oscuro, fontWeight: 700 }}>{ev.actor_email ?? 'sin email'}</span>
-              {ev.nivel && <Pill tupla={NIVEL_ADMIN[ev.nivel]} />}
-              <span style={{ flex: 1, fontSize: 14, color: ADMIN.ink, fontWeight: 700 }}>{ev.accion}</span>
-              {ev.entidad && (
-                <span style={{ background: ADMIN.hover, border: `1px solid ${ADMIN.chipBorde}`, color: ADMIN.tinta2, borderRadius: 999, padding: '3px 10px', fontSize: 11, fontWeight: 800 }}>
-                  {ev.entidad}
-                </span>
-              )}
-            </summary>
-            <div style={{ fontSize: 13, color: ADMIN.tinta2, fontWeight: 600, padding: '10px 0 2px 130px' }}>
-              {ev.entidad_id ? `${ev.entidad ?? 'registro'} · ${ev.entidad_id}` : 'Sin identificador de registro'}
-              {ev.detalle && Object.keys(ev.detalle).length > 0 && (
-                <pre style={{ margin: '8px 0 0', padding: '10px 12px', background: ADMIN.suave, border: `1.5px solid ${ADMIN.bordeCalido}`, borderRadius: 12, fontSize: 12.5, color: ADMIN.ink, overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                  {JSON.stringify(ev.detalle, null, 2)}
-                </pre>
-              )}
-            </div>
-          </details>
-        ))}
-        {!eventos.length && cargado && !cargando && (
+      <div style={{ background: ADMIN.carta, border: `2px solid ${ADMIN.bordeCalido}`, borderRadius: 22, padding: '10px 22px', maxWidth: 940 }}>
+        {visibles.map((item) => <FilaEvento key={item.id} item={item} nombres={nombres} />)}
+
+        {!visibles.length && cargado && !cargando && (
           <div style={{ padding: '30px 0', textAlign: 'center', color: ADMIN.tinta2, fontFamily: QUICK, fontWeight: 700, fontSize: 14.5 }}>
-            No hay eventos con esos filtros.
+            {categoria && items.length > 0
+              ? 'No hay eventos de esa categoría en lo cargado. Probá "Cargar más" o sacá el chip.'
+              : 'No hay eventos con esos filtros.'}
           </div>
         )}
-        {cargando && !eventos.length && (
+        {cargando && !visibles.length && (
           <p style={{ padding: '20px 0', color: ADMIN.tinta2, fontFamily: QUICK, fontWeight: 700 }}>Cargando…</p>
         )}
         {cursor && (
           <div style={{ textAlign: 'center', padding: '16px 0' }}>
             <button
-              onClick={() => cargar(aplicados, cursor)}
+              onClick={() => cargar(aplicados, cursor, verRutina)}
               disabled={cargando}
               className="ad-ghost"
               style={{ background: ADMIN.carta, border: `1.5px solid ${ADMIN.borde}`, borderRadius: 999, padding: '10px 24px', fontFamily: QUICK, fontWeight: 700, fontSize: 14, color: ADMIN.oscuro, cursor: cargando ? 'wait' : 'pointer' }}
@@ -217,6 +367,14 @@ export default function AuditoriaPage() {
           </div>
         )}
       </div>
+
+      {!verRutina && cargado && (
+        <p style={{ fontFamily: NUNITO, fontWeight: 600, fontSize: 12.5, color: ADMIN.tinta2, margin: '12px 0 0', maxWidth: 940 }}>
+          Se registra todo, siempre. Acá ves lo importante; lo rutinario
+          (revisión NAP, alertas atendidas, notas, jobs) está guardado igual y
+          aparece con el botón de arriba.
+        </p>
+      )}
     </div>
   );
 }
