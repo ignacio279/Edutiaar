@@ -12,7 +12,10 @@ import { createClient } from '@/lib/supabase/client';
 import { ADMIN } from '@/lib/admin/tema';
 import { toast } from '@/lib/toast';
 import { ERRS_LICENCIAS, PLAN_COPY, copyCupos, copyVencimientoLicencia } from '@/lib/admin/licencias';
-import { copyCosto, copyDeuda, copyPrecision, totalesInstitucion, type FilaColegio } from '@/lib/institucion';
+import {
+  GRADOS_PRIMARIA, MATERIAS_PANEL, copyCobertura, copyCosto, copyDeuda,
+  copyDesempenoTema, totalesInstitucion, type FilaColegio,
+} from '@/lib/institucion';
 import { postFn } from '@/lib/edge';
 
 const BALOO = 'var(--font-baloo), cursive';
@@ -28,6 +31,20 @@ type ColegioResumen = {
 };
 type Pool = { id: string; plan: string; cupos: number | null; estado: string; fecha_fin: string | null; usados: number; disponibles: number | null };
 type Resumen = { institucion: { id: string; nombre: string; estado: string }; colegios: ColegioResumen[]; pools: Pool[] };
+
+// Desempeño contra el marco NAP: las filas nacen del CATÁLOGO oficial, así que
+// un tema que nadie practicó aparece igual, en cero — que un tema no se esté
+// dando es información. `dominioPromedio` en null = suprimido por k=5.
+type TemaNapFila = {
+  temaId: string; tema: string; alumnos: number; respuestas: number;
+  dominioPromedio: number | null; dominados: number | null;
+  colegiosConTema: number; colegiosTotal: number; muestraInsuficiente: boolean;
+};
+type EjeNapFila = {
+  ejeId: string; eje: string; alumnos: number; dominioPromedio: number | null;
+  colegiosConTema: number; colegiosTotal: number; muestraInsuficiente: boolean;
+  temas: TemaNapFila[];
+};
 
 async function panel(accion: string, payload: Record<string, unknown> = {}) {
   const { data: { session } } = await supabase.auth.getSession();
@@ -63,6 +80,9 @@ export default function PanelInstitucion() {
   const [nuevoColegio, setNuevoColegio] = useState({ nombre: '', provincia: '' });
   const [nuevaDocente, setNuevaDocente] = useState({ escuela_id: '', nombre: '', email: '' });
   const [credencial, setCredencial] = useState<{ email: string; password: string } | null>(null);
+  const [materia, setMateria] = useState<string>(MATERIAS_PANEL[1]); // Matemática
+  const [grado, setGrado] = useState<number>(4);
+  const [ejes, setEjes] = useState<EjeNapFila[] | null>(null);
   const ahora = new Date();
 
   async function cargar() {
@@ -76,6 +96,18 @@ export default function PanelInstitucion() {
     if (m.ok) setMetricas((m.j.filas ?? []) as FilaColegio[]);
   }
   useEffect(() => { cargar(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+
+  // El desempeño se pide aparte: cambiar de materia o grado no debe recargar
+  // todo el panel (y una materia sin datos no puede dejar la pantalla muda).
+  useEffect(() => {
+    let vigente = true;
+    setEjes(null);
+    panel('desempeno', { materia, grado }).then(({ ok, j }) => {
+      if (!vigente) return;
+      setEjes(ok ? ((j.ejes ?? []) as EjeNapFila[]) : []);
+    });
+    return () => { vigente = false; };
+  }, [materia, grado]);
 
   async function crearColegio() {
     if (busy) return;
@@ -174,11 +206,90 @@ export default function PanelInstitucion() {
                 </div>
                 <div style={{ fontFamily: QUICK, fontSize: 13, color: ADMIN.tinta2, marginTop: 4 }}>
                   {c.docentes} maestras · {c.matriculas_activas} chicos con matrícula activa ·{' '}
-                  {m ? `${m.sesiones ?? 0} sesiones · ${copyPrecision(m)}` : 'sin métricas'} · {copyDeuda(c.deuda_consentimientos)}
+                  {m ? `${m.sesiones ?? 0} sesiones` : 'sin métricas'} · {copyDeuda(c.deuda_consentimientos)}
                 </div>
               </div>
             );
           })}
+        </section>
+
+        {/* ── Aprendizaje contra los NAP ───────────────────────────────
+            La vara fija: los Núcleos de Aprendizajes Prioritarios (Res. CFE
+            214/04). Las filas nacen del catálogo oficial, así que un tema que
+            nadie dio aparece igual — eso también es información. */}
+        <section style={card}>
+          <h2 style={h2}>Aprendizaje contra los NAP</h2>
+          <p style={sub}>
+            Medido contra los Núcleos de Aprendizajes Prioritarios, el marco curricular oficial.
+            El desempeño de un tema con menos de 5 chicos no se muestra, y siempre se dice
+            cuántos de tus colegios lo dieron: un tema que dio uno solo no es un dato de toda tu red.
+          </p>
+
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+            {MATERIAS_PANEL.map((mat) => (
+              <button
+                key={mat}
+                onClick={() => setMateria(mat)}
+                style={{
+                  background: mat === materia ? ADMIN.base : ADMIN.carta,
+                  color: mat === materia ? '#fff' : ADMIN.tinta2,
+                  border: `1.5px solid ${mat === materia ? ADMIN.base : ADMIN.borde}`,
+                  borderRadius: 999, padding: '7px 14px', fontFamily: QUICK,
+                  fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                }}
+              >{mat}</button>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+            {GRADOS_PRIMARIA.map((g) => (
+              <button
+                key={g}
+                onClick={() => setGrado(g)}
+                style={{
+                  background: g === grado ? ADMIN.burbuja : ADMIN.carta,
+                  color: ADMIN.oscuro,
+                  border: `1.5px solid ${g === grado ? ADMIN.base : ADMIN.borde}`,
+                  borderRadius: 10, padding: '6px 12px', fontFamily: QUICK,
+                  fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                }}
+              >{g}°</button>
+            ))}
+          </div>
+
+          {ejes === null ? (
+            <p style={{ fontFamily: QUICK, fontSize: 14, color: ADMIN.tinta2 }}>Buscando el desempeño…</p>
+          ) : ejes.length === 0 ? (
+            <p style={{ fontFamily: QUICK, fontSize: 14, color: ADMIN.tinta2 }}>
+              Todavía no hay práctica de {materia} en {grado}° en tus colegios.
+            </p>
+          ) : ejes.map((e) => (
+            <div key={e.ejeId} style={{ padding: '14px 0', borderTop: `1px solid ${ADMIN.bordeCalido}` }}>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'baseline', flexWrap: 'wrap' }}>
+                <span style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 15.5, color: ADMIN.ink, flex: 1, minWidth: 200 }}>
+                  {e.eje}
+                </span>
+                <span style={{ fontFamily: BALOO, fontSize: 20, color: ADMIN.oscuro }}>
+                  {copyDesempenoTema(e)}
+                </span>
+              </div>
+              <div style={{ fontFamily: QUICK, fontSize: 12.5, color: ADMIN.tinta2, marginTop: 2 }}>
+                {e.alumnos} {e.alumnos === 1 ? 'chico' : 'chicos'} · {copyCobertura(e.colegiosConTema, e.colegiosTotal)}
+              </div>
+              {e.temas.map((t) => (
+                <div key={t.temaId} style={{ display: 'flex', gap: 10, alignItems: 'baseline', flexWrap: 'wrap', marginTop: 8, paddingLeft: 14 }}>
+                  <span style={{ fontFamily: NUNITO, fontSize: 13.5, color: ADMIN.ink, flex: 1, minWidth: 180 }}>
+                    {t.tema}
+                  </span>
+                  <span style={{ fontFamily: QUICK, fontSize: 12.5, color: ADMIN.tinta2 }}>
+                    {copyCobertura(t.colegiosConTema, t.colegiosTotal)}
+                  </span>
+                  <span style={{ fontFamily: QUICK, fontWeight: 700, fontSize: 13, color: ADMIN.oscuro, minWidth: 130, textAlign: 'right' }}>
+                    {copyDesempenoTema(t)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ))}
         </section>
 
         {/* ── Pools ────────────────────────────────────────────────── */}

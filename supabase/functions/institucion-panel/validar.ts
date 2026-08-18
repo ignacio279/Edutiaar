@@ -8,6 +8,7 @@
 // k=5 del observatorio (D-OA3 — la constante se replica porque las fns no
 // comparten archivos entre sí, solo _shared).
 import { esProvinciaValida } from '../_shared/provincias.ts';
+import { validarIdentidad, type IdentidadEntrada } from '../_shared/identidad.ts';
 
 export type Resultado = { ok: true } | { ok: false; error: string };
 
@@ -26,7 +27,7 @@ export function tipoColegioValido(t: unknown): boolean {
 
 export function validarColegioCrear(d: {
   nombre?: unknown; provincia?: unknown; tipo?: unknown;
-}): Resultado {
+} & IdentidadEntrada): Resultado {
   if (!noVacio(d.nombre)) return { ok: false, error: 'nombre_vacio' };
   // Provincia opcional (eje del observatorio); si viene, tiene que ser real.
   if (d.provincia !== undefined && d.provincia !== null && !esProvinciaValida(d.provincia)) {
@@ -35,7 +36,9 @@ export function validarColegioCrear(d: {
   if (d.tipo !== undefined && d.tipo !== null && !tipoColegioValido(d.tipo)) {
     return { ok: false, error: 'tipo_invalido' };
   }
-  return { ok: true };
+  // Identidad oficial (0033): opcional acá también, con las MISMAS reglas que
+  // el alta de plataforma — el CUE no puede depender de por dónde entró.
+  return validarIdentidad(d);
 }
 
 // Flags default de escuela_feature — copia literal de features_default() (0018),
@@ -100,18 +103,25 @@ export function generarPasswordTemporal(azar: Azar = azarCrypto): string {
   return `${palabras.join('-')}-${digitos}`;
 }
 
-// ── Agregado de desempeño con k-anonimato ───────────────────────────────────
-// Semántica idéntica al observatorio (D-OA3): la precisión de un agregado que
-// cubre menos de K alumnos DISTINTOS sale null + muestraInsuficiente; los
-// conteos de volumen (sesiones, activos) sí se muestran. Determinístico:
-// nada de new Date() acá adentro.
-export function precisionConK(
-  d: { aciertos: number; total: number; alumnosDistintos: number },
-  k: number = K_ANONIMATO,
-): { precision: number | null; muestraInsuficiente: boolean } {
-  const insuficiente = d.alumnosDistintos < k;
-  if (insuficiente || d.total <= 0) {
-    return { precision: null, muestraInsuficiente: insuficiente };
+// ── Desempeño contra el marco NAP ───────────────────────────────────────────
+// La precisión cruda POR COLEGIO se retiró de este panel (2026-08-18): no es
+// comparable entre colegios —distintos grados, distintos nodos y dificultad
+// adaptativa por chico— y acá la miraba justo quien tiene poder de ranking
+// sobre esas escuelas. El aprendizaje se mide contra la vara fija de los NAP,
+// con el mismo k-anonimato de siempre (lo aplica _shared/observatorio-logica.ts).
+
+export const MATERIAS_NAP = ['Lengua', 'Matemática', 'Ciencias Naturales', 'Ciencias Sociales'] as const;
+
+// `grado` es obligatorio y entero: los temas de los NAP se definen POR grado,
+// mezclarlos juntaría contenidos distintos bajo un mismo nombre. La materia se
+// valida contra las cuatro del marco (el front usa chips, nunca tipea).
+export function validarDesempeno(d: { materia?: unknown; grado?: unknown }): Resultado {
+  if (!noVacio(d.materia)) return { ok: false, error: 'falta_materia' };
+  if (!(MATERIAS_NAP as readonly string[]).includes(d.materia.trim())) {
+    return { ok: false, error: 'materia_invalida' };
   }
-  return { precision: Math.round((d.aciertos / d.total) * 100), muestraInsuficiente: false };
+  if (!Number.isInteger(d.grado) || (d.grado as number) < 1 || (d.grado as number) > 7) {
+    return { ok: false, error: 'grado_invalido' };
+  }
+  return { ok: true };
 }

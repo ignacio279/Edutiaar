@@ -11,10 +11,18 @@
 // (`fuera_de_tu_institucion`): el front no es fuente de verdad.
 import { cors, json } from '../_shared/cors.ts';
 import { verificarAdminInstitucion, type InstCtx } from '../_shared/admin.ts';
+import { armarPatchIdentidad } from '../_shared/identidad.ts';
 import {
   FEATURES_DEFAULT, emailNormalizado, fechasTrial, generarPasswordTemporal,
-  precisionConK, validarColegioCrear, validarDocenteCrear,
+  validarColegioCrear, validarDesempeno, validarDocenteCrear,
 } from './validar.ts';
+// Misma lógica pura que usa el observatorio de plataforma: k=5 por tema, filas
+// nacidas del catálogo NAP y cobertura "N de M colegios" (vive en _shared
+// porque la comparten dos funciones).
+import {
+  desempenoPorEje, type AlumnoNodoNap, type EjeCat, type NodoNap,
+  type SesionObs, type TemaCat,
+} from '../_shared/observatorio-logica.ts';
 
 const DIAS_USO = 30;
 const DIAS_ACTIVOS = 7;
@@ -195,22 +203,84 @@ Deno.serve(async (req) => {
           if (u.escuela_id) costos[u.escuela_id] = (costos[u.escuela_id] ?? 0) + (Number(u.costo_usd) || 0);
         }
 
+        // VOLUMEN Y COSTO, nunca precisión por colegio (2026-08-18): ese
+        // número no es comparable entre colegios —distintos grados, distintos
+        // nodos, dificultad adaptativa por chico— y acá lo miraba justo quien
+        // tiene poder de ranking sobre esas escuelas. El aprendizaje se mira
+        // en la acción `desempeno`, contra la vara fija de los NAP.
         return json({
           rango_dias: DIAS_USO,
           filas: colegios.filter((c) => ids.includes(c.id)).map((c) => {
             const p = porEscuela[c.id];
-            const { precision, muestraInsuficiente } = precisionConK({
-              aciertos: p.aciertos, total: p.total, alumnosDistintos: p.alumnos.size,
-            });
             return {
               escuela_id: c.id, nombre: c.nombre, provincia: c.provincia,
               sesiones: p.sesiones,
               alumnos_activos_7d: p.activos.size,
-              precision, muestraInsuficiente,
               costo_mes_usd: Number((costos[c.id] ?? 0).toFixed(4)),
             };
           }),
         });
+      }
+
+      // Desempeño contra el marco curricular NAP, acotado a MIS colegios.
+      // Espejo de la acción homónima de admin-observatorio, con el universo
+      // scopeado en la capa de datos (alumnosDe(ids) ya filtra por mis
+      // escuelas): la misma lógica pura, el mismo k-anonimato k=5, las mismas
+      // filas nacidas del catálogo. Solo lectura → no audita.
+      case 'desempeno': {
+        const v = validarDesempeno(body);
+        if (!v.ok) return json({ error: v.error }, 400);
+        const materia = String(body.materia).trim();
+        const grado = body.grado as number;
+
+        const colegios = await misColegios();
+        let ids = colegios.map((c) => c.id);
+        if (body.escuela_id !== undefined && body.escuela_id !== null) {
+          const mio = await colegioMio(body.escuela_id);
+          if (!mio) return json({ error: 'fuera_de_tu_institucion' }, 403);
+          ids = [mio];
+        }
+        if (ids.length === 0) return json({ rango_dias: DIAS_USO, ejes: [] });
+
+        // Oposición ARCO (0024): un alumno con excluido_procesamiento queda
+        // FUERA de todo agregado no esencial. Este universo es la única puerta
+        // de entrada de chicos acá, igual que en admin-observatorio.
+        const { data: alumnosData } = await sb.from('perfil')
+          .select('id, escuela_id')
+          .eq('rol', 'alumno')
+          .eq('excluido_procesamiento', false)
+          .in('escuela_id', ids);
+        const alumnos = (alumnosData ?? []) as { id: string; escuela_id: string }[];
+        if (alumnos.length === 0) return json({ rango_dias: DIAS_USO, ejes: [] });
+        const alumnoIds = alumnos.map((a) => a.id);
+
+        const desde = new Date(Date.now() - DIAS_USO * 86400000).toISOString();
+        const [sesionesRes, alumnoNodoRes, nodosRes, ejesRes, temasRes] = await Promise.all([
+          sb.from('sesion').select('alumno_id, nodo_id, aciertos, total')
+            .in('alumno_id', alumnoIds).gte('fecha', desde),
+          sb.from('alumno_nodo').select('alumno_id, nodo_id, puntaje, estado')
+            .in('alumno_id', alumnoIds),
+          sb.from('nodo').select('id, nap_tema_id, nap_confianza, nap_revisado'),
+          sb.from('nap_eje').select('id, materia, nombre, orden').eq('materia', materia),
+          sb.from('nap_tema').select('id, eje_id, nombre, grado, orden, nap_eje!inner(materia)')
+            .eq('grado', grado).eq('nap_eje.materia', materia),
+        ]);
+
+        const ejes = desempenoPorEje(
+          {
+            sesiones: (sesionesRes.data ?? []) as SesionObs[],
+            alumnoNodo: (alumnoNodoRes.data ?? []) as AlumnoNodoNap[],
+            nodos: (nodosRes.data ?? []) as NodoNap[],
+            ejes: (ejesRes.data ?? []) as EjeCat[],
+            temas: (temasRes.data ?? []) as TemaCat[],
+            escuelaDeAlumno: new Map(alumnos.map((a) => [a.id, a.escuela_id])),
+            // Sin filtro de provincia: el scoping ya es el conjunto de MIS
+            // colegios, y un segundo eje partiría la muestra sin motivo.
+            provinciaDeAlumno: new Map(),
+          },
+          { materia, grado },
+        );
+        return json({ rango_dias: DIAS_USO, materia, grado, ejes });
       }
 
       // Deuda de consentimientos de un colegio mío: SOLO el número.
@@ -236,8 +306,14 @@ Deno.serve(async (req) => {
           zona: typeof body.zona === 'string' ? body.zona.trim() : null,
           estado: 'trial', trial_inicio, trial_fin,
           institucion_id: institucion.id, // el scoping nace con el colegio
-        }).select('id, nombre, provincia, estado').single();
-        if (error) throw error;
+          ...armarPatchIdentidad(body), // identidad oficial normalizada (0033)
+        }).select('id, nombre, provincia, estado, cue, cue_anexo').single();
+        if (error) {
+          if ((error as { code?: string }).code === '23505') {
+            return json({ error: 'cue_duplicado' }, 409);
+          }
+          throw error;
+        }
         const nueva = esc as { id: string; nombre: string };
         // Features default: el alta institucional no puede dejar un colegio
         // sin fila cuando el alta de plataforma sí la crea.

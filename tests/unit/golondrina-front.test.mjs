@@ -31,7 +31,7 @@ import {
 import {
   calcularExpiracion, diasExpiracion, DIAS_EXPIRACION_DEFAULT,
 } from '../../supabase/functions/gestion-transferencias/logica.ts';
-import { precisionConK, fechasTrial, generarPasswordTemporal } from '../../supabase/functions/institucion-panel/validar.ts';
+import { fechasTrial, generarPasswordTemporal } from '../../supabase/functions/institucion-panel/validar.ts';
 
 // Jueves 6 de agosto de 2026, 10:30 UTC.
 const NOW = new Date(Date.UTC(2026, 7, 6, 10, 30));
@@ -351,17 +351,10 @@ test('extenderTreintaDias: suma sobre lo que quedaba, o desde hoy si ya venció'
   assert.equal(extenderTreintaDias(null, NOW), '2026-09-05');
 });
 
-test('precisionConK: el borde exacto del k-anonimato del panel institucional', () => {
-  assert.deepEqual(precisionConK({ aciertos: 8, total: 10, alumnosDistintos: 4 }), {
-    precision: null, muestraInsuficiente: true,
-  }, '4 alumnos → suprimido');
-  assert.deepEqual(precisionConK({ aciertos: 8, total: 10, alumnosDistintos: 5 }), {
-    precision: 80, muestraInsuficiente: false,
-  }, '5 alumnos → sale');
-  assert.deepEqual(precisionConK({ aciertos: 0, total: 0, alumnosDistintos: 9 }), {
-    precision: null, muestraInsuficiente: false,
-  }, 'sin respuestas no hay precisión, pero la muestra alcanza');
-});
+// La precisión por colegio del panel institucional (precisionConK) se RETIRÓ
+// el 2026-08-18: no es comparable entre colegios y la miraba justo quien tiene
+// poder de ranking sobre esas escuelas. El desempeño del asiento institucional
+// se mide contra los NAP — tests en institucion-nap.test.mjs.
 
 test('fechasTrial y password temporal son determinísticos con la entrada dada', () => {
   const { trial_inicio, trial_fin } = fechasTrial(new Date(Date.UTC(2026, 7, 6)));

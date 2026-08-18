@@ -57,7 +57,7 @@ type FilaMateria = {
 };
 
 // Espejo de EjeDesempeno/TemaDesempeno de
-// supabase/functions/admin-observatorio/observatorio-logica.ts (la verdad
+// supabase/functions/_shared/observatorio-logica.ts (la verdad
 // vive ahí; acá solo se replica la forma para tipar la respuesta del front).
 // `precision`, `dominioPromedio` y `dominados` en null = no se publica por
 // k-anonimato, NUNCA cero.

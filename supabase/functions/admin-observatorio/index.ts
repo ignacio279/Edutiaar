@@ -8,7 +8,7 @@
 // manda filas crudas al front). Motivo (D-OA3): las filas crudas de sesiones
 // llevan alumno_id — mandarlas al browser rompería el anonimato. Esta función
 // trae filas acotadas de la DB, las pasa por la lógica pura de
-// ./observatorio-logica.ts (testeada desde Node) y devuelve SOLO agregados:
+// _shared/observatorio-logica.ts (testeada desde Node) y devuelve SOLO agregados:
 // ningún nombre, id de perfil ni dato individual viaja en las respuestas, y
 // el k-anonimato (k=5) anula las métricas de desempeño de celdas chicas.
 //
@@ -25,7 +25,7 @@ import {
   type AlumnoNodoObs, type AlumnoNodoNap, type AlumnoObs, type EjeCat,
   type EscuelaObs, type MateriaObs, type NodoNap, type NodoObs,
   type ProgramaObs, type SesionObs, type TemaCat,
-} from './observatorio-logica.ts';
+} from '../_shared/observatorio-logica.ts';
 
 const DIA_MS = 86_400_000;
 const MAX_FILAS = 10000;

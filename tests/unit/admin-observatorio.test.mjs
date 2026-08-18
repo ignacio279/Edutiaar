@@ -1,5 +1,5 @@
 // Tests de WP-A — Observatorio educativo (fase "Observatorio y avisos"): TODA
-// la lógica pura de supabase/functions/admin-observatorio/observatorio-logica.ts
+// la lógica pura de supabase/functions/_shared/observatorio-logica.ts
 // con datasets sintéticos (sin new Date() adentro de las funciones →
 // determinístico). La Edge Function admin-observatorio agrega SERVER-SIDE con
 // estas mismas funciones (D-OA3: las filas crudas llevan alumno_id y no pueden
@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import {
   K_ANONIMATO,
   normalizarTema, indexarCurriculo, agregarPorProvincia, agregarPorMateria,
-} from '../../supabase/functions/admin-observatorio/observatorio-logica.ts';
+} from '../../supabase/functions/_shared/observatorio-logica.ts';
 
 // ── Fixtures chicos y reutilizables ─────────────────────────────────────────
 

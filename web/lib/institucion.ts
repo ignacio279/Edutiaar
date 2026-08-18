@@ -10,19 +10,41 @@ export type FilaColegio = {
   provincia?: string | null;
   sesiones?: number;
   alumnos_activos_7d?: number;
-  precision?: number | null;
-  muestraInsuficiente?: boolean;
   costo_mes_usd?: number;
 };
 
-// Copy del desempeño respetando el k-anonimato: si la muestra es chica, se
-// dice por qué no hay número — nunca se inventa ni se muestra igual.
-export function copyPrecision(fila: {
-  precision?: number | null; muestraInsuficiente?: boolean;
+// ── Desempeño contra el marco NAP ───────────────────────────────────────────
+// El aprendizaje se mide contra la vara fija de los NAP, NO comparando la
+// precisión cruda entre colegios: distintos grados, distintos nodos y
+// dificultad adaptativa por chico la vuelven incomparable (misma doctrina que
+// retiró ese número de /admin/metricas el 2026-08-17).
+
+// Las cuatro materias del marco. Duplicadas a propósito de web/lib/admin/nap.ts
+// para no arrastrar el catálogo de 289 temas al bundle de esta página; un test
+// de paridad (institucion-nap.test.mjs) impide que diverjan.
+export const MATERIAS_PANEL = ['Lengua', 'Matemática', 'Ciencias Naturales', 'Ciencias Sociales'] as const;
+export const GRADOS_PRIMARIA = [1, 2, 3, 4, 5, 6, 7] as const;
+
+// Cobertura: cuántos de MIS colegios dieron el tema. Se dice SIEMPRE — sin
+// esto, un tema que dio un solo colegio se lee como un dato de toda la red.
+export function copyCobertura(conTema: number, total: number): string {
+  const n = Number(conTema) || 0;
+  const m = Number(total) || 0;
+  if (m === 0) return 'todavía sin práctica';
+  if (n === 0) return 'ningún colegio dio este tema';
+  return `${n} de ${m} colegios`;
+}
+
+// Copy del desempeño respetando el k-anonimato: si la muestra es chica se dice
+// por qué no hay número; nunca se inventa ni se muestra igual.
+export function copyDesempenoTema(t: {
+  alumnos?: number; dominioPromedio?: number | null; muestraInsuficiente?: boolean;
 }): string {
-  if (fila.muestraInsuficiente) return 'Muestra chica: no se muestra';
-  if (fila.precision === null || fila.precision === undefined) return 'Sin práctica todavía';
-  return `${fila.precision}% de aciertos`;
+  if (!t.alumnos) return 'todavía sin práctica';
+  if (t.muestraInsuficiente || t.dominioPromedio === null || t.dominioPromedio === undefined) {
+    return 'muestra chica: no se muestra';
+  }
+  return `${t.dominioPromedio}% de dominio`;
 }
 
 // Totales de la institución. Los agregados de desempeño NO se promedian entre

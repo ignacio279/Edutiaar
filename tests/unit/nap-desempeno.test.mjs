@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { desempenoPorEje, K_ANONIMATO } from '../../supabase/functions/admin-observatorio/observatorio-logica.ts';
+import { desempenoPorEje, K_ANONIMATO } from '../../supabase/functions/_shared/observatorio-logica.ts';
 
 // Catálogo mínimo: 1 eje de Matemática 4° con 2 temas.
 const EJES = [{ id: 'e1', materia: 'Matemática', nombre: 'Número y operaciones', orden: 0 }];

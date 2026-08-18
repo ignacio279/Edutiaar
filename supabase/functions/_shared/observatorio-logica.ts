@@ -1,7 +1,12 @@
 // Lógica PURA del observatorio educativo (WP-A — fase "Observatorio y avisos").
-// Módulo hermano de index.ts SIN imports de Deno/supabase: testeable desde Node
+// SIN imports de Deno/supabase: testeable desde Node
 // (patrón admin-costos/agregar.ts; tests/unit/admin-observatorio.test.mjs).
-import { mapeoCuenta } from '../_shared/nap-bandas.ts';
+//
+// VIVE EN _shared (2026-08-18) porque la usan DOS funciones: admin-observatorio
+// (el panel de plataforma, agregando por provincia) e institucion-panel (el
+// asiento del ministerio, agregando por SUS colegios). Las Edge Functions solo
+// comparten código por acá.
+import { mapeoCuenta } from './nap-bandas.ts';
 //
 // ANONIMATO (D-OA3): acá se cocina el k-anonimato. Toda métrica de DESEMPEÑO
 // (precisión, dominio) de una celda con menos de K_ANONIMATO alumnos distintos
