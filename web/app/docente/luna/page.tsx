@@ -140,7 +140,23 @@ function LunaDashboard({ aulaParam }: { aulaParam: string | null }) {
 
       // "Listo ✓" definitivo: las claves atendidas no vuelven a mostrarse (0017).
       const atendidas = (((atR.data as { clave: string }[]) || [])).map((c) => c.clave);
-      const alertas = filtrarAtendidas(alertasAula(alumnos, sesiones, respuestas, nodosAlumno, nodos, now), atendidas);
+      const calculadas = alertasAula(alumnos, sesiones, respuestas, nodosAlumno, nodos, now);
+      const alertas = filtrarAtendidas(calculadas, atendidas);
+
+      // Se deja constancia de lo que LUNA EFECTIVAMENTE mostró (luna_alerta,
+      // 0032). Es el denominador de "atendidas / emitidas" en las métricas de
+      // valor del panel admin: luna_alerta_atendida (0017) tenía numerador sin
+      // denominador. Va acá y no en un job nocturno a propósito — así el dato
+      // es "lo que se le mostró", no "lo que existiría si abriera la pantalla".
+      // Fire-and-forget: es analítica, jamás debe frenar el dashboard.
+      if (calculadas.length) {
+        supabase.from('luna_alerta').upsert(
+          calculadas.map((a) => ({
+            docente_id: user.id, clave: claveAlerta(a), tipo: a.tipo, prioridad: a.prioridad,
+          })),
+          { onConflict: 'docente_id,clave', ignoreDuplicates: true }, // conserva primera_vez_at
+        ).then(() => {});
+      }
       setEstado({
         modo: 'aula',
         aula: res.aula,

@@ -48,6 +48,61 @@ async function expirarTransferencias(
   return (data as unknown[] | null)?.length ?? 0;
 }
 
+// Fotografía del puntaje de TODOS los nodos, por colegio y por decil
+// (snapshot_aprendizaje, migración 0032). Es lo único genuinamente
+// poblacional de las métricas de valor: el histograma "hoy contra hace un
+// mes" no se puede reconstruir hacia atrás porque alumno_nodo guarda estado
+// ACTUAL. Por eso se fotografía; el resto sale del log de hitos.
+// Idempotente: la PK es (fecha, escuela_id, bucket) y se hace upsert, así
+// correrla dos veces el mismo día no duplica ni suma de más.
+async function snapshotAprendizaje(sb: ReturnType<typeof createClient>, now: Date): Promise<{ fecha: string; filas: number; nodos: number }> {
+  const fecha = now.toISOString().slice(0, 10);
+
+  // El vínculo alumno↔colegio se lee del caché de `perfil` (lo mantiene
+  // matricula_sync, 0022): la foto es de dónde está el chico HOY.
+  const { data: perfiles, error: pErr } = await sb
+    .from('perfil')
+    .select('id, escuela_id')
+    .eq('rol', 'alumno');
+  if (pErr) throw pErr;
+  const escuelaDe = new Map<string, string>();
+  for (const p of (perfiles ?? []) as { id: string; escuela_id: string | null }[]) {
+    if (p.escuela_id) escuelaDe.set(p.id, p.escuela_id);
+  }
+
+  const { data: nodos, error: nErr } = await sb
+    .from('alumno_nodo')
+    .select('alumno_id, puntaje')
+    .limit(50000);
+  if (nErr) throw nErr;
+
+  // Decil de puntaje: 0-9. El 100 cae en el bucket 9, no en un décimo primero.
+  const acum = new Map<string, number>();
+  let contados = 0;
+  for (const n of (nodos ?? []) as { alumno_id: string; puntaje: number | null }[]) {
+    const esc = escuelaDe.get(n.alumno_id);
+    if (!esc) continue; // alumno sin colegio (en tránsito): no entra en la foto
+    const p = Number(n.puntaje ?? 0);
+    const bucket = Math.max(0, Math.min(9, Math.floor((Number.isFinite(p) ? p : 0) / 10)));
+    const k = `${esc}|${bucket}`;
+    acum.set(k, (acum.get(k) ?? 0) + 1);
+    contados += 1;
+  }
+
+  const filas = [...acum.entries()].map(([k, cantidad]) => {
+    const [escuela_id, bucket] = k.split('|');
+    return { fecha, escuela_id, bucket: Number(bucket), nodos: cantidad };
+  });
+
+  if (filas.length) {
+    const { error } = await sb
+      .from('snapshot_aprendizaje')
+      .upsert(filas, { onConflict: 'fecha,escuela_id,bucket' });
+    if (error) throw error;
+  }
+  return { fecha, filas: filas.length, nodos: contados };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   try {
@@ -192,9 +247,18 @@ Deno.serve(async (req) => {
           console.error('expirar_transferencias_fallo', String((e as Error)?.message ?? e));
         }
 
+        // Métricas de valor (spec 2026-08-17): la foto del puntaje también va
+        // al final y tampoco rompe la corrida si falla.
+        let foto: { fecha: string; filas: number; nodos: number } | null = null;
+        try {
+          foto = await snapshotAprendizaje(sb, now);
+        } catch (e) {
+          console.error('snapshot_aprendizaje_fallo', String((e as Error)?.message ?? e));
+        }
+
         return json({
           ok: true, generadas: upsert.length, borradas: borrar.length,
-          transferencias_expiradas: expiradas, corrida_at: now.toISOString(),
+          transferencias_expiradas: expiradas, snapshot: foto, corrida_at: now.toISOString(),
         });
       }
 
@@ -204,6 +268,14 @@ Deno.serve(async (req) => {
       case 'expirar_transferencias': {
         const expiradas = await expirarTransferencias(sb, new Date());
         return json({ ok: true, transferencias_expiradas: expiradas });
+      }
+
+      // Foto diaria del puntaje para el histograma de las métricas de valor
+      // (spec 2026-08-17). Se puede correr sola desde el panel además de venir
+      // en la corrida nocturna.
+      case 'snapshot_aprendizaje': {
+        const r = await snapshotAprendizaje(sb, new Date());
+        return json({ ok: true, ...r });
       }
 
       // accion 'luna_nocturno': job de alertas de LUNA (pendiente del ROADMAP) — se cuelga acá.

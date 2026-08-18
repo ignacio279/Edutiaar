@@ -510,6 +510,118 @@ Deno.serve(async (req) => {
         });
       }
 
+      // ── MÉTRICAS DE VALOR (spec 2026-08-17) ──────────────────────────────
+      // No "cuánta gente la usó" sino "qué le pasó al chico que la usó". Mismo
+      // contrato que el resto: filas crudas acotadas → web/lib/admin/valor.ts.
+
+      // Hitos de aprendizaje (0032) + snapshots del histograma.
+      // Se traen DOS ventanas de hitos vivos: `rango` para los conteos y 180
+      // días para la serie mensual de "esfuerzo para dominar" (necesita varios
+      // meses o la tendencia no existe). Los backfill van aparte y sin filtro
+      // de fecha: su created_at es aproximado (ver 0032), el front no los mete
+      // en las series y solo los cuenta como "antes de la medición".
+      case 'aprendizaje': {
+        const desdeSerie = new Date(ahora - 180 * DIA_MS).toISOString();
+        // El período previo también se necesita para el delta: 2× el rango.
+        const desdeConPrevio = new Date(ahora - 2 * rango * DIA_MS).toISOString();
+        const desdeHitos = desdeSerie < desdeConPrevio ? desdeSerie : desdeConPrevio;
+
+        const [vivos, backfill, snapshots] = await Promise.all([
+          sb.from('hito_aprendizaje')
+            .select('tipo, alumno_id, nodo_id, escuela_id, grado, ejercicios_hasta, puntaje, origen, created_at')
+            .eq('origen', 'vivo')
+            .gte('created_at', desdeHitos)
+            .order('created_at', { ascending: false })
+            .limit(MAX_FILAS),
+          sb.from('hito_aprendizaje')
+            .select('tipo, alumno_id, nodo_id, escuela_id, grado, ejercicios_hasta, puntaje, origen, created_at')
+            .eq('origen', 'backfill')
+            .limit(MAX_FILAS),
+          sb.from('snapshot_aprendizaje')
+            .select('fecha, escuela_id, bucket, nodos')
+            .gte('fecha', new Date(ahora - (rango + 45) * DIA_MS).toISOString().slice(0, 10))
+            .limit(MAX_FILAS),
+        ]);
+        if (vivos.error) throw vivos.error;
+
+        return json({
+          rango_dias: rango,
+          desde: desdeRango,
+          hasta: new Date(ahora).toISOString(),
+          hitos: [...(vivos.data ?? []), ...(backfill.data ?? [])],
+          snapshots: snapshots.data ?? [],
+        });
+      }
+
+      // Cobertura del marco NAP: el catálogo oficial completo (289 temas, 0028)
+      // + el mapeo de los nodos + qué tocó cada chico. El catálogo se manda
+      // entero a propósito: las filas de la cobertura nacen del CATÁLOGO, no de
+      // las sesiones, así un tema que nadie practicó aparece en cero.
+      case 'curriculum': {
+        const [temas, nodos, alumnoNodo, alumnos] = await Promise.all([
+          sb.from('nap_tema').select('id, nombre, grado, eje:eje_id(materia)').limit(MAX_FILAS),
+          sb.from('nodo').select('id, nap_tema_id').limit(MAX_FILAS),
+          sb.from('alumno_nodo').select('alumno_id, nodo_id, estado').limit(MAX_FILAS),
+          sb.from('perfil').select('id, grado').eq('rol', 'alumno').limit(MAX_FILAS),
+        ]);
+        if (temas.error) throw temas.error;
+
+        // La materia vive en nap_eje; se aplana acá para que la función pura
+        // reciba el shape NapTemaFila y no tenga que saber del embed.
+        const napTemas = ((temas.data ?? []) as Record<string, unknown>[]).map((t) => ({
+          id: String(t.id),
+          nombre: (t.nombre ?? null) as string | null,
+          grado: Number(t.grado),
+          materia: uno<{ materia: string }>(t.eje)?.materia ?? '',
+        }));
+
+        return json({
+          napTemas,
+          nodos: nodos.data ?? [],
+          alumnoNodo: alumnoNodo.data ?? [],
+          alumnos: alumnos.data ?? [],
+        });
+      }
+
+      // Valor para la maestra: alertas de LUNA emitidas vs. atendidas,
+      // tendencia de boletines sin editar y overrides.
+      // Los boletines van SIN filtro de fecha (mismo motivo que traerBoletines:
+      // el volumen es chico y la serie mensual los necesita todos).
+      case 'copiloto': {
+        const desdeAlertas = new Date(ahora - 2 * rango * DIA_MS).toISOString();
+        const [emitidas, atendidas, boletines, nodosTotal, conOverride] = await Promise.all([
+          sb.from('luna_alerta')
+            .select('docente_id, clave, tipo, prioridad, primera_vez_at')
+            .gte('primera_vez_at', desdeAlertas)
+            .limit(MAX_FILAS),
+          sb.from('luna_alerta_atendida').select('docente_id, clave, atendida_at').limit(MAX_FILAS),
+          traerBoletines(),
+          sb.from('alumno_nodo').select('*', { count: 'exact', head: true }),
+          sb.from('alumno_nodo').select('*', { count: 'exact', head: true }).eq('estado_override', true),
+        ]);
+
+        // Overrides como FLUJO (eventos del rango) salen del log de hitos; acá
+        // va el STOCK actual, que el log no puede reconstruir hacia atrás.
+        const { data: hitosOverride } = await sb
+          .from('hito_aprendizaje')
+          .select('tipo, alumno_id, origen, created_at')
+          .eq('tipo', 'override')
+          .gte('created_at', desdeAlertas)
+          .limit(MAX_FILAS);
+
+        return json({
+          rango_dias: rango,
+          desde: desdeRango,
+          hasta: new Date(ahora).toISOString(),
+          alertas: { emitidas: emitidas.data ?? [], atendidas: atendidas.data ?? [] },
+          boletines,
+          overrides: {
+            hitos: hitosOverride ?? [],
+            stock: { conOverride: conOverride.count ?? 0, total: nodosTotal.count ?? 0 },
+          },
+        });
+      }
+
       default:
         return json({ error: 'accion_desconocida' }, 400);
     }
