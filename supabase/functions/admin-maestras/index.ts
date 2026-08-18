@@ -9,6 +9,7 @@ import { verificarAdmin } from '../_shared/admin.ts';
 import { registrarAuditoria } from '../_shared/auditoria.ts';
 import { listarUsuariosAuth } from '../_shared/auth-users.ts';
 import { validarCrearMaestra, generarPasswordTemporal, emailNormalizado } from './validar.ts';
+import { generarLinkRecuperacion } from '../_shared/invitacion.ts';
 
 type Acceso = { perfil_id: string; estado: string; trial_inicio: string | null; trial_fin: string | null };
 type AulaRow = { id: string; nombre: string; docente_id: string };
@@ -143,12 +144,8 @@ Deno.serve(async (req) => {
 
         // (5) link de invitación (recovery). Si falla, la password temporal
         // igual sirve: se devuelve con warning en vez de romper el alta.
-        let link: string | null = null;
-        let warning: string | undefined;
-        const { data: linkData, error: lErr } = await sb.auth.admin.generateLink({ type: 'recovery', email });
-        const action = linkData?.properties?.action_link;
-        if (lErr || !action) warning = 'link_no_generado';
-        else link = action;
+        const link = await generarLinkRecuperacion(sb, email, 'docente');
+        const warning = link ? undefined : 'link_no_generado';
 
         registrarAuditoria(sb, ctx, {
           accion: 'crear_maestra', entidad: 'perfil', entidad_id: id,
@@ -166,9 +163,8 @@ Deno.serve(async (req) => {
         const { data: u } = await sb.auth.admin.getUserById(doc.id);
         const email = u?.user?.email;
         if (!email) return json({ error: 'sin_email' }, 404);
-        const { data: linkData, error: lErr } = await sb.auth.admin.generateLink({ type: 'recovery', email });
-        const link = linkData?.properties?.action_link;
-        if (lErr || !link) return json({ error: 'link_no_generado' }, 500);
+        const link = await generarLinkRecuperacion(sb, email, 'docente');
+        if (!link) return json({ error: 'link_no_generado' }, 500);
         registrarAuditoria(sb, ctx, { accion: 'reset_password_maestra', entidad: 'perfil', entidad_id: doc.id });
         return json({ link });
       }

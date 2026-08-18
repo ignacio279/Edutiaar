@@ -10,6 +10,7 @@ import { cors, json } from '../_shared/cors.ts';
 import { verificarAdmin } from '../_shared/admin.ts';
 import { registrarAuditoria } from '../_shared/auditoria.ts';
 import { emailNormalizado, generarPasswordTemporal, nivelValido, validarCrearAdmin } from './validar.ts';
+import { generarLinkRecuperacion } from '../_shared/invitacion.ts';
 
 type FilaAdmin = {
   perfil_id: string;
@@ -87,12 +88,8 @@ Deno.serve(async (req) => {
 
         // (4) link de invitación (recovery). Si falla, la password temporal
         // igual sirve: se devuelve con warning en vez de romper el alta.
-        let link: string | null = null;
-        let warning: string | undefined;
-        const { data: linkData, error: lErr } = await sb.auth.admin.generateLink({ type: 'recovery', email });
-        const action = linkData?.properties?.action_link;
-        if (lErr || !action) warning = 'link_no_generado';
-        else link = action;
+        const link = await generarLinkRecuperacion(sb, email, 'admin');
+        const warning = link ? undefined : 'link_no_generado';
 
         registrarAuditoria(sb, ctx, {
           accion: 'crear_admin', entidad: 'plataforma_admin', entidad_id: id,

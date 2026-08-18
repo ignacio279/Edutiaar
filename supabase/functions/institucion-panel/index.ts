@@ -12,6 +12,7 @@
 import { cors, json } from '../_shared/cors.ts';
 import { verificarAdminInstitucion, type InstCtx } from '../_shared/admin.ts';
 import { armarPatchIdentidad } from '../_shared/identidad.ts';
+import { generarLinkRecuperacion } from '../_shared/invitacion.ts';
 import {
   FEATURES_DEFAULT, emailNormalizado, fechasTrial, generarPasswordTemporal,
   validarColegioCrear, validarDesempeno, validarDocenteCrear,
@@ -352,11 +353,8 @@ Deno.serve(async (req) => {
         const { error: aErr } = await sb.from('docente_acceso').insert({ perfil_id: id, estado: 'activo' });
         if (aErr) { await sb.auth.admin.deleteUser(id).catch(() => {}); throw aErr; }
 
-        let link: string | null = null;
-        let warning: string | undefined;
-        const { data: linkData, error: lErr } = await sb.auth.admin.generateLink({ type: 'recovery', email });
-        const action = linkData?.properties?.action_link;
-        if (lErr || !action) warning = 'link_no_generado'; else link = action;
+        const link = await generarLinkRecuperacion(sb, email, 'docente');
+        const warning = link ? undefined : 'link_no_generado';
 
         auditar('docente_creado', 'perfil', id, { email, escuela_id: mio });
         return json({
