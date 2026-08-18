@@ -239,3 +239,14 @@ Lo escribe **solo** el trigger `hito_registrar` (`after insert or update on alum
 
 ### luna_alerta
 `docente_id` · `clave` (`<tipo>:<alumno_id>`, la de `claveAlerta`) · `tipo` · `prioridad` · `primera_vez_at`. PK `(docente_id, clave)`. Es el **denominador** de "atendidas / emitidas": `luna_alerta_atendida` (0017) tenía numerador sin denominador. La escribe el dashboard de la seño con lo que efectivamente le mostró (upsert idempotente). RLS: inserta y lee lo suyo, **sin policy de UPDATE** → `primera_vez_at` no se puede empujar y el "tiempo hasta atender" no se falsea.
+
+## Identidad oficial del establecimiento *(mig. 0033 — spec 2026-08-18)*
+
+### escuela (columnas nuevas)
+`cue` (text, check `^[0-9]{9}$`) · `cue_anexo` (text, check `^[0-9]{2}$`; `'00'` = la sede) · `departamento` · `localidad` · `matricula_declarada` (int 1..10000 — la matrícula TOTAL del establecimiento **según la escuela**, no la de EDUTIA: es el denominador de cualquier cobertura) · `matricula_anio` (int 2000..2100).
+
+**Todas nullable a propósito:** un colegio sin CUE funciona entero; la identidad se carga cuando la escuela la dicta. El **CUE** (Clave Única de Establecimiento) es el identificador federal de toda escuela argentina — sin él ningún número de EDUTIA se cruza con el Padrón Oficial, el Relevamiento Anual, SInIDE ni Aprender, y el matching por nombre en ruralidad ("Escuela N° 45" en cada departamento) es veto técnico garantizado.
+
+Índice único **parcial** `escuela_cue_unico_idx` sobre `(cue, coalesce(cue_anexo,'00')) where cue is not null`: dos colegios no pueden reclamar el mismo establecimiento, los que no tienen CUE no compiten entre sí, y anexo ausente = sede (espeja a `claveEstablecimiento()`). Índice `(provincia, departamento)`.
+
+Reglas espejadas en `_shared/identidad.ts` ↔ `web/lib/admin/identidad.ts` (byte-idénticos) + paridad contra el DDL en `tests/unit/identidad.test.mjs`, patrón `provincias.ts`. Las escriben `admin-colegios` (`crear`/`editar`, error `cue_duplicado` en el 23505) e `institucion-panel` (`colegio_crear`). `departamento` se **guarda** desde ahora aunque la vista agregada por departamento no exista todavía: el eje es barato, agregarlo sin densidad daría "muestra insuficiente" en pantalla completa.
