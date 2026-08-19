@@ -28,11 +28,11 @@ const AULA_SECRETO = 'aula2026';
 
 // email opaco ESTABLE por alumno (no `nombre@edutia.local`)
 const ALUMNOS = [
-  { key: 'mateo', name: 'Mateo', animal: 'fox', pin: '1111', email: 'alu-7f3a9c@students.edutia.local' },
-  { key: 'lucia', name: 'Lucía', animal: 'owl', pin: '2222', email: 'alu-2b8e51@students.edutia.local' },
-  { key: 'benja', name: 'Benja', animal: 'turtle', pin: '3333', email: 'alu-c4d017@students.edutia.local' },
-  { key: 'sofia', name: 'Sofía', animal: 'cat', pin: '4444', email: 'alu-9a6f23@students.edutia.local' },
-  { key: 'tomas', name: 'Tomás', animal: 'sheep', pin: '5555', email: 'alu-13e7bd@students.edutia.local' },
+  { key: 'mateo', name: 'Mateo', animal: 'fox', pin: '1234', email: 'alu-7f3a9c@students.edutia.local' },
+  { key: 'lucia', name: 'Lucía', animal: 'owl', pin: '1234', email: 'alu-2b8e51@students.edutia.local' },
+  { key: 'benja', name: 'Benja', animal: 'turtle', pin: '1234', email: 'alu-c4d017@students.edutia.local' },
+  { key: 'sofia', name: 'Sofía', animal: 'cat', pin: '1234', email: 'alu-9a6f23@students.edutia.local' },
+  { key: 'tomas', name: 'Tomás', animal: 'sheep', pin: '1234', email: 'alu-13e7bd@students.edutia.local' },
 ];
 
 const randPass = () => randomBytes(24).toString('hex'); // 48 chars

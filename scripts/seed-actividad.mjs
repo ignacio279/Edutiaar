@@ -279,17 +279,17 @@ const POOL_G4_MATE = [
 ];
 
 // 8 alumnos nuevos de 4° (mínimo para pasar k=5 con margen en el observatorio).
-// Mismo patrón opaco de credenciales que scripts/seed.mjs; PIN propio (6001+)
-// para no pisar los 1111-5555 de los alumnos semilla del mismo aula.
+// Mismo patrón opaco de credenciales que scripts/seed.mjs. TODOS los chicos
+// de demo entran con PIN 1234 (decisión de producto: uniforme para las demos).
 const ALUMNOS_G4 = [
-  { name: 'Valentina', animal: 'fox', pin: '6001', email: 'alu-4a11f2@students.edutia.local' },
-  { name: 'Bruno', animal: 'owl', pin: '6002', email: 'alu-8b22c4@students.edutia.local' },
-  { name: 'Martina', animal: 'turtle', pin: '6003', email: 'alu-1c33d6@students.edutia.local' },
-  { name: 'Ian', animal: 'cat', pin: '6004', email: 'alu-9d44e8@students.edutia.local' },
-  { name: 'Delfina', animal: 'sheep', pin: '6005', email: 'alu-2e55fa@students.edutia.local' },
-  { name: 'Agustín', animal: 'fox', pin: '6006', email: 'alu-6f66ac@students.edutia.local' },
-  { name: 'Catalina', animal: 'owl', pin: '6007', email: 'alu-3a77be@students.edutia.local' },
-  { name: 'Franco', animal: 'turtle', pin: '6008', email: 'alu-7b88d0@students.edutia.local' },
+  { name: 'Valentina', animal: 'fox', pin: '1234', email: 'alu-4a11f2@students.edutia.local' },
+  { name: 'Bruno', animal: 'owl', pin: '1234', email: 'alu-8b22c4@students.edutia.local' },
+  { name: 'Martina', animal: 'turtle', pin: '1234', email: 'alu-1c33d6@students.edutia.local' },
+  { name: 'Ian', animal: 'cat', pin: '1234', email: 'alu-9d44e8@students.edutia.local' },
+  { name: 'Delfina', animal: 'sheep', pin: '1234', email: 'alu-2e55fa@students.edutia.local' },
+  { name: 'Agustín', animal: 'fox', pin: '1234', email: 'alu-6f66ac@students.edutia.local' },
+  { name: 'Catalina', animal: 'owl', pin: '1234', email: 'alu-3a77be@students.edutia.local' },
+  { name: 'Franco', animal: 'turtle', pin: '1234', email: 'alu-7b88d0@students.edutia.local' },
 ];
 
 // ── Colegios hermanos (review de la Task 9: la cobertura "N de M colegios"
@@ -330,37 +330,37 @@ const POOL_SE_TEMA0 = [
 ];
 
 // 8 alumnos por colegio hermano (mismo mínimo para k=5 con margen). Nombres
-// sin repetir los ya usados arriba; PIN en bloques propios por aula (7000/
-// 8000/9000) para que se lean de un vistazo como de otro colegio.
+// sin repetir los emails ya usados arriba. PIN 1234 para todos, igual que el
+// resto de la demo.
 const ALUMNOS_PI = [
-  { name: 'Milagros', animal: 'fox', pin: '7001', email: 'alu-b1c2d3@students.edutia.local' },
-  { name: 'Ezequiel', animal: 'owl', pin: '7002', email: 'alu-b4c5d6@students.edutia.local' },
-  { name: 'Camila', animal: 'turtle', pin: '7003', email: 'alu-b7c8d9@students.edutia.local' },
-  { name: 'Joaquín', animal: 'cat', pin: '7004', email: 'alu-b0c1d2@students.edutia.local' },
-  { name: 'Abril', animal: 'sheep', pin: '7005', email: 'alu-b3c4d5@students.edutia.local' },
-  { name: 'Nahuel', animal: 'fox', pin: '7006', email: 'alu-b6c7d8@students.edutia.local' },
-  { name: 'Rocío', animal: 'owl', pin: '7007', email: 'alu-b9c0d1@students.edutia.local' },
-  { name: 'Elián', animal: 'turtle', pin: '7008', email: 'alu-b2c3d4@students.edutia.local' },
+  { name: 'Milagros', animal: 'fox', pin: '1234', email: 'alu-b1c2d3@students.edutia.local' },
+  { name: 'Ezequiel', animal: 'owl', pin: '1234', email: 'alu-b4c5d6@students.edutia.local' },
+  { name: 'Camila', animal: 'turtle', pin: '1234', email: 'alu-b7c8d9@students.edutia.local' },
+  { name: 'Joaquín', animal: 'cat', pin: '1234', email: 'alu-b0c1d2@students.edutia.local' },
+  { name: 'Abril', animal: 'sheep', pin: '1234', email: 'alu-b3c4d5@students.edutia.local' },
+  { name: 'Nahuel', animal: 'fox', pin: '1234', email: 'alu-b6c7d8@students.edutia.local' },
+  { name: 'Rocío', animal: 'owl', pin: '1234', email: 'alu-b9c0d1@students.edutia.local' },
+  { name: 'Elián', animal: 'turtle', pin: '1234', email: 'alu-b2c3d4@students.edutia.local' },
 ];
 const ALUMNOS_MQ = [
-  { name: 'Guadalupe', animal: 'cat', pin: '8001', email: 'alu-c1d2e3@students.edutia.local' },
-  { name: 'Ramiro', animal: 'sheep', pin: '8002', email: 'alu-c4d5e6@students.edutia.local' },
-  { name: 'Micaela', animal: 'fox', pin: '8003', email: 'alu-c7d8e9@students.edutia.local' },
-  { name: 'Federico', animal: 'owl', pin: '8004', email: 'alu-c0d1e2@students.edutia.local' },
-  { name: 'Antonella', animal: 'turtle', pin: '8005', email: 'alu-c3d4e5@students.edutia.local' },
-  { name: 'Lautaro', animal: 'cat', pin: '8006', email: 'alu-c6d7e8@students.edutia.local' },
-  { name: 'Jazmín', animal: 'sheep', pin: '8007', email: 'alu-c9d0e1@students.edutia.local' },
-  { name: 'Thiago', animal: 'fox', pin: '8008', email: 'alu-c2d3e4@students.edutia.local' },
+  { name: 'Guadalupe', animal: 'cat', pin: '1234', email: 'alu-c1d2e3@students.edutia.local' },
+  { name: 'Ramiro', animal: 'sheep', pin: '1234', email: 'alu-c4d5e6@students.edutia.local' },
+  { name: 'Micaela', animal: 'fox', pin: '1234', email: 'alu-c7d8e9@students.edutia.local' },
+  { name: 'Federico', animal: 'owl', pin: '1234', email: 'alu-c0d1e2@students.edutia.local' },
+  { name: 'Antonella', animal: 'turtle', pin: '1234', email: 'alu-c3d4e5@students.edutia.local' },
+  { name: 'Lautaro', animal: 'cat', pin: '1234', email: 'alu-c6d7e8@students.edutia.local' },
+  { name: 'Jazmín', animal: 'sheep', pin: '1234', email: 'alu-c9d0e1@students.edutia.local' },
+  { name: 'Thiago', animal: 'fox', pin: '1234', email: 'alu-c2d3e4@students.edutia.local' },
 ];
 const ALUMNOS_SE = [
-  { name: 'Ayelén', animal: 'owl', pin: '9001', email: 'alu-d1e2f3@students.edutia.local' },
-  { name: 'Maximiliano', animal: 'turtle', pin: '9002', email: 'alu-d4e5f6@students.edutia.local' },
-  { name: 'Brisa', animal: 'cat', pin: '9003', email: 'alu-d7e8f9@students.edutia.local' },
-  { name: 'Gonzalo', animal: 'sheep', pin: '9004', email: 'alu-d0e1f2@students.edutia.local' },
-  { name: 'Milena', animal: 'fox', pin: '9005', email: 'alu-d3e4f5@students.edutia.local' },
-  { name: 'Ulises', animal: 'owl', pin: '9006', email: 'alu-d6e7f8@students.edutia.local' },
-  { name: 'Priscila', animal: 'turtle', pin: '9007', email: 'alu-d9e0f1@students.edutia.local' },
-  { name: 'Emanuel', animal: 'cat', pin: '9008', email: 'alu-d2e3f4@students.edutia.local' },
+  { name: 'Ayelén', animal: 'owl', pin: '1234', email: 'alu-d1e2f3@students.edutia.local' },
+  { name: 'Maximiliano', animal: 'turtle', pin: '1234', email: 'alu-d4e5f6@students.edutia.local' },
+  { name: 'Brisa', animal: 'cat', pin: '1234', email: 'alu-d7e8f9@students.edutia.local' },
+  { name: 'Gonzalo', animal: 'sheep', pin: '1234', email: 'alu-d0e1f2@students.edutia.local' },
+  { name: 'Milena', animal: 'fox', pin: '1234', email: 'alu-d3e4f5@students.edutia.local' },
+  { name: 'Ulises', animal: 'owl', pin: '1234', email: 'alu-d6e7f8@students.edutia.local' },
+  { name: 'Priscila', animal: 'turtle', pin: '1234', email: 'alu-d9e0f1@students.edutia.local' },
+  { name: 'Emanuel', animal: 'cat', pin: '1234', email: 'alu-d2e3f4@students.edutia.local' },
 ];
 
 // `conflicto` (opcional): columnas del unique a usar cuando el conflicto no es
@@ -414,7 +414,18 @@ async function ensureUser(email, password, meta) {
     const data = await r.json();
     const users = data?.users ?? data ?? [];
     const u = users.find?.((x) => x.email?.toLowerCase() === email.toLowerCase());
-    if (u) return u.id;
+    if (u) {
+      // OJO: hay que PISAR la password del user existente. `alumno-login` hace
+      // un token grant con `alumno_cred.auth_password`, así que si en el rerun
+      // el user se queda con la password vieja y `set_alumno_cred` guarda una
+      // nueva, el chico pasa el PIN y igual recibe `auth_fallo` (500).
+      const up = await fetch(`${URL}/auth/v1/admin/users/${u.id}`, {
+        method: 'PUT', headers: H,
+        body: JSON.stringify({ password, email_confirm: true, user_metadata: meta }),
+      });
+      if (!up.ok) throw new Error(`update ${email}: ${up.status} ${await up.text()}`);
+      return u.id;
+    }
   }
   throw new Error(`create ${email}: ${c.status} ${t}`);
 }
@@ -435,17 +446,20 @@ async function ensureUser(email, password, meta) {
 async function crearAlumnos(lista, { escuelaId, docenteId, aulaId, grado }) {
   const porNombre = {};
   for (const a of lista) {
-    const id = await ensureUser(a.email, randPass(), { nombre: a.name, rol: 'alumno' });
+    // MISMA password para el user de Auth y para `alumno_cred`: `alumno-login`
+    // valida el PIN y después hace un token grant con `auth_password`. Dos
+    // `randPass()` distintos = PIN correcto y `auth_fallo` (500) igual.
+    const pass = randPass();
+    const id = await ensureUser(a.email, pass, { nombre: a.name, rol: 'alumno' });
     await upsert('perfil', [{ id, rol: 'alumno', nombre: a.name, avatar: a.animal, grado, escuela_id: escuelaId, docente_id: docenteId, aula_id: aulaId }]);
     const mExiste = await get(`matricula?alumno_id=eq.${id}&fecha_fin=is.null&select=id`);
     if (!Array.isArray(mExiste) || mExiste.length === 0) {
       await rpc('matricula_abrir', { p_alumno: id, p_escuela: escuelaId, p_aula: aulaId, p_docente: docenteId, p_grado: grado, p_actor: docenteId });
     }
-    // La password de Auth ROTA en cada corrida a propósito (nadie loguea con
-    // email+password en esta demo, así que no hace falta que sea estable).
-    // El PIN sí queda FIJO — viene de `lista` — porque es la credencial real
-    // con la que se entra por aula+PIN.
-    await rpc('set_alumno_cred', { p_perfil: id, p_aula: aulaId, p_pin: a.pin, p_email: a.email, p_password: randPass() });
+    // La password de Auth ROTA en cada corrida (nadie la tipea: es opaca), pero
+    // rota SINCRONIZADA con la que guarda `alumno_cred`. El PIN queda FIJO —
+    // viene de `lista` — porque es la credencial real con la que se entra.
+    await rpc('set_alumno_cred', { p_perfil: id, p_aula: aulaId, p_pin: a.pin, p_email: a.email, p_password: pass });
     porNombre[a.name] = id;
   }
   return porNombre;
@@ -487,7 +501,7 @@ async function main() {
   // salón, plurigrado); matrícula activa como fuente de verdad del grado
   // (0022).
   const porNombreG4 = await crearAlumnos(ALUMNOS_G4, { escuelaId: ID.escuela, docenteId: ana.id, aulaId: ID.aula, grado: 4 });
-  console.log(`✓ ${ALUMNOS_G4.length} alumnos nuevos de 4° en Cerro Azul (PIN 6001-6008)`);
+  console.log(`✓ ${ALUMNOS_G4.length} alumnos nuevos de 4° en Cerro Azul (PIN 1234)`);
 
   // 1c) Colegios hermanos (review de la Task 9): Piacentini ya existe (docente
   // Marita, se resuelve acá — si algún día no está más, el script frena con

@@ -73,7 +73,18 @@ async function ensureUser(email, password, meta) {
     const data = await r.json();
     const users = data?.users ?? data ?? [];
     const u = users.find?.((x) => x.email?.toLowerCase() === email.toLowerCase());
-    if (u) return u.id;
+    if (u) {
+      // OJO: hay que PISAR la password del user existente. `alumno-login` hace
+      // un token grant con `alumno_cred.auth_password`, así que si en el rerun
+      // el user se queda con la password vieja y `set_alumno_cred` guarda una
+      // nueva, el chico pasa el PIN y igual recibe `auth_fallo` (500).
+      const up = await fetch(`${URL}/auth/v1/admin/users/${u.id}`, {
+        method: 'PUT', headers: H,
+        body: JSON.stringify({ password, email_confirm: true, user_metadata: meta }),
+      });
+      if (!up.ok) throw new Error(`update ${email}: ${up.status} ${await up.text()}`);
+      return u.id;
+    }
   }
   throw new Error(`create ${email}: ${c.status} ${t}`);
 }
@@ -134,7 +145,8 @@ async function main() {
 
   // ── 4) Wanda: historial en DOS colegios ──────────────────────────────────
   const wandaEmail = 'alu-golondrina-w1@students.edutia.local';
-  const wanda = await ensureUser(wandaEmail, randPass(), { nombre: 'Wanda', rol: 'alumno' });
+  const wandaPass = randPass(); // la misma que va a `alumno_cred` (ver abajo)
+  const wanda = await ensureUser(wandaEmail, wandaPass, { nombre: 'Wanda', rol: 'alumno' });
   await upsert('perfil', [{ id: wanda, rol: 'alumno', nombre: 'Wanda', avatar: 'owl' }]);
 
   const matriculasW = await get('matricula', `alumno_id=eq.${wanda}`, 'id,escuela_id,fecha_fin');
@@ -153,9 +165,9 @@ async function main() {
     });
     const consId = (await cons.json())[0].id;
     await asegurarMatricula(wanda, ID.esc2, ID.aula2, doc2, 4, doc2, consId);
-    await rpc('set_alumno_cred', { p_perfil: wanda, p_aula: ID.aula2, p_pin: '7777', p_email: wandaEmail, p_password: randPass() });
+    await rpc('set_alumno_cred', { p_perfil: wanda, p_aula: ID.aula2, p_pin: '1234', p_email: wandaEmail, p_password: wandaPass });
   }
-  console.log('✓ Wanda: matrícula cerrada en El Chañar + activa en Los Álamos (PIN 7777)');
+  console.log('✓ Wanda: matrícula cerrada en El Chañar + activa en Los Álamos (PIN 1234)');
 
   // ── 5) Simón: en tránsito con transferencia pendiente ────────────────────
   const simonEmail = 'alu-golondrina-s1@students.edutia.local';
