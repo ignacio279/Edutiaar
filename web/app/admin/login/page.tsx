@@ -2,12 +2,17 @@
 // Login del panel de administración (Dashboard admin v3). Link aparte: no hay
 // ningún acceso desde la app principal. Si la cuenta no es admin (RPC
 // admin_nivel null), se cierra la sesión y se muestra un error genérico — no
-// se revela si el email existe ni si es de docente.
+// se revela si el usuario existe ni si es de docente.
+//
+// El campo es "Usuario", no "Email": quien opera el panel tipea `admin` y
+// `emailDeUsuario` le completa el dominio (Auth solo entiende emails). Un
+// email completo pasa tal cual, así las cuentas nominales siguen andando.
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { ADMIN } from '@/lib/admin/tema';
+import { emailDeUsuario } from '@/lib/admin/login';
 
 const BALOO = 'var(--font-baloo), cursive';
 const NUNITO = 'var(--font-nunito)';
@@ -22,16 +27,18 @@ const field: React.CSSProperties = {
 export default function AdminLogin() {
   const router = useRouter();
   const supabase = createClient();
-  const [email, setEmail] = useState('');
+  const [usuario, setUsuario] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function entrar() {
     if (busy) return;
+    const email = emailDeUsuario(usuario);
+    if (!email || !password) { setError('Credenciales inválidas.'); return; }
     setBusy(true);
     setError('');
-    const { error: e } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    const { error: e } = await supabase.auth.signInWithPassword({ email, password });
     if (e) {
       setBusy(false);
       setError('Credenciales inválidas.');
@@ -55,8 +62,17 @@ export default function AdminLogin() {
         <h1 style={{ fontFamily: BALOO, fontWeight: 700, fontSize: 30, color: ADMIN.ink, margin: '0 0 4px' }}>Administración</h1>
         <p style={{ fontSize: 15.5, color: ADMIN.tinta2, margin: '0 0 26px', fontWeight: 600 }}>Panel de operación de EDUTIA</p>
 
-        <label style={label}>Email</label>
-        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={field} autoComplete="username" />
+        <label style={label}>Usuario</label>
+        <input
+          type="text"
+          value={usuario}
+          onChange={(e) => setUsuario(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') entrar(); }}
+          style={field}
+          autoComplete="username"
+          autoCapitalize="none"
+          spellCheck={false}
+        />
         <label style={label}>Contraseña</label>
         <input
           type="password"

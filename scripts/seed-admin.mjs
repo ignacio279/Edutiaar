@@ -7,6 +7,19 @@
 //   SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... \
 //   ADMIN_EMAIL=jorge@edutia.ar ADMIN_PASSWORD=... [ADMIN_NOMBRE=Jorge] \
 //   node scripts/seed-admin.mjs
+//
+// OJO con las contraseñas cortas: el proyecto tiene `password_min_length = 6`
+// y la Admin API de Auth la respeta, así que una de 4 dígitos la rechaza acá.
+// Para la cuenta de demo (`admin` / `1234`) se crea con una password larga y
+// después se pisa el hash por SQL — el mínimo se valida al crear/cambiar, NO
+// al entrar, así la política sigue en 6 para las maestras:
+//
+//   update auth.users
+//   set encrypted_password = extensions.crypt('1234', extensions.gen_salt('bf', 10))
+//   where lower(email) = 'admin@edutia.ar';
+//
+// El front del panel completa el dominio: quien opera tipea `admin` y
+// `web/lib/admin/login.ts` lo convierte en `admin@edutia.ar`.
 
 const URL = process.env.SUPABASE_URL;
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
